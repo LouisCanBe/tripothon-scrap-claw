@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>拾荒娃娃机 · 灰盒原型 v0.1</title>
+<script>
+  // 调试钩子：收集运行时错误，便于自动化验证
+  window.__errs = [];
+  addEventListener('error', e => __errs.push(String(e.message)));
+  addEventListener('unhandledrejection', e => __errs.push(String(e.reason)));
+</script>
+<style>
+  :root {
+    color-scheme: dark;
+    /* ============ 字体 / 文案样式调整区（全站改这一处） ============ */
+    --font-main: "Courier New", ui-monospace, monospace;             /* 正文/UI：等宽 → 终端打字机感 */
+    --font-hand: "Segoe Script", "Xingkai SC", "STXingkai", cursive; /* 手写体：终幕那行字用 */
+    --font-size-hud: 13px;
+    --font-size-msg: 15px;
+    --font-size-hint: 12px;
+    --letter-spacing: .5px;
+    --color-ink: #d8d4c8;        /* 主文案 */
+    --color-ink-dim: #8a877e;    /* 次要提示 */
+    --color-accent: #9db87a;     /* 任务完成 */
+    --text-shadow: 0 1px 3px #000;
+    /* 换自定义字体：把 woff2 放进 prototype/fonts/（中文务必子集化，整包好几 MB），
+       取消下面注释、再把 --font-hand 或 --font-main 改成你的字体名即可：
+    @font-face { font-family: 'MyHand'; src: url('./fonts/hand.woff2') format('woff2'); }
+    */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #070708; }
+  body { font-family: var(--font-main); color: var(--color-ink); }
+
+  /* 舞台：canvas 始终全窗口渲染，用 clip-path 控制可见画幅（见 frameMask.js）
+     —— 这是 outline 定的方案：不渲染进 RT，遮罩切视口，16:9 展开零成本 */
+  #stage { position: fixed; inset: 0; transition: clip-path 1.15s cubic-bezier(.65,0,.25,1); }
+  #stage.no-anim { transition: none; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+
+  /* 旧照片式白框（与 clip 区域同步，由 JS 定位） */
+  #frameBorder { position: fixed; pointer-events: none; z-index: 5;
+                 border: 5px solid rgba(240,236,224,.88); border-radius: 2px;
+                 box-shadow: 0 0 80px rgba(0,0,0,.85);
+                 transition: all 1.15s cubic-bezier(.65,0,.25,1); }
+  #frameBorder.no-anim { transition: none; }
+
+  /* 黑屏闪（终幕"硬切"降级方案用） */
+  #flash { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 20; }
+
+  #hud { position: fixed; top: 18px; left: 20px; z-index: 10; font-size: var(--font-size-hud);
+         line-height: 1.7; text-shadow: var(--text-shadow); user-select: none; pointer-events: none; }
+  #hud .quest.done { color: var(--color-accent); text-decoration: line-through; }
+  #msg { position: fixed; bottom: 64px; width: 100%; text-align: center; z-index: 10;
+         font-size: var(--font-size-msg); color: var(--color-ink); text-shadow: var(--text-shadow);
+         opacity: 0; transition: opacity .4s; pointer-events: none; }
+  /* 终幕那行手写体：给 #msg 加 .stinger 类即可（JS: msgEl.classList.add('stinger')） */
+  #msg.stinger { font-family: var(--font-hand); font-size: 24px; letter-spacing: 2px; }
+  #hint { position: fixed; bottom: 14px; width: 100%; text-align: center; z-index: 10;
+          font-size: var(--font-size-hint); color: var(--color-ink-dim);
+          letter-spacing: var(--letter-spacing); pointer-events: none; }
+  .lil-gui { z-index: 30 !important; --background-color: rgba(14,14,16,.94); }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="frameBorder"></div>
+  <div id="flash"></div>
+
+  <div id="hud">
+    <div>已收集：<span id="collected">0</span></div>
+    <div style="margin-top:6px;opacity:.85">今日采集配额：</div>
+    <div class="quest" id="q-bread">· 面包 ×1</div>
+    <div class="quest" id="q-can">· 罐头 ×1</div>
+    <div class="quest" id="q-veg">· 蔬菜 ×1</div>
+  </div>
+  <div id="msg"></div>
+  <div id="hint">←→↑↓ / WASD 移动 · 空格 落爪(不可取消) · 1/2/3 视角 左/前/右 · Q/E 循环 · F 画幅展开(过渡) · Shift+F 硬切(降级) · H 参数面板</div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

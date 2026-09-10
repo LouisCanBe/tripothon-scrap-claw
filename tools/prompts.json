@@ -1,0 +1,27 @@
+{
+  "_note1": "逐件可加 face_limit / model 等字段覆盖 _defaults",
+  "_note2": "某件加 \"image\": \"https://概念图URL\" 即切换为 image-to-model（风格更统一的路线）",
+  "_defaults": { "model": "P2-20260801", "face_limit": 8000, "texture": true, "pbr": true },
+  "_style": "stylized low-poly game asset, post-apocalyptic scavenging prop, muted desaturated hand-painted colors, single object, centered, plain dark background",
+
+  "items": {
+    "bread":   { "prompt": "a small crusty bread loaf, boxy rounded silhouette" },
+    "can":     { "prompt": "a short cylindrical tin food can with pull-ring lid, clean label" },
+    "veg":     { "prompt": "a squashed bundle of leafy vegetables, lumpy oval silhouette" },
+    "moldy":   { "prompt": "a moldy bread loaf covered in green-grey fuzz, boxy rounded silhouette" },
+    "rustcan": { "prompt": "a rusty dented empty tin can, corroded cylinder" },
+    "rot":     { "prompt": "a rotten unidentifiable organic lump, dark green-brown, lumpy oval" },
+    "carton":  { "prompt": "a small rectangular drink carton, slightly crumpled" },
+    "cheese":  { "prompt": "a wedge block of hard cheese" },
+    "bottle":  { "prompt": "a slim glass bottle with narrow neck" },
+    "apple":   { "prompt": "a withered wrinkled apple" },
+    "jar":     { "prompt": "a small squat glass jar with metal lid" },
+    "brick":   { "prompt": "a broken chunk of red brick, heavy looking" },
+    "bone":    { "prompt": "a large gnawed animal bone" },
+    "cloth":   { "prompt": "a wadded ball of dirty rags" },
+    "stone":   { "prompt": "a dull grey rock lump" },
+    "foil":    { "prompt": "a crumpled ball of aluminum foil" }
+  },
+
+  "_claw": { "prompt": "a three-pronged mechanical claw from an arcade claw machine, industrial metal, open gripper", "model": "v3.1-20260211" }
+}

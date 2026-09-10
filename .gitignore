@@ -1,0 +1,5 @@
+# API Key 绝不提交
+.env.local
+.env
+
+node_modules/
