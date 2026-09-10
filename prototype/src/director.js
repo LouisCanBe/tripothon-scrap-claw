@@ -89,6 +89,7 @@ export class Director {
     this._viewsSeen = null;
 
     this.mask.setLayout(act.layout, i > 0);
+    if (act.framing) this.mask.setViewMode(act.framing);   // 缺省不写 = 沿用上一幕（保留玩家 V 键选择）
     this.rig?.setZoom(act.zoom ?? 1);
     this.claw.controlEnabled = !!(act.control.move || act.control.drop);
     if (act.tuning) {

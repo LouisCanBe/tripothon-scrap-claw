@@ -23,6 +23,7 @@ export const ACTS = [
     id: 1, label: '第一幕 · 引子', layout: 'right',
     control: { move: false, drop: false, view: true },
     zoom: 0.68,   // 贴近玻璃柜的近景
+    framing: 'near',   // 右布局必须 near（far 会只露个边）
     hint: '按 1 / 2 / 3（或 Q / E）转动视线，看看柜子里。',
     script: [
       { type: 'sub', text: '资源枯竭纪元 21 年。', dur: 3 },
@@ -35,6 +36,7 @@ export const ACTS = [
   {
     id: 2, label: '第二幕 · 学会抓取', layout: 'center',
     control: { move: true, drop: true, view: true },
+    framing: 'far',   // 中远景站远抓（首版构图）；V 键可切 near 凑近看
     tuning: { gripStrength: 1.0, baseSlipProb: 0 },   // 教学：首抓必成
     hint: DEFAULT_HINT,
     script: [
@@ -74,6 +76,7 @@ export const ACTS = [
   {
     id: 5, label: '', layout: 'wide',
     control: { move: false, drop: false, view: false },
+    framing: 'far',
     hint: null,
     script: [
       { type: 'glitch' },

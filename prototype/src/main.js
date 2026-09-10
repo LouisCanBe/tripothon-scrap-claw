@@ -113,6 +113,8 @@ input.on('drop', () => { if (director.allow('drop')) claw.startDrop(); });
 input.on('view', (v) => { if (director.allow('view')) { rig.setView(v); director.notify('view', v); } });
 input.on('cycle', (d) => { if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); } });
 input.on('next', () => director.skip());
+// 近/远取景切换：仅居中画幅幕开放（一幕右布局用 far 会穿帮）
+input.on('frameMode', () => { if (director.act?.layout === 'center') mask.toggleViewMode(); });
 input.on('toggleFrame', () => mask.toggle(true));
 input.on('hardCut', () => mask.hardCut());
 
@@ -148,6 +150,7 @@ const gui = new GUI({ title: '爪机手感调参' });
 
   const act = {
     '跳过当前幕(N)': () => director.skip(),
+    '凑近/站远(V)': () => mask.toggleViewMode(),
     '右布局(一幕)': () => mask.setLayout('right'),
     '居中(二~四幕)': () => mask.setLayout('center'),
     '展开16:9': () => mask.setLayout('wide'),
@@ -160,9 +163,12 @@ input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
 // —— 调试钩子（控制台/自动化用）——
 window.__debug = { claw, rig, director, mask, items, CONFIG };
 
-// 视口偏移：相机只按"画幅实际可见区域"取景 —— 画幅偏右时娃娃机跟着移到画幅中央，
-// 而不是取景全窗口再被 clip 裁掉一半（那等于只露个边）
-const viewRect = { ...mask.getRect() };
+// 视口偏移：near = 相机只按画幅可见区域取景（凑近，画幅偏右时机器跟着居中）；
+// far = 全窗取景 + clip 裁切（站远，首版构图）。
+// far ≡ viewOffset 取全窗矩形 → 两种模式共用同一套阻尼插值，切换自动平滑过渡
+const fullRect = () => ({ x: 0, y: 0, w: innerWidth, h: innerHeight });
+const targetRect = () => mask.viewMode === 'near' ? mask.getRect() : fullRect();
+const viewRect = { ...targetRect() };
 function applyViewRect() {
   camera.setViewOffset(innerWidth, innerHeight, viewRect.x, viewRect.y, viewRect.w, viewRect.h);
   post.setCenter((viewRect.x + viewRect.w / 2) / innerWidth, 1 - (viewRect.y + viewRect.h / 2) / innerHeight);
@@ -178,8 +184,8 @@ function tick() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
-  // 画幅位阻尼跟踪（转场动画过程中逐帧收敛到 mask 的实时位置）
-  const cur = mask.getRect();
+  // 画幅位/取景模式阻尼跟踪（转场与近远切换过程中逐帧收敛）
+  const cur = targetRect();
   const a = 1 - Math.exp(-dt / 0.28);
   viewRect.x += (cur.x - viewRect.x) * a;
   viewRect.y += (cur.y - viewRect.y) * a;
@@ -201,6 +207,6 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   post.setSize(innerWidth, innerHeight);
-  Object.assign(viewRect, mask.getRect());   // 窗口变化时直接对齐，不做阻尼
+  Object.assign(viewRect, targetRect());   // 窗口变化时直接对齐，不做阻尼
   // 画幅遮罩在 frameMask 内自行监听 resize
 });

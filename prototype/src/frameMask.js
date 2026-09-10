@@ -16,9 +16,13 @@ export class FrameMask {
     this.border = document.getElementById('frameBorder');
     this.flash = document.getElementById('flash');
     this.mode = 'center';
+    this.viewMode = 'near';   // 取景：near=只取画幅区域（凑近）/ far=全窗取景画幅裁切（站远，首版构图）
     window.addEventListener('resize', () => this.apply(false));
     this.apply(false);
   }
+
+  setViewMode(m) { if (m === 'near' || m === 'far') this.viewMode = m; }
+  toggleViewMode() { this.setViewMode(this.viewMode === 'near' ? 'far' : 'near'); }
 
   #rect() {
     const w = innerWidth, h = innerHeight, f = CONFIG.frame;

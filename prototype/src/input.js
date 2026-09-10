@@ -21,6 +21,7 @@ export class Input {
         case 'KeyF':   this.emit(e.shiftKey ? 'hardCut' : 'toggleFrame'); break;
         case 'KeyH':   this.emit('gui'); break;
         case 'KeyN':   this.emit('next'); break;   // 调试：跳过当前幕
+        case 'KeyV':   this.emit('frameMode'); break;   // 取景 近/远 切换
       }
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
