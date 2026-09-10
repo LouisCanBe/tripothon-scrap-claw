@@ -124,30 +124,65 @@ export function nearestItem(items, x, z, radius) {
 }
 
 // ============================================================
-// Tripo 接缝：GLB 热替换
-// 页面先用几何体秒开；manifest 有条目的物品加载完成后原位替换。
+// Tripo 接缝：GLB 热替换（无卡顿版）
+// 流程：全部并行下载解析 → 隐身挂进场景 → compileAsync 异步编译着色器
+//       （不阻塞主线程，卡顿的真凶是 16 个 PBR 材质同帧编译）
+//       → 逐个"弹出"换装（把换装从瑕疵变成一个上货小动画）
 // 动态 import GLTFLoader —— 没有任何 GLB 时零成本。
 // ============================================================
-export function upgradeVisuals(scene, items) {
+const _swapAnims = [];
+const _sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// 弹出动画（easeOut + 微回弹），由主循环每帧驱动
+export function tickUpgrades(dt) {
+  for (let i = _swapAnims.length - 1; i >= 0; i--) {
+    const a = _swapAnims[i];
+    a.t += dt / 0.28;
+    const k = Math.min(a.t, 1);
+    const e = 1 - Math.pow(1 - k, 3);
+    a.obj.scale.setScalar(k >= 1 ? 1 : 0.6 + 0.4 * e + Math.sin(k * Math.PI) * 0.06);
+    if (k >= 1) _swapAnims.splice(i, 1);
+  }
+}
+
+export async function upgradeVisuals(parent, items, renderer, camera) {
   const pending = items.filter(it => GLB_MANIFEST[it.id]);
   if (!pending.length) return;
 
-  import('three/addons/loaders/GLTFLoader.js').then(({ GLTFLoader }) => {
-    const loader = new GLTFLoader();
-    for (const item of pending) {
-      loader.loadAsync(GLB_MANIFEST[item.id])
-        .then(gltf => {
-          if (item.state !== 'idle') return; // 已被抓走/收集，不换
-          const g = normalizeGLB(gltf.scene, item.collider, item.restY);
-          g.position.copy(item.mesh.position);
-          g.rotation.copy(item.mesh.rotation);
-          scene.remove(item.mesh);
-          scene.add(g);
-          item.mesh = g;   // 引用替换：爪机/判定读的都是 item.mesh，无感知
-        })
-        .catch(err => console.warn(`[Tripo] ${item.id} 加载失败，保留几何体`, err));
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const loader = new GLTFLoader();
+  const results = await Promise.allSettled(pending.map(it => loader.loadAsync(GLB_MANIFEST[it.id])));
+
+  // 归一化 + 隐身挂场景（此时尚未显示，不触发逐材质编译卡顿）
+  const ready = [];
+  for (let i = 0; i < pending.length; i++) {
+    const res = results[i], item = pending[i];
+    if (res.status !== 'fulfilled') {
+      console.warn(`[Tripo] ${item.id} 加载失败，保留几何体`, res.reason);
+      continue;
     }
-  });
+    const g = normalizeGLB(res.value.scene, item.collider, item.restY);
+    g.position.copy(item.mesh.position);
+    g.rotation.copy(item.mesh.rotation);
+    g.visible = false;
+    parent.add(g);
+    ready.push({ item, g });
+  }
+  if (!ready.length) return;
+
+  // 一次性异步编译全部新材质（KHR_parallel_shader_compile 支持时不卡帧）
+  try { await renderer.compileAsync(parent, camera); } catch { /* 不支持则退化为同步，与旧行为一致 */ }
+
+  // 逐个弹出换装
+  for (const { item, g } of ready) {
+    if (item.state !== 'idle') { parent.remove(g); continue; }  // 已被抓走/收集
+    parent.remove(item.mesh);
+    g.visible = true;
+    g.scale.setScalar(0.6);
+    _swapAnims.push({ obj: g, t: 0 });
+    item.mesh = g;   // 引用替换：爪机/判定读的都是 item.mesh，无感知
+    await _sleep(90);
+  }
 }
 
 // Tripo 输出的比例/轴心不统一，载入侧归一，四步：

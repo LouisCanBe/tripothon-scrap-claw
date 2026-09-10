@@ -20,6 +20,7 @@ export class Input {
         case 'KeyE':   this.emit('cycle', 1); break;
         case 'KeyF':   this.emit(e.shiftKey ? 'hardCut' : 'toggleFrame'); break;
         case 'KeyH':   this.emit('gui'); break;
+        case 'KeyN':   this.emit('next'); break;   // 调试：跳过当前幕
       }
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));

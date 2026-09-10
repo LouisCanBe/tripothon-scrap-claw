@@ -16,10 +16,14 @@ export class CameraRig {
     const v = cfg.views.front;
     this.pos = new THREE.Vector3(...v.pos);
     this.look = new THREE.Vector3(...v.look);
+    this.zoom = 1;          // 有效机位 = look + (pos - look) × zoom（一幕拉近用）
+    this.zoomTarget = 1;
     this._m = new THREE.Matrix4();
     this._q = new THREE.Quaternion();
     this._e = new THREE.Euler();
   }
+
+  setZoom(z) { this.zoomTarget = z; }
 
   setView(name) { if (this.cfg.views[name]) this.cur = name; }
 
@@ -31,10 +35,13 @@ export class CameraRig {
   update(dt, t) {
     const cfg = this.cfg;
     const v = cfg.views[this.cur];
+    this.zoom = damp(this.zoom, this.zoomTarget, cfg.tau, dt);
+    const z = this.zoom;
 
-    this.pos.x = damp(this.pos.x, v.pos[0], cfg.tau, dt);
-    this.pos.y = damp(this.pos.y, v.pos[1], cfg.tau, dt);
-    this.pos.z = damp(this.pos.z, v.pos[2], cfg.tau, dt);
+    // 以观察目标为锚点缩放机位（zoom<1 = 贴近玻璃柜）
+    this.pos.x = damp(this.pos.x, v.look[0] + (v.pos[0] - v.look[0]) * z, cfg.tau, dt);
+    this.pos.y = damp(this.pos.y, v.look[1] + (v.pos[1] - v.look[1]) * z, cfg.tau, dt);
+    this.pos.z = damp(this.pos.z, v.look[2] + (v.pos[2] - v.look[2]) * z, cfg.tau, dt);
     this.look.x = damp(this.look.x, v.look[0], cfg.tau, dt);
     this.look.y = damp(this.look.y, v.look[1], cfg.tau, dt);
     this.look.z = damp(this.look.z, v.look[2], cfg.tau, dt);

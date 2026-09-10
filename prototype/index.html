@@ -59,7 +59,37 @@
   #msg.stinger { font-family: var(--font-hand); font-size: 24px; letter-spacing: 2px; }
   #hint { position: fixed; bottom: 14px; width: 100%; text-align: center; z-index: 10;
           font-size: var(--font-size-hint); color: var(--color-ink-dim);
-          letter-spacing: var(--letter-spacing); pointer-events: none; }
+          letter-spacing: var(--letter-spacing); pointer-events: none; transition: opacity .5s; }
+
+  /* —— 漫画旁白框（二/三幕两侧）—— */
+  .panel { position: fixed; top: 50%; left: 5%; transform: translateY(-50%) rotate(-.8deg);
+           width: 24%; max-width: 330px; padding: 18px 20px; z-index: 8; pointer-events: none;
+           background: #efe9dc; color: #26241f; font-size: 15px; line-height: 1.9;
+           white-space: pre-line; border: 2px solid #26241f; box-shadow: 4px 4px 0 rgba(0,0,0,.45);
+           opacity: 0; transition: opacity .6s; }
+  .panel.right { left: auto; right: 5%; transform: translateY(-50%) rotate(.7deg); }
+  .panel.show { opacity: 1; }
+
+  /* —— 幕标题卡 —— */
+  #actLabel { position: fixed; top: 8%; width: 100%; text-align: center; z-index: 9;
+              font-size: 15px; letter-spacing: 6px; color: var(--color-ink);
+              opacity: 0; transition: opacity .8s; pointer-events: none; }
+  #actLabel.show { opacity: .9; }
+
+  /* —— 四幕合成演出 —— */
+  #synth { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+  .syn-card { position: fixed; bottom: 12%; width: 110px; padding: 12px 0; text-align: center;
+              background: #efe9dc; color: #26241f; border: 2px solid #26241f;
+              box-shadow: 3px 3px 0 rgba(0,0,0,.4); opacity: 0;
+              transition: all .9s cubic-bezier(.5,0,.2,1); }
+  #synCard0 { left: 30%; } #synCard1 { left: 46%; } #synCard2 { left: 62%; }
+  .syn-card.show { opacity: 1; bottom: 18%; }
+  .syn-card.merge { left: 46%; bottom: 46%; opacity: 0; transform: scale(.6) rotate(6deg); }
+  #menuCard { position: fixed; left: 50%; top: 44%; transform: translate(-50%,-50%) scale(.9);
+              padding: 22px 34px; background: #f7f1e2; color: #26241f; border: 2px solid #26241f;
+              box-shadow: 0 0 60px rgba(255,190,120,.35); text-align: center; line-height: 2;
+              font-size: 16px; white-space: pre-line; opacity: 0; transition: all 1.2s; }
+  #menuCard.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
   .lil-gui { z-index: 30 !important; --background-color: rgba(14,14,16,.94); }
 </style>
 </head>
@@ -75,8 +105,17 @@
     <div class="quest" id="q-can">· 罐头 ×1</div>
     <div class="quest" id="q-veg">· 蔬菜 ×1</div>
   </div>
+  <div id="panelLeft" class="panel"></div>
+  <div id="panelRight" class="panel right"></div>
+  <div id="actLabel"></div>
+  <div id="synth" hidden>
+    <div class="syn-card" id="synCard0"></div>
+    <div class="syn-card" id="synCard1"></div>
+    <div class="syn-card" id="synCard2"></div>
+    <div id="menuCard"></div>
+  </div>
   <div id="msg"></div>
-  <div id="hint">←→↑↓ / WASD 移动 · 空格 落爪(不可取消) · 1/2/3 视角 左/前/右 · Q/E 循环 · F 画幅展开(过渡) · Shift+F 硬切(降级) · H 参数面板</div>
+  <div id="hint"></div>
 
   <script type="importmap">
   {

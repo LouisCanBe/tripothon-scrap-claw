@@ -1,15 +1,23 @@
 // ============================================================
-// 装配：渲染器 / 场景 / 灯光 / 外壳 / 各模块 / 调参面板 / 主循环
+// 装配：渲染器 / 场景 / 灯光 / 世界组 / 各模块 / 导演 / 调参面板 / 主循环
+//
+// 分层视图：
+//   Director（流程编排）→ 调接口：claw / rig / mask / CONFIG / lights
+//   机器生成实验 → 换实现：machineShell.js / clawMachine 内部视觉
+//   两条线互不接触。
 // ============================================================
 import * as THREE from 'three';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
 import { CONFIG } from './config.js';
-import { spawnPool, upgradeVisuals } from './prizePool.js';
+import { spawnPool, upgradeVisuals, tickUpgrades } from './prizePool.js';
 import { ClawMachine } from './clawMachine.js';
 import { CameraRig } from './cameraRig.js';
 import { FrameMask } from './frameMask.js';
 import { Post } from './post.js';
 import { Input } from './input.js';
+import { buildMachineShell } from './machineShell.js';
+import { Director } from './director.js';
+import { DEFAULT_HINT } from './acts.js';
 
 // —— 渲染器 ——
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -22,8 +30,9 @@ scene.background = new THREE.Color(0x0b0b0d);
 
 const camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, innerWidth / innerHeight, 0.1, 60);
 
-// —— 灯光：记忆层的"暖"（终幕实景再反转为冷调）——
-scene.add(new THREE.HemisphereLight(0xfff2dd, 0x191a20, 0.55));
+// —— 灯光：记忆层的"暖"（终幕转冷）——
+const hemi = new THREE.HemisphereLight(0xfff2dd, 0x191a20, 0.55);
+scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffe7c4, 1.1);
 key.position.set(2.5, 4, 3);
 scene.add(key);
@@ -31,100 +40,83 @@ const glow = new THREE.PointLight(0xffd9a0, 10, 7, 1.8);
 glow.position.set(0, 1.7, 0.4);
 scene.add(glow);
 
-// —— 娃娃机外壳（灰盒：框架 + 底板 + 背板，玻璃省略）——
-(function buildShell() {
-  const matBody = new THREE.MeshStandardMaterial({ color: 0x2b2e35, roughness: 0.55, metalness: 0.6 });
-  const matDark = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.9 });
+// —— 世界组：机器 + 奖池 + 爪（终幕整组隐藏，切实景）——
+const world = new THREE.Group();
+scene.add(world);
+buildMachineShell(world);
+const items = spawnPool(world);
+upgradeVisuals(world, items, renderer, camera);   // manifest 有 GLB 的：预编译后逐个弹出热替换
 
-  const base = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.3, 2.3), matBody);
-  base.position.y = -0.15;
-  scene.add(base);
-
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.0, 2.0),
-    new THREE.MeshStandardMaterial({ color: 0x3d3428, roughness: 0.95 }));
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 0.001;
-  scene.add(floor);
-
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 2.4), matDark);
-  back.position.set(0, 1.05, -1.12);
-  scene.add(back);
-
-  const postGeo = new THREE.CylinderGeometry(0.045, 0.045, 2.1, 10);
-  for (const [px, pz] of [[-1.58, -1.08], [1.58, -1.08], [-1.58, 1.08], [1.58, 1.08]]) {
-    const m = new THREE.Mesh(postGeo, matBody);
-    m.position.set(px, 1.05, pz);
-    scene.add(m);
-  }
-
-  const top = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.32, 2.3), matBody);
-  top.position.y = 2.2;
-  scene.add(top);
-
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.06), matDark);
-  panel.position.set(0.9, 0.05, 1.14);
-  scene.add(panel);
-
-  // 取物洞
-  const [hx, hz] = CONFIG.claw.holePos;
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(CONFIG.claw.holeRadius, 0.02, 10, 32), matBody);
-  rim.rotation.x = Math.PI / 2;
-  rim.position.set(hx, 0.015, hz);
-  scene.add(rim);
-  const pit = new THREE.Mesh(
-    new THREE.CylinderGeometry(CONFIG.claw.holeRadius, CONFIG.claw.holeRadius, 0.3, 24),
-    new THREE.MeshBasicMaterial({ color: 0x000000 }));
-  pit.position.set(hx, -0.14, hz);
-  scene.add(pit);
-})();
-
-// —— 奖池（几何体秒开；manifest 有 GLB 的会原位热替换）——
-const items = spawnPool(scene);
-upgradeVisuals(scene, items);
-
-// —— HUD 回调 ——
-let collected = 0;
-const msgEl = document.getElementById('msg');
-let msgTimer = 0;
-const hooks = {
-  onMessage(text) {
-    msgEl.textContent = text;
-    msgEl.style.opacity = '1';
-    clearTimeout(msgTimer);
-    msgTimer = setTimeout(() => (msgEl.style.opacity = '0'), 2400);
+// —— 爪机 ——
+let director;   // 前向声明：claw 的 hooks 里闭包引用
+const claw = new ClawMachine(world, items, {
+  onMessage: (t) => director?.msg(t),
+  onCollect: (item) => {
+    const el = document.getElementById('collected');
+    el.textContent = +el.textContent + 1;
+    director?.notify('collect', item);
   },
-  onCollect(item) {
-    document.getElementById('collected').textContent = ++collected;
-    if (item.quest) {
-      document.getElementById('q-' + item.id)?.classList.add('done');
-      const allDone = ['bread', 'can', 'veg']
-        .every(id => document.getElementById('q-' + id).classList.contains('done'));
-      if (allDone) setTimeout(() => hooks.onMessage('配额完成。「那天他们吃得很好。」'), 1200);
-    }
-  },
-};
+});
+claw.upgradeClawVisual(renderer, camera);   // AI 分件爪热替换（失败回退 procedural）
 
-// —— 模块装配 ——
-const claw = new ClawMachine(scene, items, hooks);
+// —— 镜头 / 画幅 / 后处理 / 输入 ——
 const rig = new CameraRig(camera);
 const mask = new FrameMask();
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
 const input = new Input();
 
-// 画幅切换 → 鱼眼同步消退/恢复
 window.addEventListener('framechange', (e) => {
   if (CONFIG.frame.fisheyeFadeOnWide) post.setFisheyeFade(e.detail === 'wide' ? 0 : 1);
 });
 
-input.on('drop', () => claw.startDrop());
-input.on('view', (v) => rig.setView(v));
-input.on('cycle', (d) => rig.cycle(d));
+// —— 终幕实景（占位版：冷调废墟角落 + 压扁的罐头；正式版换生成的实景资产）——
+function onReveal() {
+  world.visible = false;
+  key.color.set(0x8ea6c2); key.intensity = 0.5;
+  hemi.intensity = 0.22;
+  glow.visible = false;
+  scene.fog = new THREE.Fog(0x05060a, 3.5, 13);
+
+  const g = new THREE.Group();
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 30),
+    new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: 1 }));
+  ground.rotation.x = -Math.PI / 2;
+  g.add(ground);
+
+  const squashed = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.06, 0.028, 16),
+    new THREE.MeshStandardMaterial({ color: 0x7a5238, roughness: 0.8, metalness: 0.5 }));
+  squashed.position.set(0.25, 0.014, 0.9);
+  g.add(squashed);
+
+  const rubbleMat = new THREE.MeshStandardMaterial({ color: 0x191b1f, roughness: 1 });
+  for (const [x, y, z, s] of [[-0.9, 0.16, 0.2, 0.5], [0.8, 0.22, -0.3, 0.7], [-0.3, 0.12, 1.4, 0.4]]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(s, s * 0.6, s * 0.7), rubbleMat);
+    b.position.set(x, y, z);
+    b.rotation.y = Math.random() * 3;
+    g.add(b);
+  }
+  scene.add(g);
+}
+
+// —— 导演（流程编排中枢）——
+director = new Director({
+  mask, claw, rig,
+  lights: { key, glow, hemi },
+  hooks: { onReveal },
+});
+
+// —— 输入接线（带幕间权限闸）——
+input.on('drop', () => { if (director.allow('drop')) claw.startDrop(); });
+input.on('view', (v) => { if (director.allow('view')) { rig.setView(v); director.notify('view', v); } });
+input.on('cycle', (d) => { if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); } });
+input.on('next', () => director.skip());
 input.on('toggleFrame', () => mask.toggle(true));
 input.on('hardCut', () => mask.hardCut());
 
-// —— 调参面板（H 切换显隐）——
+// —— 调参面板（H 切换显隐；画幅按钮是调试入口，正常流程由导演接管）——
 const gui = new GUI({ title: '爪机手感调参' });
 {
   const f = gui.addFolder('移动惯性');
@@ -137,8 +129,8 @@ const gui = new GUI({ title: '爪机手感调参' });
   d.add(CONFIG.claw, 'closeDelay', 0, 0.6, 0.01);
   d.add(CONFIG.claw, 'closeDuration', 0.1, 1, 0.01);
 
-  const g = gui.addFolder('爪力 / 滑落');
-  g.add(CONFIG.claw, 'gripStrength', 0, 1, 0.01);
+  const g = gui.addFolder('爪力 / 滑落（导演按幕覆盖）');
+  g.add(CONFIG.claw, 'gripStrength', 0, 1, 0.01).listen();
   g.add(CONFIG.claw, 'baseSlipProb', 0, 1, 0.01);
   g.add(CONFIG.claw, 'grabRadius', 0.15, 0.5, 0.01);
   g.add(CONFIG.claw, 'wobbleAmp', 0, 0.06, 0.001);
@@ -151,20 +143,33 @@ const gui = new GUI({ title: '爪机手感调参' });
   const p = gui.addFolder('后处理');
   p.add(CONFIG.post, 'k1', -0.2, 0.3, 0.005);
   p.add(CONFIG.post, 'k2', 0, 0.2, 0.005);
-  p.add(CONFIG.post, 'grain', 0, 0.15, 0.005);
+  p.add(CONFIG.post, 'grain', 0, 0.15, 0.005).listen();
   p.add(CONFIG.post, 'vignette', 0, 1, 0.05);
 
   const act = {
-    '展开16:9(过渡)': () => mask.toWide(true),
-    '硬切16:9(降级)': () => mask.hardCut(),
-    '回到1:1': () => mask.toSquare(true),
+    '跳过当前幕(N)': () => director.skip(),
+    '右布局(一幕)': () => mask.setLayout('right'),
+    '居中(二~四幕)': () => mask.setLayout('center'),
+    '展开16:9': () => mask.setLayout('wide'),
   };
-  gui.add(act, '展开16:9(过渡)');
-  gui.add(act, '硬切16:9(降级)');
-  gui.add(act, '回到1:1');
+  for (const k of Object.keys(act)) gui.add(act, k);
 }
 let guiOn = true;
 input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
+
+// —— 调试钩子（控制台/自动化用）——
+window.__debug = { claw, rig, director, mask, items, CONFIG };
+
+// 视口偏移：相机只按"画幅实际可见区域"取景 —— 画幅偏右时娃娃机跟着移到画幅中央，
+// 而不是取景全窗口再被 clip 裁掉一半（那等于只露个边）
+const viewRect = { ...mask.getRect() };
+function applyViewRect() {
+  camera.setViewOffset(innerWidth, innerHeight, viewRect.x, viewRect.y, viewRect.w, viewRect.h);
+  post.setCenter((viewRect.x + viewRect.w / 2) / innerWidth, 1 - (viewRect.y + viewRect.h / 2) / innerHeight);
+}
+applyViewRect();
+
+director.start();
 
 // —— 主循环 ——
 const clock = new THREE.Clock();
@@ -172,10 +177,21 @@ function tick() {
   requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
+
+  // 画幅位阻尼跟踪（转场动画过程中逐帧收敛到 mask 的实时位置）
+  const cur = mask.getRect();
+  const a = 1 - Math.exp(-dt / 0.28);
+  viewRect.x += (cur.x - viewRect.x) * a;
+  viewRect.y += (cur.y - viewRect.y) * a;
+  viewRect.w += (cur.w - viewRect.w) * a;
+  viewRect.h += (cur.h - viewRect.h) * a;
+  applyViewRect();
+
   const ax = input.axis();
   claw.move(ax.x, ax.z, dt);
   claw.update(dt, t);
   rig.update(dt, t);
+  tickUpgrades(dt);
   post.render(dt, t);
 }
 tick();
@@ -185,5 +201,6 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   post.setSize(innerWidth, innerHeight);
+  Object.assign(viewRect, mask.getRect());   // 窗口变化时直接对齐，不做阻尼
   // 画幅遮罩在 frameMask 内自行监听 resize
 });

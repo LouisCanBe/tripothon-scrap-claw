@@ -1,0 +1,84 @@
+// ============================================================
+// 分幕数据（outline 三~四章的代码化，文案/时长都在这改，不动引擎）
+//
+// 每幕字段：
+//   label   幕标题卡          layout  画幅位 right/center/wide
+//   control 输入权限           tuning  幕间爪力曲线（难度旋钮）
+//   quest   任务物品 id        hint    底部操作提示（null=隐藏）
+//   script  步骤序列：
+//     { sub, dur }            底部字幕，dur 秒
+//     { panel, side, text, dur? }  漫画旁白框；text:'' 收起；无 dur 常驻
+//     { hint }                改底部提示
+//     { wait: 事件名 }         等待事件：allViews / firstCollect / questComplete
+//     { synthesis }           四幕合成演出
+//     { glitch }              终幕故障转场
+//     { reveal }              露出实景（调 main 注入的 onReveal）
+//     { stinger }             终幕手写体收尾 + 八音盒彩蛋钩子
+// ============================================================
+
+export const DEFAULT_HINT = '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环 · H 参数面板';
+
+export const ACTS = [
+  {
+    id: 1, label: '第一幕 · 引子', layout: 'right',
+    control: { move: false, drop: false, view: true },
+    zoom: 0.68,   // 贴近玻璃柜的近景
+    hint: '按 1 / 2 / 3（或 Q / E）转动视线，看看柜子里。',
+    script: [
+      { type: 'sub', text: '资源枯竭纪元 21 年。', dur: 3 },
+      { type: 'sub', text: '配给制度崩坏，人们靠"采集"活下去。', dur: 4 },
+      { type: 'panel', side: 'left', text: '他还记得那台机器。\n那时候，食物是装在玻璃柜里的。', dur: 4.5 },
+      { type: 'wait', event: 'allViews' },
+      { type: 'sub', text: '左边……右边……都一样。都是吃的。', dur: 4 },
+    ],
+  },
+  {
+    id: 2, label: '第二幕 · 学会抓取', layout: 'center',
+    control: { move: true, drop: true, view: true },
+    tuning: { gripStrength: 1.0, baseSlipProb: 0 },   // 教学：首抓必成
+    hint: DEFAULT_HINT,
+    script: [
+      { type: 'panel', side: 'left', text: '移动爪子。\n对准。' },
+      { type: 'panel', side: 'right', text: '按下空格。\n落爪。' },
+      { type: 'wait', event: 'firstCollect' },
+      { type: 'panel', side: 'right', text: '' },
+      { type: 'panel', side: 'left', text: '成功了。\n他和妹妹分着吃。', dur: 4 },
+    ],
+  },
+  {
+    id: 3, label: '第三幕 · 采集任务', layout: 'center',
+    control: { move: true, drop: true, view: true },
+    tuning: { gripStrength: 0.78, baseSlipProb: 0.45, decayPerGrab: 0.06 },  // 爪力开始不稳
+    quest: ['bread', 'can', 'veg'],
+    hint: DEFAULT_HINT,
+    script: [
+      { type: 'panel', side: 'left', text: '今日采集配额：\n面包 ×1\n罐头 ×1\n蔬菜 ×1' },
+      { type: 'panel', side: 'right', text: '抓够之前，\n别去想机器外面是什么。' },
+      { type: 'wait', event: 'questComplete' },
+      { type: 'sub', text: '……齐了。今天能吃了。', dur: 2.5 },
+    ],
+  },
+  {
+    id: 4, label: '第四幕 · 拼凑一顿饭', layout: 'center',
+    control: { move: false, drop: false, view: false },
+    hint: null,
+    menu: { cards: ['面包', '罐头', '蔬菜'], line: '今日菜单\n面包汤 · 罐头 · 烫青菜' },
+    script: [
+      { type: 'panel', side: 'left', text: '' },
+      { type: 'panel', side: 'right', text: '' },
+      { type: 'synthesis' },
+      { type: 'sub', text: '那天他们吃得很好。', dur: 3.2 },
+      { type: 'sub', text: '他一直是这么记的。', dur: 3 },
+    ],
+  },
+  {
+    id: 5, label: '', layout: 'wide',
+    control: { move: false, drop: false, view: false },
+    hint: null,
+    script: [
+      { type: 'glitch' },
+      { type: 'reveal' },
+      { type: 'stinger', text: 'Demo 结束。他今天吃了什么？' },
+    ],
+  },
+];

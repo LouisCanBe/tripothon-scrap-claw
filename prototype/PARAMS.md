@@ -87,6 +87,22 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 | `views.*` | 见 config | — | 三观察位坐标，只允许左/前/右 |
 | `tau` | 0.38 | 0.2–0.7 | 视角切换阻尼 |
 | `breathDeg` | 0.25 | 0–0.3 | 呼吸幅度，**outline 硬上限 0.3°** |
+| `acts.js 的 zoom` | 一幕 0.68 | 0.5–1.2 | **逐幕变焦**：机位 = look + (pos−look)×zoom。<1 贴近玻璃柜（一幕近景），缺省 1 = 看全整机。相机只对画幅可见区域取景（setViewOffset），画幅偏右时机器自动居中 |
+
+## 四·五、AI 分件爪（config.clawGLB）
+
+替换机制：`upgradeClawVisual()` 加载分件 GLB → 静态件保持原变换 → 每条爪臂按**节点位移的方位角**包一个关节 pivot（`attach` 保持世界位姿）→ 替换 `this.pivots` 引用，开合时序/#setProngs 照常工作。
+
+| 参数 | 默认 | 控制什么 |
+|---|---|---|
+| `url` | assets/machine/claw_parts.glb | 分件模型路径；清空即回退 procedural |
+| `scale / offsetY` | 0.58 / -0.24 | 体量对齐：顶盖≈+0.05 接吊缆，爪尖≈-0.53（= 抓物悬挂点 -0.52 附近） |
+| `staticParts` | part_0/2/5/7 | 不动的件（外壳/中柱/细杆/顶盖） |
+| `prongGroups` | [1,6] [3] [4] | 同组共享一个关节；part_6 小关节贴前臂同组随动 |
+| `attachY / attachR` | -0.14 / 0.15 | 关节点：臂顶端高度 / 臂根内缘半径（模型单位） |
+| `openAngle / closeAngle` | 0 / -0.50 | 生成姿态即张开；闭合=绕关节内收（负=向内）。臂穿插/合不拢就调它 |
+
+**换新一版爪子模型时**：分件名会变 → 浏览器控制台把 GLB 挂进场景，逐件染不同颜色截图确认归属（本次就是这么标的），再更新 `staticParts` / `prongGroups`。
 
 ## 五、后处理
 
@@ -114,7 +130,7 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 
 1. 数据表某项 `visual` 改为 `{ type:'glb', url }`，走 `prizePool.js → normalizeGLB()`（归一化四步已写在注释里）——机制代码零改动；
 2. 生成侧参数：`face_limit` 1万–5万（Web）或 `smart_low_poly:true`；风格统一走 image-to-3D（先出一套概念图）；
-3. **爪子不走 Tripo**：AI 出的是静态整体网格，开合动画要分件。灰盒里的 procedural 三爪片可直接沿用为正赛资产；
+3. **爪子已换 AI 分件**（2026-09-11 起）：`generate_parts` 出的 `assets/machine/claw_parts.glb` 经 `clawMachine.upgradeClawVisual()` 热替换，只换视觉、状态机/判定零改动，失败自动回退 procedural 爪。分件归属与关节参数见下"AI 分件爪"一节；
 4. 冒烟 DoD：面包 + 罐头各生成一次，跑通 `生成→GLB→归一化→入池→被抓→60fps`。
 
 ## 灰盒已知简化（不是 bug，别现在修）
@@ -122,6 +138,21 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 - 奖池单层平铺，无堆叠物理（正赛如需堆叠再上网格碰撞）
 - 无玻璃反射、无音效、无故障 shader（后处理链已留扩展位）
 - HUD/字幕是最简 HTML，未做漫画分镜样式（二幕美术阶段替换）
+- 终幕实景是占位（冷调地面 + 压扁罐头 + 杂物剪影），正式版换生成资产
+
+---
+
+## 流程编排（director.js + acts.js）
+
+**分层原则：编排层只调稳定接口**（爪机 controlEnabled/参数/hooks、画幅 setLayout、镜头三视角、灯光），
+不碰机器外壳与爪子的实现 —— 所以机器生成实验（换 machineShell.js / 爪片视觉）与编排互不影响。
+
+- **改文案/时长/参数** → 只动 `acts.js`（数据驱动：sub 字幕、panel 旁白框、wait 事件、tuning 爪力、quest 任务）
+- **改流程结构**（加幕/加步骤类型）→ `director.js`
+- **画幅三布局位**：`right`（一幕左文右窗）/ `center`（二三四幕居中）/ `wide`（终幕 16:9）；相机取景跟随画幅（阻尼 0.28s），转场时机器不跑偏
+- **逐幕变焦**：`acts.js` 每幕可写 `zoom`（一幕 0.68 近景贴玻璃柜；缺省 1 看全整机，二幕起自动拉回）
+- **幕间难度曲线**已按本文档"三、爪力"表接线：二幕必成（1.0/0）→ 三幕衰减（0.78 起步，每抓 -0.06）
+- 调试：**N 键跳幕**；控制台 `__debug.director / claw / items` 可直接操作（自动化测试用的就是这个）
 
 ---
 

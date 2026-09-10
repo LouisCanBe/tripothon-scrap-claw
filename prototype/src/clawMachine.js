@@ -45,6 +45,7 @@ export class ClawMachine {
     this.gripped = null;             // 当前抓住的物品
     this.slipPlanned = false;        // 本次上升是否安排滑落
     this.slipAtY = 0;                // 滑落发生高度
+    this.controlEnabled = true;      // 流程编排的输入总闸（Director 控制）
 
     this.#build(scene);
   }
@@ -74,13 +75,14 @@ export class ClawMachine {
     const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.10, 16), metal);
     this.claw.add(crown);
 
-    // 三爪片：procedural 建模（Tripo 生成的是静态整体网格，
-    // 开合动画必须分件 —— 爪子本来就不走 AI 生成，见 PARAMS.md）
+    // 三爪片：procedural 建模（灰盒兜底；AI 分件爪由 upgradeClawVisual 热替换）
+    this._procVisuals = [crown];   // 记录 procedural 件，替换时摘除
     this.pivots = [];
     for (let i = 0; i < 3; i++) {
       const assembly = new THREE.Group();
       assembly.rotation.y = (i / 3) * Math.PI * 2;
       this.claw.add(assembly);
+      this._procVisuals.push(assembly);
 
       const pivot = new THREE.Group();
       pivot.position.set(0.15, -0.05, 0);
@@ -100,6 +102,69 @@ export class ClawMachine {
     this.#setProngs(0);
   }
 
+  // ============================================================
+  // Tripo 接缝：AI 分件爪热替换（只换视觉，状态机/判定零改动）
+  // 静态件保持原变换；爪臂按节点方位角各包一个关节 pivot，
+  // 替换 this.pivots 引用 → #setProngs / 开合时序照常工作。
+  // 失败（无文件/解析错）→ 保留 procedural 爪，静默回退。
+  // ============================================================
+  async upgradeClawVisual(renderer, camera) {
+    const cfg = CONFIG.clawGLB;
+    if (!cfg?.url) return;
+    try {
+      const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+      const gltf = await new GLTFLoader().loadAsync(cfg.url);
+      const root = gltf.scene;
+      const byName = {};
+      root.traverse(o => { if (o.name) byName[o.name] = o; });
+
+      const newClaw = new THREE.Group();
+      newClaw.scale.setScalar(cfg.scale);
+      newClaw.position.y = cfg.offsetY;
+      newClaw.rotation.y = cfg.rotationY ?? 0;   // 转正：让正视角看到开合
+      newClaw.add(root);
+      this.claw.add(newClaw);
+
+      // 爪臂重挂：每条臂一个 assembly（对齐方位角）+ pivot（关节点）
+      const pivots = [];
+      for (const group of cfg.prongGroups) {
+        const first = byName[group[0]];
+        if (!first) continue;
+        const t = first.position;                     // 节点位移 ≈ 臂的方位
+        const assembly = new THREE.Group();
+        assembly.rotation.y = Math.atan2(-t.z, t.x);  // 局部 +x = 该臂径向
+        const pivot = new THREE.Group();
+        pivot.position.set(cfg.attachR, cfg.attachY, 0);
+        assembly.add(pivot);
+        newClaw.add(assembly);
+        pivots.push(pivot);
+        newClaw.updateMatrixWorld(true);              // attach 前刷新矩阵
+        for (const name of group) {
+          const part = byName[name];
+          if (part) pivot.attach(part);               // 保持世界位姿挂到关节下
+        }
+      }
+      if (!pivots.length) throw new Error('分件里没有可动爪臂');
+
+      // 预编译材质，避免替换瞬间卡帧
+      if (renderer && camera) {
+        newClaw.visible = false;
+        try { await renderer.compileAsync(newClaw, camera); } catch { /* 退化为同步 */ }
+        newClaw.visible = true;
+      }
+
+      for (const o of this._procVisuals) this.claw.remove(o);
+      this._procVisuals = [];
+      this.pivots = pivots;
+      this.openAngle = cfg.openAngle;                 // 生成姿态 = 张开
+      this.closedAngle = cfg.closeAngle;
+      this.#setProngs(this.prongT);
+      console.log('[claw] AI 分件爪已替换，关节数:', pivots.length);
+    } catch (err) {
+      console.warn('[claw] GLB 爪加载失败，保留 procedural 爪', err);
+    }
+  }
+
   #setProngs(t) {
     for (const p of this.pivots) p.rotation.z = lerp(this.openAngle, this.closedAngle, t);
   }
@@ -110,16 +175,17 @@ export class ClawMachine {
       this.hooks.onMessage(pool[Math.floor(Math.random() * pool.length)]);
   }
 
-  // 水平移动：非 IDLE 一律忽略（落爪不可取消的输入锁）
+  // 水平移动：非 IDLE 一律忽略（落爪不可取消的输入锁）；
+  // controlEnabled=false 时整闸关闭（一幕/四幕/终幕）
   move(ax, az, dt) {
-    if (this.state !== S.IDLE) return;
+    if (!this.controlEnabled || this.state !== S.IDLE) return;
     const c = C();
     this.target.x = THREE.MathUtils.clamp(this.target.x + ax * c.moveSpeed * dt, ...c.boundsX);
     this.target.y = THREE.MathUtils.clamp(this.target.y + az * c.moveSpeed * dt, ...c.boundsZ);
   }
 
   startDrop() {
-    if (this.state !== S.IDLE) return false;
+    if (!this.controlEnabled || this.state !== S.IDLE) return false;
     this.state = S.DROP;
     this.#say('drop');
     return true;

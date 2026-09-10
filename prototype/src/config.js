@@ -36,6 +36,26 @@ export const CONFIG = {
     holeRadius: 0.24,
   },
 
+  // —— AI 生成爪（Tripo 分件模型）——
+  // 判定/状态机不变，只替换视觉；加载失败自动回退 procedural 爪。
+  // 分件归属用浏览器染色法确认：staticParts 不动；prongGroups 同组共享一个开合关节。
+  clawGLB: {
+    url: 'assets/machine/claw_parts.glb',
+    scale: 0.58,           // 模型高约 1.0 → 缩到 procedural 爪的体量（尖深≈0.53）
+    offsetY: -0.24,        // 缩放后整体下移：顶盖≈+0.05 接吊缆，爪尖≈-0.53
+    staticParts: ['tripo_part_0', 'tripo_part_2', 'tripo_part_5', 'tripo_part_7'], // 外壳/中柱/细杆/顶盖
+    prongGroups: [         // 三条爪臂；part_6 小关节贴在前臂上，同组随动
+      ['tripo_part_1', 'tripo_part_6'],
+      ['tripo_part_3'],
+      ['tripo_part_4'],
+    ],
+    attachY: -0.14,        // 关节高度（模型单位）= 各臂顶端的 y
+    attachR: 0.15,         // 关节到轴心的径向距离（臂根内缘）
+    rotationY: 1.5708,     // 整体绕 Y 旋转（rad）：生成模型的臂朝前，转 90° 让正视角看到剪刀式开合
+    openAngle: 0.0,        // 生成姿态即张开姿态
+    closeAngle: -0.50,     // 闭合：绕关节向内收（负=向内）
+  },
+
   camera: {
     fov: 78,                 // 广角，outline 建议 70~85
     tau: 0.38,               // 视角切换时间常数(秒)
