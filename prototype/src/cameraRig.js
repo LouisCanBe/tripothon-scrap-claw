@@ -17,13 +17,15 @@ export class CameraRig {
     this.pos = new THREE.Vector3(...v.pos);
     this.look = new THREE.Vector3(...v.look);
     this.zoom = 1;          // 有效机位 = look + (pos - look) × zoom（一幕拉近用）
-    this.zoomTarget = 1;
+    this.baseZoom = 1;      // 幕级变焦（acts.js 的 zoom 字段）
+    this.modeZoom = 1;      // 取景模式倍率（near 凑近 / far 站远），main 每帧写入
     this._m = new THREE.Matrix4();
     this._q = new THREE.Quaternion();
     this._e = new THREE.Euler();
   }
 
-  setZoom(z) { this.zoomTarget = z; }
+  setZoom(z) { this.baseZoom = z; }
+  setModeZoom(f) { this.modeZoom = f; }
 
   setView(name) { if (this.cfg.views[name]) this.cur = name; }
 
@@ -35,7 +37,7 @@ export class CameraRig {
   update(dt, t) {
     const cfg = this.cfg;
     const v = cfg.views[this.cur];
-    this.zoom = damp(this.zoom, this.zoomTarget, cfg.tau, dt);
+    this.zoom = damp(this.zoom, this.baseZoom * this.modeZoom, cfg.tau, dt);
     const z = this.zoom;
 
     // 以观察目标为锚点缩放机位（zoom<1 = 贴近玻璃柜）

@@ -145,13 +145,15 @@ export function tickUpgrades(dt) {
   }
 }
 
-export async function upgradeVisuals(parent, items, renderer, camera) {
+export async function upgradeVisuals(parent, items, renderer, camera, onProgress) {
   const pending = items.filter(it => GLB_MANIFEST[it.id]);
   if (!pending.length) return;
 
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
   const loader = new GLTFLoader();
-  const results = await Promise.allSettled(pending.map(it => loader.loadAsync(GLB_MANIFEST[it.id])));
+  let done = 0;
+  const track = p => p.finally(() => onProgress?.(++done, pending.length));   // 成败都计进度
+  const results = await Promise.allSettled(pending.map(it => track(loader.loadAsync(GLB_MANIFEST[it.id]))));
 
   // 归一化 + 隐身挂场景（此时尚未显示，不触发逐材质编译卡顿）
   const ready = [];

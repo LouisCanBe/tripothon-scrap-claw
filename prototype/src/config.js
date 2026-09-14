@@ -80,6 +80,7 @@ export const CONFIG = {
     wideFill: 0.94,          // 16:9 画幅占窗口宽比例
     transitionSec: 1.15,     // 画幅展开时长（需与 index.html 的 CSS transition 一致）
     fisheyeFadeOnWide: true, // 展开 16:9 时鱼眼同步消退（"梦醒了"的镜头语言）
+    nearZoom: 0.7,           // near 取景的变焦倍率（有效变焦 = 幕zoom × 此值；far=1）
   },
 
   pool: {

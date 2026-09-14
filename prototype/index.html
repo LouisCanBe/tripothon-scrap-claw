@@ -91,6 +91,16 @@
               font-size: 16px; white-space: pre-line; opacity: 0; transition: all 1.2s; }
   #menuCard.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
   .lil-gui { z-index: 30 !important; --background-color: rgba(14,14,16,.94); }
+
+  /* —— 加载闸门：GLB 全部就位才开演（线上资产走网络，避免演到一半换装）—— */
+  #loading { position: fixed; inset: 0; z-index: 40; background: #070708;
+             display: flex; flex-direction: column; align-items: center; justify-content: center;
+             gap: 18px; transition: opacity .7s; }
+  #loading.done { opacity: 0; pointer-events: none; }
+  #loading .t { font-size: 14px; letter-spacing: 4px; color: var(--color-ink-dim); }
+  #loading .bar { width: 220px; height: 2px; background: #2a2a2e; }
+  #loading .bar i { display: block; height: 100%; width: 0; background: var(--color-ink);
+                    transition: width .3s; }
 </style>
 </head>
 <body>
@@ -116,6 +126,7 @@
   </div>
   <div id="msg"></div>
   <div id="hint"></div>
+  <div id="loading"><div class="t">上货中……</div><div class="bar"><i id="loadFill"></i></div></div>
 
   <script type="importmap">
   {

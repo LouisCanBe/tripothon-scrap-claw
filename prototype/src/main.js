@@ -45,7 +45,10 @@ const world = new THREE.Group();
 scene.add(world);
 buildMachineShell(world);
 const items = spawnPool(world);
-upgradeVisuals(world, items, renderer, camera);   // manifest 有 GLB 的：预编译后逐个弹出热替换
+// manifest 有 GLB 的：预编译后逐个弹出热替换；进度喂给加载画面
+const prizesReady = upgradeVisuals(world, items, renderer, camera, (d, t) => {
+  prizeDone = d; prizeTotal = t; paintLoading();
+});
 
 // —— 爪机 ——
 let director;   // 前向声明：claw 的 hooks 里闭包引用
@@ -57,7 +60,8 @@ const claw = new ClawMachine(world, items, {
     director?.notify('collect', item);
   },
 });
-claw.upgradeClawVisual(renderer, camera);   // AI 分件爪热替换（失败回退 procedural）
+const clawReady = claw.upgradeClawVisual(renderer, camera)   // AI 分件爪热替换（失败回退 procedural）
+  .then(() => { clawLoaded = true; paintLoading(); });
 
 // —— 镜头 / 画幅 / 后处理 / 输入 ——
 const rig = new CameraRig(camera);
@@ -163,19 +167,39 @@ input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
 // —— 调试钩子（控制台/自动化用）——
 window.__debug = { claw, rig, director, mask, items, CONFIG };
 
-// 视口偏移：near = 相机只按画幅可见区域取景（凑近，画幅偏右时机器跟着居中）；
-// far = 全窗取景 + clip 裁切（站远，首版构图）。
-// far ≡ viewOffset 取全窗矩形 → 两种模式共用同一套阻尼插值，切换自动平滑过渡
-const fullRect = () => ({ x: 0, y: 0, w: innerWidth, h: innerHeight });
-const targetRect = () => mask.viewMode === 'near' ? mask.getRect() : fullRect();
-const viewRect = { ...targetRect() };
+// 取景绑定：投影平移把机器中心钉在画幅中心（移轴式偏移，无放大、无畸变、与窗口宽度无关），
+// near/far 只是变焦倍率差（nearZoom）。偏移量与倍率都走阻尼 → 转场/切换全部平滑。
+// far 时偏移=0 → 严格等于首版"全窗取景 + clip 裁切"构图。
+let modeBlend = mask.viewMode === 'near' ? 1 : 0;   // 0=far 站远 / 1=near 凑近
+const viewRect = { ...mask.getRect() };             // 阻尼后的画幅矩形（px）
 function applyViewRect() {
-  camera.setViewOffset(innerWidth, innerHeight, viewRect.x, viewRect.y, viewRect.w, viewRect.h);
+  const dx = (viewRect.x + viewRect.w / 2 - innerWidth / 2) * modeBlend;
+  const dy = (viewRect.y + viewRect.h / 2 - innerHeight / 2) * modeBlend;
+  // 全幅 viewOffset + 负偏移 = 投影平移：画面内容跟随画幅，机器始终落在画幅中心
+  camera.setViewOffset(innerWidth, innerHeight, -dx, -dy, innerWidth, innerHeight);
   post.setCenter((viewRect.x + viewRect.w / 2) / innerWidth, 1 - (viewRect.y + viewRect.h / 2) / innerHeight);
+  rig.setModeZoom(1 + (CONFIG.frame.nearZoom - 1) * modeBlend);
 }
 applyViewRect();
 
-director.start();
+// —— 加载闸门：GLB 全部就位后才开演（线上 48MB 走网络，避免演到一半"变装"）——
+const loadingEl = document.getElementById('loading');
+const loadFill = document.getElementById('loadFill');
+let prizeDone = 0, prizeTotal = 1, clawLoaded = false;
+const paintLoading = () => {
+  const frac = (prizeDone + (clawLoaded ? 1 : 0)) / (prizeTotal + 1);
+  loadFill.style.width = (frac * 100 | 0) + '%';
+};
+let booted = false;
+function boot() {
+  if (booted) return;
+  booted = true;
+  loadingEl.classList.add('done');
+  setTimeout(() => loadingEl.remove(), 800);
+  director.start();
+}
+Promise.allSettled([prizesReady, clawReady]).then(boot);
+setTimeout(boot, 30000);   // 兜底：30 秒无论如何开演（个别资产失败不应卡死）
 
 // —— 主循环 ——
 const clock = new THREE.Clock();
@@ -185,12 +209,13 @@ function tick() {
   const t = clock.elapsedTime;
 
   // 画幅位/取景模式阻尼跟踪（转场与近远切换过程中逐帧收敛）
-  const cur = targetRect();
+  const cur = mask.getRect();
   const a = 1 - Math.exp(-dt / 0.28);
   viewRect.x += (cur.x - viewRect.x) * a;
   viewRect.y += (cur.y - viewRect.y) * a;
   viewRect.w += (cur.w - viewRect.w) * a;
   viewRect.h += (cur.h - viewRect.h) * a;
+  modeBlend += ((mask.viewMode === 'near' ? 1 : 0) - modeBlend) * a;
   applyViewRect();
 
   const ax = input.axis();
@@ -207,6 +232,7 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   post.setSize(innerWidth, innerHeight);
-  Object.assign(viewRect, targetRect());   // 窗口变化时直接对齐，不做阻尼
+  Object.assign(viewRect, mask.getRect());   // 窗口变化时直接对齐，不做阻尼
+  modeBlend = mask.viewMode === 'near' ? 1 : 0;
   // 画幅遮罩在 frameMask 内自行监听 resize
 });

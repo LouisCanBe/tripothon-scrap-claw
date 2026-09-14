@@ -22,8 +22,8 @@ export const ACTS = [
   {
     id: 1, label: '第一幕 · 引子', layout: 'right',
     control: { move: false, drop: false, view: true },
-    zoom: 0.68,   // 贴近玻璃柜的近景
-    framing: 'near',   // 右布局必须 near（far 会只露个边）
+    zoom: 0.95,   // 幕级变焦；near 模式再 ×0.7 → 有效 0.67，贴近玻璃柜的近景
+    framing: 'near',   // 右布局必须 near（投影绑定画幅中心；far 不绑定会只露个边）
     hint: '按 1 / 2 / 3（或 Q / E）转动视线，看看柜子里。',
     script: [
       { type: 'sub', text: '资源枯竭纪元 21 年。', dur: 3 },
