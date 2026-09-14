@@ -15,13 +15,17 @@ import { CameraRig } from './cameraRig.js';
 import { FrameMask } from './frameMask.js';
 import { Post } from './post.js';
 import { Input } from './input.js';
+import { PointerControls } from './pointerControls.js';
+import { OnscreenButtons } from './onscreenButtons.js';
 import { buildMachineShell } from './machineShell.js';
 import { Director } from './director.js';
 import { DEFAULT_HINT } from './acts.js';
 
 // —— 渲染器 ——
+// 触屏设备（iPad/手机）降渲染分辨率上限：Retina ×2 全幅 + 后处理极易爆显存崩标签页
+const COARSE = matchMedia('(pointer: coarse)').matches;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, COARSE ? CONFIG.mobile.maxPixelRatio : 2));
 renderer.setSize(innerWidth, innerHeight);
 document.getElementById('stage').appendChild(renderer.domElement);
 
@@ -69,6 +73,7 @@ const mask = new FrameMask();
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
 const input = new Input();
+const buttons = new OnscreenButtons(input);   // 屏幕按钮（触屏自动显示，H 面板可开）
 
 window.addEventListener('framechange', (e) => {
   if (CONFIG.frame.fisheyeFadeOnWide) post.setFisheyeFade(e.detail === 'wide' ? 0 : 1);
@@ -122,6 +127,12 @@ input.on('frameMode', () => { if (director.act?.layout === 'center') mask.toggle
 input.on('toggleFrame', () => mask.toggle(true));
 input.on('hardCut', () => mask.hardCut());
 
+// —— 指针手势：拖拽切视角（过权限闸）/ 滚轮与捏合缩放（用户层，不碰幕级调参）——
+new PointerControls(document.getElementById('stage'), {
+  onCycle: (d) => { if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); } },
+  onZoomFactor: (f) => rig.setUserZoom(rig.userZoom * f),
+});
+
 // —— 调参面板（H 切换显隐；画幅按钮是调试入口，正常流程由导演接管）——
 const gui = new GUI({ title: '爪机手感调参' });
 {
@@ -155,6 +166,7 @@ const gui = new GUI({ title: '爪机手感调参' });
   const act = {
     '跳过当前幕(N)': () => director.skip(),
     '凑近/站远(V)': () => mask.toggleViewMode(),
+    '屏幕按钮': () => buttons.toggle(),
     '右布局(一幕)': () => mask.setLayout('right'),
     '居中(二~四幕)': () => mask.setLayout('center'),
     '展开16:9': () => mask.setLayout('wide'),

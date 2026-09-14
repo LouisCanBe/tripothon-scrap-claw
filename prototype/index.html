@@ -35,7 +35,8 @@
 
   /* 舞台：canvas 始终全窗口渲染，用 clip-path 控制可见画幅（见 frameMask.js）
      —— 这是 outline 定的方案：不渲染进 RT，遮罩切视口，16:9 展开零成本 */
-  #stage { position: fixed; inset: 0; transition: clip-path 1.15s cubic-bezier(.65,0,.25,1); }
+  #stage { position: fixed; inset: 0; transition: clip-path 1.15s cubic-bezier(.65,0,.25,1);
+           touch-action: none;   /* 触控手势交给 pointerControls，禁止浏览器滚动/缩放接管 */ }
   #stage.no-anim { transition: none; }
   #stage canvas { display: block; width: 100%; height: 100%; }
 
@@ -101,6 +102,25 @@
   #loading .bar { width: 220px; height: 2px; background: #2a2a2e; }
   #loading .bar i { display: block; height: 100%; width: 0; background: var(--color-ink);
                     transition: width .3s; }
+
+  /* —— 屏幕按钮（触屏自动显示，桌面 H 面板开关；逻辑见 onscreenButtons.js）—— */
+  #touchUI { position: fixed; inset: 0; z-index: 25; pointer-events: none;
+             user-select: none; -webkit-user-select: none; }
+  #touchUI button { pointer-events: auto; font-family: var(--font-main); color: var(--color-ink);
+                    background: rgba(20,20,24,.42); border: 1px solid rgba(216,212,200,.4);
+                    border-radius: 8px; cursor: pointer; touch-action: none;
+                    -webkit-tap-highlight-color: transparent; }
+  #touchUI button:active { background: rgba(216,212,200,.25); }
+  #touchUI .dpad { position: fixed; left: 18px; bottom: 46px; display: grid;
+                   grid-template-areas: ". up ." "left down right"; gap: 8px; }
+  #touchUI .pad { width: 52px; height: 52px; font-size: 16px; }
+  #touchUI .pad.up { grid-area: up; } #touchUI .pad.down { grid-area: down; }
+  #touchUI .pad.left { grid-area: left; } #touchUI .pad.right { grid-area: right; }
+  #touchUI .acts { position: fixed; right: 18px; bottom: 46px; display: flex;
+                   align-items: flex-end; gap: 12px; }
+  #touchUI .act.view { width: 56px; height: 40px; font-size: 13px; }
+  #touchUI .act.drop { width: 72px; height: 72px; border-radius: 50%; font-size: 20px;
+                       border-color: rgba(216,212,200,.65); }
 </style>
 </head>
 <body>

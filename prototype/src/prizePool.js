@@ -132,6 +132,27 @@ export function nearestItem(items, x, z, radius) {
 // ============================================================
 const _swapAnims = [];
 const _sleep = ms => new Promise(r => setTimeout(r, ms));
+const COARSE = matchMedia('(pointer: coarse)').matches;   // 触屏设备（iPad/手机）
+
+// 触屏设备贴图降尺寸：Tripo GLB 可能带 2K/4K 贴图，16 件解码后显存上 GB → iPad 直接崩标签页
+export function capTextures(root, max) {
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) {
+        const tex = m[k], img = tex?.image;
+        if (!img?.width || img.width <= max) continue;
+        const c = document.createElement('canvas');
+        c.width = max;
+        c.height = Math.max(1, Math.round(img.height * max / img.width));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        tex.image = c;
+        tex.needsUpdate = true;
+      }
+    }
+  });
+}
 
 // 弹出动画（easeOut + 微回弹），由主循环每帧驱动
 export function tickUpgrades(dt) {
@@ -153,7 +174,21 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
   const loader = new GLTFLoader();
   let done = 0;
   const track = p => p.finally(() => onProgress?.(++done, pending.length));   // 成败都计进度
-  const results = await Promise.allSettled(pending.map(it => track(loader.loadAsync(GLB_MANIFEST[it.id]))));
+  // 触屏设备限流加载：16 个 GLB 同时下载解析会内存尖峰；桌面端保持全并行
+  const results = new Array(pending.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < pending.length) {
+      const i = next++;
+      try {
+        results[i] = { status: 'fulfilled', value: await track(loader.loadAsync(GLB_MANIFEST[pending[i].id])) };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  };
+  const lanes = COARSE ? Math.min(CONFIG.mobile.glbConcurrency, pending.length) : pending.length;
+  await Promise.all(Array.from({ length: lanes }, worker));
 
   // 归一化 + 隐身挂场景（此时尚未显示，不触发逐材质编译卡顿）
   const ready = [];
@@ -164,6 +199,7 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
       continue;
     }
     const g = normalizeGLB(res.value.scene, item.collider, item.restY);
+    if (COARSE) capTextures(g, CONFIG.mobile.maxTextureSize);
     g.position.copy(item.mesh.position);
     g.rotation.copy(item.mesh.rotation);
     g.visible = false;

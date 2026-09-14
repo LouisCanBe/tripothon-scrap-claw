@@ -61,6 +61,8 @@ export const CONFIG = {
     tau: 0.38,               // 视角切换时间常数(秒)
     breathDeg: 0.25,         // 呼吸晃动幅度(度)，outline 上限 <0.3°
     breathFreq: 0.22,        // 呼吸频率(Hz)
+    userZoomMin: 0.55,       // 滚轮/双指缩放的最近倍率（防止钻进机器内部）
+    userZoomMax: 1.6,        // 最远倍率
     views: {
       front: { pos: [ 0.00, 2.05, 3.15], look: [ 0.0, 0.30, -0.05] },
       left:  { pos: [-2.25, 1.95, 2.30], look: [ 0.1, 0.30, -0.05] },
@@ -86,5 +88,12 @@ export const CONFIG = {
   pool: {
     boundsX: [-1.30, 1.30],
     boundsZ: [-0.85, 0.85],
+  },
+
+  // —— 触屏/低性能设备防护（iPad/手机防崩）——
+  mobile: {
+    maxPixelRatio: 1.5,      // 触屏设备渲染分辨率上限（Retina ×2 全分辨率 + 后处理极易爆显存）
+    maxTextureSize: 1024,    // 触屏设备贴图降尺寸上限（Tripo GLB 可能带 2K/4K 贴图，16 件解码后显存上 GB）
+    glbConcurrency: 3,       // 触屏设备 GLB 并行加载数（同时 16 个会内存尖峰）；桌面端不限
   },
 };

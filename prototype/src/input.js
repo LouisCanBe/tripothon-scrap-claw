@@ -30,6 +30,10 @@ export class Input {
   on(evt, fn) { (this._cb[evt] ??= []).push(fn); }
   emit(evt, arg) { (this._cb[evt] || []).forEach(fn => fn(arg)); }
 
+  // 虚拟按键（屏幕按钮/触屏用）：与物理键盘共用 keys 集合，axis() 天然兼容
+  press(code)   { this.keys.add(code); }
+  release(code) { this.keys.delete(code); }
+
   // 移动轴：x 左右，z 前后（上 = 向机器深处 -z）
   axis() {
     const k = this.keys;
