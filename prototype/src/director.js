@@ -143,9 +143,21 @@ export class Director {
 
   msg(text) {   // 爪机台词也走这里
     this.elMsg.classList.remove('stinger');
-    this.elMsg.textContent = text;
-    this.elMsg.style.opacity = '1';
     clearTimeout(this._msgTimer);
+    clearInterval(this._typeTimer);
+    this.elMsg.style.opacity = '1';
+    // 打字机：>6 字的句子逐字出现（短提示瞬显，不拖节奏）
+    const chars = [...text];
+    if (chars.length > 6) {
+      let i = 0;
+      this.elMsg.textContent = '';
+      this._typeTimer = setInterval(() => {
+        this.elMsg.textContent = chars.slice(0, ++i).join('');
+        if (i >= chars.length) clearInterval(this._typeTimer);
+      }, 34);
+    } else {
+      this.elMsg.textContent = text;
+    }
     this._msgTimer = setTimeout(() => (this.elMsg.style.opacity = '0'), 2400);
   }
 

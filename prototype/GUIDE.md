@@ -29,9 +29,11 @@
 |---|---|---|
 | 画幅白框（颜色/粗细/圆角/阴影） | `#frameBorder` | **位置尺寸由 `src/frameMask.js` 的 `#rect()` 计算**（三个布局位 right/center/wide 的公式都在这），JS 写入 left/top/width/height |
 | 画幅裁切 | `#stage`（clip-path） | 同上，转场动画时长要与 `config.js` 的 `frame.transitionSec` 一致 |
-| 底部字幕 | `#msg` | 文案在 `acts.js`；终幕手写体 = 加 `.stinger` 类 |
+| 底部字幕（底条背板+打字机） | `#msg` | 文案在 `acts.js`；打字机在 `director.js` 的 `msg()`；终幕手写体 = 加 `.stinger` 类 |
 | 底部操作提示 | `#hint` | 文案在 `acts.js` 的 `hint` 字段 |
-| 配额面板 + 打勾划线 | `#hud` / `.quest.done` | `director.js` 里 notify('collect') 驱动 |
+| 配额任务卡 + 打勾动画 | `#hud` / `.quest.done::before` | `director.js` 里 notify('collect') 驱动 |
+| 收集飘字 / 提示 toast | `#toasts` / `.toast` | `main.js` 的 `toast()`（onCollect、近远切换触发） |
+| 视角指示点 | `#viewDots i.on` | `main.js` 主循环轮询 `rig.cur` 点亮 |
 | 漫画旁白框（纸张色/旋转角/位置） | `.panel` / `.panel.right` | `acts.js` 的 `{ panel, side, text }` 步骤 |
 | 幕标题卡 | `#actLabel` | `acts.js` 的 `label` 字段 |
 | 四幕合成卡片 / 菜单卡 | `.syn-card` / `#menuCard` | `director.js` #synthesis()；文案在 `acts.js` 的 `menu` |

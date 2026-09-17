@@ -54,6 +54,18 @@ const prizesReady = upgradeVisuals(world, items, renderer, camera, (d, t) => {
   prizeDone = d; prizeTotal = t; paintLoading();
 });
 
+// —— 飘字 toast（收集反馈 / 模式切换提示）——
+const toastsEl = document.getElementById('toasts');
+function toast(text) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = text;
+  toastsEl.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+  setTimeout(() => el.classList.add('out'), 1400);
+  setTimeout(() => el.remove(), 1900);
+}
+
 // —— 爪机 ——
 let director;   // 前向声明：claw 的 hooks 里闭包引用
 const claw = new ClawMachine(world, items, {
@@ -61,6 +73,7 @@ const claw = new ClawMachine(world, items, {
   onCollect: (item) => {
     const el = document.getElementById('collected');
     el.textContent = +el.textContent + 1;
+    toast(`+1 ${item.name}`);
     director?.notify('collect', item);
   },
 });
@@ -123,7 +136,12 @@ input.on('view', (v) => { if (director.allow('view')) { rig.setView(v); director
 input.on('cycle', (d) => { if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); } });
 input.on('next', () => director.skip());
 // 近/远取景切换：仅居中画幅幕开放（一幕右布局用 far 会穿帮）
-input.on('frameMode', () => { if (director.act?.layout === 'center') mask.toggleViewMode(); });
+input.on('frameMode', () => {
+  if (director.act?.layout === 'center') {
+    mask.toggleViewMode();
+    toast(mask.viewMode === 'near' ? '凑近' : '站远');
+  }
+});
 input.on('toggleFrame', () => mask.toggle(true));
 input.on('hardCut', () => mask.hardCut());
 
@@ -177,7 +195,7 @@ let guiOn = true;
 input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
 
 // —— 调试钩子（控制台/自动化用）——
-window.__debug = { claw, rig, director, mask, items, CONFIG };
+window.__debug = { claw, rig, director, mask, items, CONFIG, toast };
 
 // 取景绑定：投影平移把机器中心钉在画幅中心（移轴式偏移，无放大、无畸变、与窗口宽度无关），
 // near/far 只是变焦倍率差（nearZoom）。偏移量与倍率都走阻尼 → 转场/切换全部平滑。
@@ -197,10 +215,12 @@ applyViewRect();
 // —— 加载闸门：GLB 全部就位后才开演（线上 48MB 走网络，避免演到一半"变装"）——
 const loadingEl = document.getElementById('loading');
 const loadFill = document.getElementById('loadFill');
+const loadPct = document.getElementById('loadPct');
 let prizeDone = 0, prizeTotal = 1, clawLoaded = false;
 const paintLoading = () => {
   const frac = (prizeDone + (clawLoaded ? 1 : 0)) / (prizeTotal + 1);
   loadFill.style.width = (frac * 100 | 0) + '%';
+  loadPct.textContent = (frac * 100 | 0) + '%';
 };
 let booted = false;
 function boot() {
@@ -213,12 +233,21 @@ function boot() {
 Promise.allSettled([prizesReady, clawReady]).then(boot);
 setTimeout(boot, 30000);   // 兜底：30 秒无论如何开演（个别资产失败不应卡死）
 
+// —— 视角指示点（左/正/右；任何途径切视角都会收敛到这里）——
+const viewDots = [...document.querySelectorAll('#viewDots i')];
+let lastView = rig.cur;
+
 // —— 主循环 ——
 const clock = new THREE.Clock();
 function tick() {
   requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
+
+  if (rig.cur !== lastView) {
+    lastView = rig.cur;
+    viewDots.forEach(d => d.classList.toggle('on', d.dataset.v === rig.cur));
+  }
 
   // 画幅位/取景模式阻尼跟踪（转场与近远切换过程中逐帧收敛）
   const cur = mask.getRect();
