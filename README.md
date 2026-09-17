@@ -80,5 +80,7 @@ prototype/              可玩原型（Three.js 0.170，CDN 引入）
   PARAMS.md             参数文档 + 验收清单 + 管线用法
   assets/               生成的 GLB（prizes/ 奖品、machine/ 爪子）
 tools/generate.mjs      Tripo 批处理脚本（Node，零依赖）
+tools/tripo.mjs         Tripo API 全接口薄封装：CLI / 可 import / serve 本地转发（给可视化 UI）
+tools/TRIPO.md          接口清单 + 分件可动/绑骨动画/替换流程示例
 tools/prompts.json      16 件物品 prompt + 统一风格后缀
 ```

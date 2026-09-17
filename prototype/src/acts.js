@@ -54,7 +54,7 @@ export const ACTS = [
     quest: ['bread', 'can', 'veg'],
     hint: DEFAULT_HINT,
     script: [
-      { type: 'panel', side: 'left', text: '今日采集配额：\n面包 ×1\n罐头 ×1\n蔬菜 ×1' },
+      { type: 'panel', side: 'left', text: '配额写在墙上了。\n今天也是三样。' },
       { type: 'panel', side: 'right', text: '抓够之前，\n别去想机器外面是什么。' },
       { type: 'wait', event: 'questComplete' },
       { type: 'sub', text: '……齐了。今天能吃了。', dur: 2.5 },
