@@ -31,7 +31,8 @@ HTTPS_PROXY=http://127.0.0.1:7890
 | `retarget` | `retarget` | POST /animations/retarget | 套预设动画（如 `preset:run`） |
 | `getTask` | `task` | GET /tasks/{id} | 任务状态轮询 |
 | `uploadFile` | `upload` | POST /files | 本地文件 → file_token |
-| `getBalance` | `balance` | GET /user/balance | 余额 |
+| `getBalance` | `balance` | GET /account/balance | 余额 `{balance, frozen}` |
+| `getUsage` | `call` | GET /account/usage | 逐任务消耗明细 |
 | `call` | `call` | 任意 | **逃生舱**：表里没有/路径变了直接调 |
 
 生成类常用参数（text/image/multiview）：`model`（如 `v3.1-20260211`、`P1-20260311`）、`face_limit`、`texture`、`pbr`、`texture_quality`(standard/detailed/extreme)、`geometry_quality`、`model_seed`、`auto_size`、`quad`、`smart_low_poly`、`generate_parts`（仅 text，且必须 `texture:false pbr:false`）。

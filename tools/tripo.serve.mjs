@@ -12,6 +12,11 @@
 //   POST /api/call                       { method, path, body } 逃生舱，任意接口
 //   POST /api/upload?filename=a.png      二进制 body 上传 → { file_token }
 //   POST /api/download                   { url, name } 下载到 prototype/assets/generated/<name>
+//
+// 静态服务（配套可视化页面 tools/ui.html）：
+//   GET /          → tools/ui.html
+//   GET /vendor/*  → prototype/vendor/*（three.js，预览器用）
+//   GET /files/*   → prototype/assets/generated/*（已下载的 GLB，预览用）
 // ============================================================
 import http from 'node:http';
 import fs from 'node:fs';
@@ -21,6 +26,19 @@ import { TripoClient } from './tripo.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GEN_DIR = path.join(ROOT, 'prototype', 'assets', 'generated');
+
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
+               '.css': 'text/css', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg' };
+
+// 静态文件：防路径穿越（resolve 后必须还在 base 下）
+function sendFile(res, base, rel) {
+  const p = path.resolve(base, rel);
+  if (!p.startsWith(path.resolve(base)) || !fs.existsSync(p) || !fs.statSync(p).isFile()) return false;
+  res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] ?? 'application/octet-stream',
+                       'Access-Control-Allow-Origin': '*' });
+  fs.createReadStream(p).pipe(res);
+  return true;
+}
 
 const json = (res, code, data) => {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -50,6 +68,22 @@ export function serve(port = 8787) {
     }
     const u = new URL(req.url, 'http://x');
     try {
+      // —— 静态 ——
+      if (req.method === 'GET') {
+        if (u.pathname === '/' || u.pathname === '/index.html') {
+          if (!sendFile(res, path.join(ROOT, 'tools'), 'ui.html')) json(res, 404, { error: 'ui.html 不存在' });
+          return;
+        }
+        if (u.pathname.startsWith('/vendor/')) {
+          if (!sendFile(res, path.join(ROOT, 'prototype', 'vendor'), decodeURIComponent(u.pathname.slice(8)))) json(res, 404, { error: 'not found' });
+          return;
+        }
+        if (u.pathname.startsWith('/files/')) {
+          if (!sendFile(res, GEN_DIR, decodeURIComponent(u.pathname.slice(7)))) json(res, 404, { error: 'not found' });
+          return;
+        }
+      }
+      // —— API ——
       if (u.pathname === '/api/health')  return json(res, 200, { ok: true });
       if (u.pathname === '/api/balance') return json(res, 200, await client.getBalance());
 

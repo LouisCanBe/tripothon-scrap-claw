@@ -71,7 +71,8 @@ const PATHS = {
   task:             ['GET',  '/tasks/{id}'],                      // ✓ 单任务查询（轮询用）
   tasks:            ['GET',  '/tasks'],                           // ? 任务列表
   upload:           ['POST', '/files'],                           // ? 文件上传→file_token（v2 是 /v2/openapi/upload/sts）
-  balance:          ['GET',  '/user/balance'],                    // ? 余额查询
+  balance:          ['GET',  '/account/balance'],                 // ✓ 余额 {balance, frozen}
+  usage:            ['GET',  '/account/usage'],                   // ✓ 逐任务消耗明细
 };
 
 // ============================================================
@@ -161,6 +162,7 @@ export class TripoClient {
   rigModel(taskId, opts = {})         { return this.submit('rig', { original_model_task_id: taskId, ...opts }); }
   retarget(taskId, animation, opts = {}) { return this.submit('retarget', { original_model_task_id: taskId, animation, ...opts }); } // 如 'preset:run'
   getBalance()                        { const [, p] = PATHS.balance; return this.call('GET', p); }
+  getUsage()                          { const [, p] = PATHS.usage; return this.call('GET', p); }
 
   // 一条龙：提交 → 轮询 → （可选）下载
   async run(name, body, { out, onProgress } = {}) {

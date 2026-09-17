@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tripo API 控制台</title>
+<style>
+  :root { color-scheme: dark;
+    --ink: #d8d4c8; --dim: #8a877e; --accent: #9db87a; --paper: #efe9dc; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0b0b0d; color: var(--ink); font: 13px/1.7 "Courier New", ui-monospace, monospace;
+         min-height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 14px 20px;
+           border-bottom: 1px solid #26262b; }
+  header h1 { font-size: 16px; letter-spacing: 4px; font-weight: normal; }
+  header .stat { color: var(--dim); font-size: 12px; }
+  header .stat b { color: var(--accent); font-weight: normal; }
+  main { flex: 1; display: grid; grid-template-columns: 380px 1fr; gap: 0; min-height: 0; }
+  /* —— 左：表单 —— */
+  #form { padding: 16px 20px; border-right: 1px solid #26262b; overflow-y: auto; }
+  #form h2, #right h2 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 14px 0 8px; }
+  #form h2:first-child { margin-top: 0; }
+  label { display: block; margin: 8px 0 2px; color: var(--dim); font-size: 12px; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; background: #141418; color: var(--ink); border: 1px solid #2c2c33;
+    border-radius: 4px; padding: 6px 8px; font: inherit; }
+  textarea { resize: vertical; min-height: 56px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0; }
+  .row label { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--ink); }
+  .row input[type=checkbox] { accent-color: var(--accent); }
+  button { background: var(--paper); color: #26241f; border: 2px solid #26241f; border-radius: 4px;
+           padding: 7px 18px; font: inherit; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.4); }
+  button:hover { filter: brightness(1.06); }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid #3a3a42;
+                 box-shadow: none; padding: 4px 10px; font-size: 12px; }
+  button:disabled { opacity: .4; cursor: default; }
+  #reqPreview { white-space: pre-wrap; word-break: break-all; background: #101014; border: 1px solid #26262b;
+                border-radius: 4px; padding: 8px 10px; font-size: 11px; color: var(--dim);
+                max-height: 160px; overflow: auto; }
+  /* —— 右：任务 + 预览 —— */
+  #right { display: flex; flex-direction: column; min-height: 0; }
+  #tasks { padding: 12px 20px; display: flex; flex-direction: column; gap: 8px;
+           max-height: 40%; overflow-y: auto; }
+  .task { border: 1px solid #2c2c33; border-radius: 6px; padding: 8px 12px; background: #101014; }
+  .task .head { display: flex; align-items: center; gap: 10px; }
+  .task .name { color: var(--ink); }
+  .task .id { color: var(--dim); font-size: 11px; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .task .bar { height: 3px; background: #26262b; border-radius: 2px; margin-top: 7px; }
+  .task .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .task .st { font-size: 12px; color: var(--dim); }
+  .task.success .st { color: var(--accent); }
+  .task.failed .st { color: #c66; }
+  .task .ops { display: flex; gap: 8px; margin-left: auto; }
+  #viewerWrap { flex: 1; position: relative; border-top: 1px solid #26262b; min-height: 320px; }
+  #viewer { position: absolute; inset: 0; }
+  #viewerInfo { position: absolute; left: 12px; bottom: 10px; z-index: 2; color: var(--dim);
+                font-size: 11px; white-space: pre-wrap; max-width: 60%; pointer-events: none;
+                text-shadow: 0 1px 3px #000; }
+  #animBar { position: absolute; right: 12px; top: 10px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; }
+  #dropHint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+              color: #3a3a42; font-size: 13px; letter-spacing: 2px; pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tripo API 控制台</h1>
+  <span class="stat" id="health">服务：检测中…</span>
+  <span class="stat" id="balance"></span>
+  <span class="stat" style="margin-left:auto">tools/tripo.mjs serve</span>
+</header>
+<main>
+  <section id="form">
+    <h2>任务类型</h2>
+    <select id="type">
+      <option value="textToModel">文本 → 模型</option>
+      <option value="imageToModel">图片 → 模型</option>
+      <option value="multiviewToModel">四视图 → 模型</option>
+      <option value="refine">草稿精修</option>
+      <option value="texture">重新贴图</option>
+      <option value="convert">格式转换</option>
+      <option value="rig">自动绑骨</option>
+      <option value="retarget">套预设动画</option>
+    </select>
+    <div id="fields"></div>
+    <h2>请求预览</h2>
+    <div id="reqPreview"></div>
+    <div style="margin-top:12px; display:flex; gap:10px">
+      <button id="submit">提交任务</button>
+    </div>
+  </section>
+  <section id="right">
+    <div id="tasks"><h2 style="color:var(--dim);font-size:12px;letter-spacing:3px">任务（本页会话）</h2></div>
+    <div id="viewerWrap">
+      <div id="viewer"></div>
+      <div id="dropHint">下载任务产物后点「预览」<br/>也可以直接把 .glb 文件拖进来</div>
+      <div id="animBar"></div>
+      <div id="viewerInfo"></div>
+    </div>
+  </section>
+</main>
+
+<script type="importmap">
+{ "imports": { "three": "/vendor/three.module.js", "three/addons/": "/vendor/addons/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ================= 表单定义 =================
+const MODELS = ['v3.1-20260211', 'v3.0-20250812', 'v2.5-20250123'];
+const FIELDS = {
+  textToModel: [
+    { k: 'prompt', label: '提示词', type: 'textarea', required: true },
+    { k: 'model', label: '模型版本', type: 'select', options: MODELS, def: MODELS[0] },
+    { k: 'negative_prompt', label: '负面提示词', type: 'text' },
+    { k: 'face_limit', label: '面数上限', type: 'number' },
+    { k: 'texture_quality', label: '贴图质量', type: 'select', options: ['standard', 'detailed', 'extreme'] },
+    { k: 'texture', label: '贴图', type: 'check', def: true },
+    { k: 'pbr', label: 'PBR', type: 'check', def: true },
+    { k: 'generate_parts', label: '分件（须关贴图/PBR）', type: 'check' },
+    { k: 'smart_low_poly', label: '智能低面数', type: 'check' },
+    { k: 'auto_size', label: '真实尺寸', type: 'check' },
+  ],
+  imageToModel: [
+    { k: 'input', label: '图片 URL 或 file_token', type: 'text', required: true, upload: true },
+    { k: 'model', label: '模型版本', type: 'select', options: MODELS, def: MODELS[0] },
+    { k: 'face_limit', label: '面数上限', type: 'number' },
+    { k: 'texture', label: '贴图', type: 'check', def: true },
+    { k: 'pbr', label: 'PBR', type: 'check', def: true },
+  ],
+  multiviewToModel: [
+    { k: 'front', label: '前视图的 URL/token', type: 'text', required: true },
+    { k: 'left', label: '左视图', type: 'text' },
+    { k: 'back', label: '后视图', type: 'text' },
+    { k: 'right', label: '右视图', type: 'text' },
+    { k: 'model', label: '模型版本', type: 'select', options: ['P1-20260311'], def: 'P1-20260311' },
+    { k: 'face_limit', label: '面数上限(50~20000)', type: 'number' },
+  ],
+  refine:   [{ k: 'draft_model_task_id', label: '草稿任务 ID', type: 'text', required: true }],
+  texture:  [{ k: 'original_model_task_id', label: '原模型任务 ID', type: 'text', required: true },
+             { k: 'texture_text', label: '贴图提示词', type: 'text' },
+             { k: 'texture_quality', label: '贴图质量', type: 'select', options: ['standard', 'detailed', 'extreme'] }],
+  convert:  [{ k: 'original_model_task_id', label: '原模型任务 ID', type: 'text', required: true },
+             { k: 'format', label: '目标格式', type: 'select', options: ['GLB', 'FBX', 'USDZ', 'OBJ'], def: 'GLB' },
+             { k: 'quad', label: '转四边面', type: 'check' },
+             { k: 'face_limit', label: '面数上限', type: 'number' }],
+  rig:      [{ k: 'original_model_task_id', label: '原模型任务 ID（人形）', type: 'text', required: true }],
+  retarget: [{ k: 'original_model_task_id', label: '绑骨任务 ID', type: 'text', required: true },
+             { k: 'animation', label: '预设动画', type: 'select', options: ['preset:idle', 'preset:walk', 'preset:run', 'preset:jump', 'preset:wave', 'preset:dance'], def: 'preset:walk' }],
+};
+
+const fieldsEl = document.getElementById('fields');
+const typeEl = document.getElementById('type');
+const previewEl = document.getElementById('reqPreview');
+
+function renderFields() {
+  const defs = FIELDS[typeEl.value];
+  fieldsEl.innerHTML = '';
+  for (const d of defs) {
+    const lab = document.createElement('label');
+    lab.textContent = d.label;
+    let el;
+    if (d.type === 'select') {
+      el = document.createElement('select');
+      for (const o of d.options) el.add(new Option(o, o, false, o === d.def));
+    } else if (d.type === 'check') {
+      el = document.createElement('input'); el.type = 'checkbox'; el.checked = !!d.def;
+    } else if (d.type === 'textarea') {
+      el = document.createElement('textarea');
+    } else {
+      el = document.createElement('input'); el.type = d.type === 'number' ? 'number' : 'text';
+    }
+    el.dataset.k = d.k;
+    el.addEventListener('input', renderPreview);
+    el.addEventListener('change', renderPreview);
+    fieldsEl.append(lab, el);
+    if (d.upload) {
+      const up = document.createElement('button');
+      up.className = 'ghost'; up.textContent = '上传本地图片…'; up.type = 'button';
+      up.onclick = () => pickUpload(el);
+      fieldsEl.appendChild(up);
+    }
+  }
+  // 分件与贴图互斥（官方限制）
+  const parts = fieldsEl.querySelector('[data-k=generate_parts]');
+  if (parts) parts.addEventListener('change', () => {
+    if (parts.checked) for (const k of ['texture', 'pbr']) {
+      const c = fieldsEl.querySelector(`[data-k=${k}]`); if (c) { c.checked = false; c.disabled = true; }
+    } else for (const k of ['texture', 'pbr']) {
+      const c = fieldsEl.querySelector(`[data-k=${k}]`); if (c) { c.disabled = false; c.checked = true; }
+    }
+    renderPreview();
+  });
+  renderPreview();
+}
+
+function buildBody() {
+  const t = typeEl.value;
+  const v = {};
+  fieldsEl.querySelectorAll('[data-k]').forEach(el => {
+    v[el.dataset.k] = el.type === 'checkbox' ? el.checked : (el.value === '' ? undefined : el.type === 'number' ? +el.value : el.value);
+  });
+  if (t === 'multiviewToModel') {
+    const inputs = ['front', 'left', 'back', 'right'].filter(k => v[k]).map(k => ({ [k]: v[k] }));
+    return { inputs, model: v.model, face_limit: v.face_limit };
+  }
+  if (t === 'texture') {
+    const b = { original_model_task_id: v.original_model_task_id, texture_quality: v.texture_quality };
+    if (v.texture_text) b.texture_prompt = { text: v.texture_text };
+    return b;
+  }
+  return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined));
+}
+
+function renderPreview() {
+  previewEl.textContent = `POST /api/gen/${typeEl.value}\n` + JSON.stringify(buildBody(), null, 2);
+}
+typeEl.addEventListener('change', renderFields);
+
+// ================= 上传 =================
+async function pickUpload(targetInput) {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    targetInput.value = '上传中…';
+    const r = await fetch(`/api/upload?filename=${encodeURIComponent(f.name)}`, { method: 'POST', body: f }).then(r => r.json());
+    targetInput.value = r.file_token ?? ('失败：' + JSON.stringify(r));
+    renderPreview();
+  };
+  inp.click();
+}
+
+// ================= 任务提交与轮询 =================
+const tasksEl = document.getElementById('tasks');
+document.getElementById('submit').onclick = async () => {
+  const body = buildBody();
+  const name = typeEl.value;
+  let task_id;
+  try {
+    const r = await fetch(`/api/gen/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+    if (r.error) throw new Error(r.error);
+    task_id = r.task_id;
+  } catch (e) { return alert('提交失败：' + e.message); }
+  addTask(name, task_id);
+};
+
+function addTask(name, id) {
+  const card = document.createElement('div');
+  card.className = 'task';
+  card.innerHTML = `<div class="head"><span class="name">${name}</span>
+    <span class="id">${id}</span>
+    <span class="ops"><button class="ghost" data-a="dl" disabled>下载</button>
+    <button class="ghost" data-a="pv" disabled>预览</button></span></div>
+    <div class="st">排队中…</div><div class="bar"><i></i></div>`;
+  tasksEl.appendChild(card);
+  const st = card.querySelector('.st'), bar = card.querySelector('.bar i');
+  const dl = card.querySelector('[data-a=dl]'), pv = card.querySelector('[data-a=pv]');
+  let output = null, saved = null;
+
+  dl.onclick = async () => {
+    const url = output?.model_url ?? output?.model ?? output?.url;
+    if (!url) return;
+    dl.disabled = true; dl.textContent = '下载中…';
+    const fname = `${name}-${id.slice(0, 8)}.glb`;
+    const r = await fetch('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, name: fname }) }).then(r => r.json());
+    if (r.saved) { saved = fname; dl.textContent = '✓ 已存 ' + r.saved; pv.disabled = false; }
+    else { dl.textContent = '下载失败'; dl.disabled = false; }
+  };
+  pv.onclick = () => saved && loadGLB('/files/' + saved);
+
+  (async function poll() {
+    for (;;) {
+      await new Promise(s => setTimeout(s, 3000));
+      let d;
+      try { d = await fetch(`/api/task/${id}`).then(r => r.json()); }
+      catch { st.textContent = '轮询网络错误，重试中…'; continue; }
+      if (d.error) { st.textContent = '查询失败：' + d.error; continue; }
+      bar.style.width = (d.progress ?? 0) + '%';
+      st.textContent = `${d.status ?? '?'} ${d.progress ?? 0}%`;
+      if (d.status === 'success') {
+        card.classList.add('success');
+        output = d.output ?? {};
+        st.textContent = '✓ 完成';
+        bar.style.width = '100%';
+        dl.disabled = false;
+        break;
+      }
+      if (d.status === 'failed' || d.status === 'cancelled') {
+        card.classList.add('failed');
+        st.textContent = '✗ ' + d.status + ' ' + JSON.stringify(d.error ?? '');
+        break;
+      }
+    }
+  })();
+}
+
+// ================= 3D 预览器 =================
+const wrap = document.getElementById('viewerWrap');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.getElementById('viewer').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x101014);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+scene.add(new THREE.HemisphereLight(0xfff2dd, 0x191a20, 1.0));
+const dir = new THREE.DirectionalLight(0xffffff, 1.6); dir.position.set(2, 4, 3); scene.add(dir);
+const grid = new THREE.GridHelper(4, 20, 0x2c2c33, 0x1c1c22); scene.add(grid);
+
+// 迷你轨道：拖拽旋转 + 滚轮缩放（不引 OrbitControls）
+let theta = 0.6, phi = 1.1, dist = 3, target = new THREE.Vector3(0, 0.4, 0);
+let dragging = false, px = 0, py = 0;
+renderer.domElement.addEventListener('pointerdown', e => { dragging = true; px = e.clientX; py = e.clientY; });
+window.addEventListener('pointerup', () => dragging = false);
+window.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  theta -= (e.clientX - px) * 0.006; phi = Math.min(3.0, Math.max(0.15, phi - (e.clientY - py) * 0.006));
+  px = e.clientX; py = e.clientY;
+});
+renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); dist = Math.min(20, Math.max(0.3, dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+
+let current = null, mixer = null;
+const clock = new THREE.Clock();
+const infoEl = document.getElementById('viewerInfo');
+const animBar = document.getElementById('animBar');
+const dropHint = document.getElementById('dropHint');
+
+async function loadGLB(url) {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  if (current) { scene.remove(current); current = null; }
+  mixer = null; animBar.innerHTML = '';
+  const root = gltf.scene;
+  // 自动取景：包围盒居中
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+  const s = 1.4 / Math.max(size.x, size.y, size.z, 1e-6);
+  root.scale.setScalar(s);
+  root.position.sub(center.multiplyScalar(s));
+  scene.add(root); current = root;
+  dist = 2.2; target.set(0, size.y * s / 2, 0);
+  dropHint.style.display = 'none';
+  // 分件名单（填 config.clawGLB 用）
+  const parts = [];
+  root.traverse(o => { if (o.isMesh && o.name) parts.push(o.name); });
+  infoEl.textContent = `${url.split('/').pop()}  ·  网格 ${parts.length} 件` +
+    (parts.length ? `\n${parts.join(', ')}` : '');
+  // 动画（rig/retarget 产物）
+  if (gltf.animations?.length) {
+    mixer = new THREE.AnimationMixer(root);
+    for (const clip of gltf.animations) {
+      const b = document.createElement('button');
+      b.className = 'ghost'; b.textContent = '▶ ' + clip.name;
+      b.onclick = () => { mixer.stopAllAction(); mixer.clipAction(clip).play(); };
+      animBar.appendChild(b);
+    }
+  }
+}
+
+// 拖放本地 .glb 预览
+window.__loadGLB = loadGLB;   // 调试钩子
+wrap.addEventListener('dragover', e => e.preventDefault());
+wrap.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files?.[0];
+  if (f && f.name.endsWith('.glb')) loadGLB(URL.createObjectURL(f));
+});
+
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(wrap); resize();
+
+(function tick() {
+  requestAnimationFrame(tick);
+  const dt = clock.getDelta();
+  mixer?.update(dt);
+  camera.position.set(
+    target.x + dist * Math.sin(phi) * Math.sin(theta),
+    target.y + dist * Math.cos(phi),
+    target.z + dist * Math.sin(phi) * Math.cos(theta));
+  camera.lookAt(target);
+  renderer.render(scene, camera);
+})();
+
+// ================= 服务状态 =================
+fetch('/api/health').then(r => r.json())
+  .then(() => document.getElementById('health').innerHTML = '服务：<b>已连接</b>')
+  .catch(() => document.getElementById('health').textContent = '服务：未连接（先跑 node tools/tripo.mjs serve）');
+fetch('/api/balance').then(r => r.json()).then(d => {
+  document.getElementById('balance').textContent = '余额：' + (d.balance ?? JSON.stringify(d));
+}).catch(() => {});
+
+renderFields();
+</script>
+</body>
+</html>
