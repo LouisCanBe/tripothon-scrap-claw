@@ -3,3 +3,6 @@
 .env
 
 node_modules/
+
+# Tripo 生成缓冲区（确认好用后改名进 prizes/ 才入库）
+prototype/assets/generated/

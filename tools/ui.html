@@ -26,6 +26,11 @@
     width: 100%; background: #141418; color: var(--ink); border: 1px solid #2c2c33;
     border-radius: 4px; padding: 6px 8px; font: inherit; transition: border-color .15s; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  .file-row { display: flex; gap: 8px; align-items: center; }
+  .file-row input[type=text] { flex: 1; min-width: 0; }
+  .thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px;
+           border: 1px solid #2c2c33; flex-shrink: 0; display: none; background: #141418; }
+  .thumb.on { display: block; }
   .required-miss { border-color: #c66 !important; }
   textarea { resize: vertical; min-height: 56px; }
   .row { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0; }
@@ -47,20 +52,22 @@
   #right { display: flex; flex-direction: column; min-height: 0; }
   #tasksHead { display: flex; align-items: center; padding: 12px 20px 0; }
   #tasks { padding: 8px 20px 12px; display: flex; flex-direction: column; gap: 8px;
-           max-height: 42%; overflow-y: auto; }
-  .task { border: 1px solid #2c2c33; border-radius: 6px; padding: 8px 12px; background: #101014;
+           max-height: 36%; overflow-y: auto; }
+  .task { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
+          border: 1px solid #2c2c33; border-radius: 8px; padding: 10px 12px; background: #101014;
           animation: slideIn .3s; }
   @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } }
-  .task .head { display: flex; align-items: center; gap: 10px; }
-  .task .name { color: var(--ink); }
-  .task .id { color: var(--dim); font-size: 11px; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
-  .task .bar { height: 3px; background: #26262b; border-radius: 2px; margin-top: 7px; }
-  .task .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
-  .task .st { font-size: 12px; color: var(--dim); }
+  .task .meta { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .task .name { color: var(--ink); white-space: nowrap; }
+  .task .id { color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task .st { font-size: 12px; color: var(--dim); white-space: nowrap; }
   .task.success .st { color: var(--accent); }
   .task.failed .st { color: #c66; }
-  .task .ops { display: flex; gap: 8px; margin-left: auto; }
-  .task .del { color: var(--dim); border: none; background: none; box-shadow: none; padding: 2px 6px; }
+  .task .bar { grid-column: 1 / -1; height: 3px; background: #26262b; border-radius: 2px; }
+  .task .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .task .ops { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .task .ops select.ghost { max-width: 88px; padding: 3px 6px; font-size: 11px; }
+  .task .del { margin-left: auto; color: var(--dim); border: none; background: none; box-shadow: none; padding: 2px 8px; }
   .task .del:hover { color: #c66; }
   /* —— 预览器 —— */
   #viewerWrap { flex: 1; position: relative; border-top: 1px solid #26262b; min-height: 320px; }
@@ -119,7 +126,7 @@
     <div id="tasks"></div>
     <div id="viewerWrap">
       <div id="viewer"></div>
-      <div id="dropHint">下载任务产物后自动预览<br/>也可以直接把 .glb 文件拖进来<br/><br/>拖拽旋转 · 滚轮缩放 · 双击复位</div>
+      <div id="dropHint">下载任务产物后自动预览<br/>也可以直接把 .glb 文件拖进来<br/><br/>左键旋转 · 右键/Shift+拖 平移 · 滚轮缩放 · 双击复位</div>
       <div id="animBar"></div>
       <div id="viewerInfo"></div>
     </div>
@@ -146,45 +153,60 @@ function toast(text, isErr = false) {
 }
 
 // ================= 表单定义 =================
-const MODELS = ['v3.1-20260211', 'v3.0-20250812', 'v2.5-20250123'];
+// P 系列 = 低面干净拓扑（游戏资产）；v3.x = 高精度扫描感
+const MODELS_GEN = [
+  { v: 'P1-20260311',   l: 'P1 · 低面干净（游戏向）' },
+  { v: 'v3.1-20260211', l: 'v3.1 · 高精度' },
+  { v: 'v3.0-20250812', l: 'v3.0 · 稳定' },
+  { v: 'v2.5-20250123', l: 'v2.5 · 均衡' },
+];
+const MODELS_MV = [
+  { v: 'P1-20260311',   l: 'P1 · 低面干净（推荐四视图）' },
+  { v: 'v3.1-20260211', l: 'v3.1 · 高精度' },
+  { v: 'v3.0-20250812', l: 'v3.0 · 稳定' },
+];
+const V3_ONLY = ['generate_parts', 'smart_low_poly'];   // P 系列文档不支持这些
 const FIELDS = {
   textToModel: [
     { k: 'prompt', label: '提示词', type: 'textarea', required: true },
-    { k: 'model', label: '模型版本', type: 'select', options: MODELS, def: MODELS[0] },
+    { k: 'model', label: '模型版本', type: 'select', options: MODELS_GEN, def: 'P1-20260311' },
     { k: 'negative_prompt', label: '负面提示词', type: 'text' },
     { k: 'face_limit', label: '面数上限', type: 'number' },
     { k: 'texture_quality', label: '贴图质量', type: 'select', options: ['standard', 'detailed', 'extreme'] },
     { k: 'texture', label: '贴图', type: 'check', def: true },
     { k: 'pbr', label: 'PBR', type: 'check', def: true },
-    { k: 'generate_parts', label: '分件（须关贴图/PBR）', type: 'check' },
-    { k: 'smart_low_poly', label: '智能低面数', type: 'check' },
+    { k: 'generate_parts', label: '分件（仅 v3，须关贴图/PBR）', type: 'check' },
+    { k: 'smart_low_poly', label: '智能低面数（仅 v3）', type: 'check' },
     { k: 'auto_size', label: '真实尺寸', type: 'check' },
   ],
   imageToModel: [
-    { k: 'input', label: '图片 URL 或 file_token', type: 'text', required: true, upload: true },
-    { k: 'model', label: '模型版本', type: 'select', options: MODELS, def: MODELS[0] },
+    { k: 'input', label: '参考图（上传本地，或粘贴 URL / token）', type: 'text', required: true, upload: true },
+    { k: 'model', label: '模型版本', type: 'select', options: MODELS_GEN, def: 'P1-20260311' },
     { k: 'face_limit', label: '面数上限', type: 'number' },
     { k: 'texture', label: '贴图', type: 'check', def: true },
     { k: 'pbr', label: 'PBR', type: 'check', def: true },
   ],
   multiviewToModel: [
-    { k: 'front', label: '前视图的 URL/token', type: 'text', required: true },
-    { k: 'left', label: '左视图', type: 'text' },
-    { k: 'back', label: '后视图', type: 'text' },
-    { k: 'right', label: '右视图', type: 'text' },
-    { k: 'model', label: '模型版本', type: 'select', options: ['P1-20260311'], def: 'P1-20260311' },
-    { k: 'face_limit', label: '面数上限(50~20000)', type: 'number' },
+    { k: 'front', label: '前视图 *', type: 'text', required: true, upload: true },
+    { k: 'left',  label: '左视图', type: 'text', upload: true },
+    { k: 'back',  label: '后视图', type: 'text', upload: true },
+    { k: 'right', label: '右视图', type: 'text', upload: true },
+    { k: 'model', label: '模型版本', type: 'select', options: MODELS_MV, def: 'P1-20260311' },
+    { k: 'face_limit', label: '面数上限', type: 'number' },
   ],
-  refine:   [{ k: 'draft_model_task_id', label: '草稿任务 ID', type: 'text', required: true }],
-  texture:  [{ k: 'original_model_task_id', label: '原模型任务 ID', type: 'text', required: true },
+  refine:   [{ k: 'draft_model_task_id', label: '用哪份模型精修', type: 'task', required: true,
+               from: ['textToModel', 'imageToModel', 'multiviewToModel'] }],
+  texture:  [{ k: 'original_model_task_id', label: '给哪份模型重新贴图', type: 'task', required: true,
+               from: ['textToModel', 'imageToModel', 'multiviewToModel', 'refine'] },
              { k: 'texture_text', label: '贴图提示词', type: 'text' },
              { k: 'texture_quality', label: '贴图质量', type: 'select', options: ['standard', 'detailed', 'extreme'] }],
-  convert:  [{ k: 'original_model_task_id', label: '原模型任务 ID', type: 'text', required: true },
+  convert:  [{ k: 'original_model_task_id', label: '转哪份模型的格式', type: 'task', required: true },
              { k: 'format', label: '目标格式', type: 'select', options: ['GLB', 'FBX', 'USDZ', 'OBJ'], def: 'GLB' },
              { k: 'quad', label: '转四边面', type: 'check' },
              { k: 'face_limit', label: '面数上限', type: 'number' }],
-  rig:      [{ k: 'original_model_task_id', label: '原模型任务 ID（人形）', type: 'text', required: true }],
-  retarget: [{ k: 'original_model_task_id', label: '绑骨任务 ID', type: 'text', required: true },
+  rig:      [{ k: 'original_model_task_id', label: '给哪份模型绑骨（人形）', type: 'task', required: true,
+               from: ['textToModel', 'imageToModel', 'multiviewToModel', 'refine', 'texture'] }],
+  retarget: [{ k: 'original_model_task_id', label: '套到哪次绑骨结果上', type: 'task', required: true, from: ['rig'] },
              { k: 'animation', label: '预设动画', type: 'select', options: ['preset:idle', 'preset:walk', 'preset:run', 'preset:jump', 'preset:wave', 'preset:dance'], def: 'preset:walk' }],
 };
 
@@ -192,6 +214,22 @@ const fieldsEl = document.getElementById('fields');
 const typeEl = document.getElementById('type');
 const previewEl = document.getElementById('reqPreview');
 const FORM_KEY = t => `tripo.form.${t}`;
+const TASKS_KEY = 'tripo.tasks';
+const loadTasks = () => JSON.parse(localStorage.getItem(TASKS_KEY) ?? '[]');
+const saveTasks = ts => localStorage.setItem(TASKS_KEY, JSON.stringify(ts));
+function doneTasks(names) {
+  return loadTasks().filter(t => t.status === 'success' && (!names?.length || names.includes(t.name)));
+}
+const TYPE_NAME = {
+  textToModel: '文本', imageToModel: '图片', multiviewToModel: '四视图',
+  refine: '精修', texture: '贴图', convert: '转换', rig: '绑骨', retarget: '动画',
+};
+function taskFile(t) { return `${t.name}-${t.id.slice(0, 8)}.glb`; }
+function fileName(p) { return String(p || '').replace(/\\/g, '/').split('/').pop(); }
+function taskLabel(t) {
+  const time = new Date(t.ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  return `${TYPE_NAME[t.name] || t.name} · ${time} · ${t.id.slice(0, 8)}`;
+}
 
 function renderFields() {
   const defs = FIELDS[typeEl.value];
@@ -203,7 +241,19 @@ function renderFields() {
     let el;
     if (d.type === 'select') {
       el = document.createElement('select');
-      for (const o of d.options) el.add(new Option(o, o, false, o === (saved[d.k] ?? d.def)));
+      const def = d.def ?? (typeof d.options[0] === 'string' ? d.options[0] : d.options[0].v);
+      const cur = saved[d.k] ?? def;
+      for (const o of d.options) {
+        const val = typeof o === 'string' ? o : o.v;
+        const lab = typeof o === 'string' ? o : o.l;
+        el.add(new Option(lab, val, false, val === cur));
+      }
+    } else if (d.type === 'task') {
+      el = document.createElement('select');
+      const list = doneTasks(d.from);
+      const cur = saved[d.k] ?? list.at(-1)?.id ?? '';
+      el.add(new Option(list.length ? '— 选一份已完成的任务 —' : '（还没有完成的任务，先在上面生成一次）', '', true, !cur));
+      for (const t of [...list].reverse()) el.add(new Option(taskLabel(t), t.id, false, t.id === cur));
     } else if (d.type === 'check') {
       el = document.createElement('input'); el.type = 'checkbox';
       el.checked = saved[d.k] ?? !!d.def;
@@ -218,12 +268,28 @@ function renderFields() {
     el.dataset.required = d.required ? '1' : '';
     el.addEventListener('input', () => { el.classList.remove('required-miss'); saveForm(); renderPreview(); });
     el.addEventListener('change', () => { saveForm(); renderPreview(); });
-    fieldsEl.append(lab, el);
     if (d.upload) {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      const thumb = document.createElement('img');
+      thumb.className = 'thumb';
+      thumb.alt = '';
       const up = document.createElement('button');
-      up.className = 'ghost'; up.textContent = '上传本地图片…'; up.type = 'button';
-      up.onclick = () => pickUpload(el);
-      fieldsEl.appendChild(up);
+      up.className = 'ghost'; up.textContent = '上传…'; up.type = 'button';
+      up.onclick = () => pickUpload(el, thumb);
+      // 拖图片到输入框也能传
+      el.addEventListener('dragover', e => { e.preventDefault(); el.style.borderColor = 'var(--accent)'; });
+      el.addEventListener('dragleave', () => { el.style.borderColor = ''; });
+      el.addEventListener('drop', e => {
+        e.preventDefault(); el.style.borderColor = '';
+        const f = e.dataTransfer.files?.[0];
+        if (f) uploadFile(el, thumb, f);
+        else toast('请拖入图片文件', true);
+      });
+      row.append(el, up, thumb);
+      fieldsEl.append(lab, row);
+    } else {
+      fieldsEl.append(lab, el);
     }
   }
   // 分件与贴图互斥（官方限制）
@@ -238,6 +304,19 @@ function renderFields() {
     parts.addEventListener('change', () => { syncParts(); saveForm(); renderPreview(); });
     syncParts();
   }
+  // P 系列关掉仅 v3 的选项（分件 / 智能低面）
+  const modelEl = fieldsEl.querySelector('[data-k=model]');
+  const syncModelCaps = () => {
+    const p = String(modelEl?.value ?? '').startsWith('P');
+    for (const k of V3_ONLY) {
+      const c = fieldsEl.querySelector(`[data-k=${k}]`);
+      if (!c) continue;
+      c.disabled = p;
+      if (p) { c.checked = false; }
+    }
+  };
+  modelEl?.addEventListener('change', () => { syncModelCaps(); saveForm(); renderPreview(); });
+  syncModelCaps();
   renderPreview();
 }
 
@@ -277,29 +356,34 @@ document.getElementById('copyReq').onclick = () => {
 };
 
 // ================= 上传 =================
-async function pickUpload(targetInput) {
+function pickUpload(targetInput, thumb) {
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/*';
-  inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return;
-    targetInput.value = '上传中…';
-    try {
-      const r = await fetch(`/api/upload?filename=${encodeURIComponent(f.name)}`, { method: 'POST', body: f }).then(r => r.json());
-      if (!r.file_token) throw new Error(r.error ?? '未知错误');
-      targetInput.value = r.file_token;
-      toast('图片已上传');
-    } catch (e) { targetInput.value = ''; toast('上传失败：' + e.message, true); }
-    saveForm(); renderPreview();
-  };
+  inp.onchange = () => { const f = inp.files[0]; if (f) uploadFile(targetInput, thumb, f); };
   inp.click();
+}
+
+async function uploadFile(targetInput, thumb, f) {
+  if (!f.type.startsWith('image/')) { toast('只支持图片文件', true); return; }
+  const prev = targetInput.value;
+  targetInput.value = '上传中…';
+  if (thumb) { thumb.src = URL.createObjectURL(f); thumb.classList.add('on'); }
+  try {
+    const r = await fetch(`/api/upload?filename=${encodeURIComponent(f.name)}`, { method: 'POST', body: f }).then(r => r.json());
+    if (!r.file_token) throw new Error(r.error ?? '未知错误');
+    targetInput.value = r.file_token;
+    toast('已上传 ' + f.name);
+  } catch (e) {
+    targetInput.value = prev;
+    if (thumb) thumb.classList.remove('on');
+    toast('上传失败：' + e.message, true);
+  }
+  saveForm(); renderPreview();
 }
 
 // ================= 任务提交与轮询（localStorage 持久化） =================
 const tasksEl = document.getElementById('tasks');
-const TASKS_KEY = 'tripo.tasks';
-const loadTasks = () => JSON.parse(localStorage.getItem(TASKS_KEY) ?? '[]');
-const saveTasks = ts => localStorage.setItem(TASKS_KEY, JSON.stringify(ts));
-const cards = new Map();   // id → {card, st, bar, dl, pv, pollToken}
+const cards = new Map();
 
 function upsertStored(t) {
   const ts = loadTasks();
@@ -342,89 +426,143 @@ document.getElementById('form').addEventListener('keydown', e => {
   if (e.ctrlKey && e.key === 'Enter') submitTask();
 });
 
+function useTaskAsInput(id, nextType) {
+  typeEl.value = nextType;
+  renderFields();
+  const el = fieldsEl.querySelector('[data-k=draft_model_task_id], [data-k=original_model_task_id]');
+  if (!el) { toast('这个后续不需要任务来源', true); return; }
+  if (![...el.options].some(o => o.value === id)) {
+    const t = loadTasks().find(x => x.id === id);
+    el.add(new Option(t ? taskLabel(t) : id.slice(0, 8), id));
+  }
+  el.value = id;
+  el.classList.remove('required-miss');
+  saveForm(); renderPreview();
+  toast('已选中，改参数后点提交即可');
+}
+
 function addTaskCard(t, isNew = false) {
   if (cards.has(t.id)) return;
   const card = document.createElement('div');
   card.className = 'task' + (t.status === 'success' ? ' success' : t.status === 'failed' || t.status === 'cancelled' ? ' failed' : '');
   const time = new Date(t.ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-  card.innerHTML = `<div class="head"><span class="name">${t.name}</span>
-    <span class="id" title="${t.id}">${time} · ${t.id.slice(0, 8)}…</span>
-    <span class="ops"><button class="ghost" data-a="dl" ${t.status === 'success' && !t.saved ? '' : 'disabled'}>下载</button>
-    <button class="ghost" data-a="pv" ${t.saved ? '' : 'disabled'}>预览</button>
-    <button class="del" title="移除记录">✕</button></span></div>
-    <div class="st">${t.saved ? '✓ 已存 ' + t.saved : t.status === 'success' ? '✓ 完成' : t.status === 'running' ? '排队中…' : t.status}</div>
-    <div class="bar"><i style="width:${t.status === 'success' ? 100 : 0}%"></i></div>`;
+  const canPv = !!(t.saved || t.status === 'success');
+  card.innerHTML = `<div class="meta"><span class="name">${TYPE_NAME[t.name] || t.name}</span>
+    <span class="id" title="${t.id}">${time}</span></div>
+    <div class="st">${t.saved ? '✓ 已缓存' : t.status === 'success' ? '✓ 完成' : t.status === 'running' ? '排队中…' : t.status}</div>
+    <div class="bar"><i style="width:${t.status === 'success' ? 100 : 0}%"></i></div>
+    <div class="ops">
+      <button class="ghost" data-a="pv" ${canPv ? '' : 'disabled'}>预览</button>
+      <button class="ghost" data-a="dl" ${t.status === 'success' ? '' : 'disabled'}>下载到本地</button>
+      <select class="ghost" data-a="follow" ${t.status === 'success' ? '' : 'disabled'}>
+        <option value="">后续…</option>
+        <option value="refine">精修</option>
+        <option value="texture">重新贴图</option>
+        <option value="convert">转格式</option>
+        <option value="rig">绑骨</option>
+        <option value="retarget">套动画</option>
+      </select>
+      <button class="del" title="移除记录">✕</button>
+    </div>`;
   tasksEl.appendChild(card);
-  const st = card.querySelector('.st'), bar = card.querySelector('.bar i');
-  const dl = card.querySelector('[data-a=dl]'), pv = card.querySelector('[data-a=pv]');
-  const del = card.querySelector('.del');
-  cards.set(t.id, { card });
+  const ui = {
+    card,
+    st: card.querySelector('.st'),
+    bar: card.querySelector('.bar i'),
+    dl: card.querySelector('[data-a=dl]'),
+    pv: card.querySelector('[data-a=pv]'),
+    follow: card.querySelector('[data-a=follow]'),
+  };
+  cards.set(t.id, ui);
 
-  del.onclick = () => {
+  card.querySelector('.del').onclick = () => {
     saveTasks(loadTasks().filter(x => x.id !== t.id));
     card.remove(); cards.delete(t.id);
   };
-  dl.onclick = async () => {
-    dl.disabled = true; dl.textContent = '下载中…';
-    try {
-      const d = await fetch(`/api/task/${t.id}`).then(r => r.json());
-      const url = d.output?.model_url ?? d.output?.model ?? d.output?.url;
-      if (!url) throw new Error('任务没有产物 URL');
-      const fname = `${t.name}-${t.id.slice(0, 8)}.glb`;
-      const r = await fetch('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, name: fname }) }).then(r => r.json());
-      if (!r.saved) throw new Error(r.error ?? '下载失败');
-      t.saved = r.saved; upsertStored(t);
-      dl.textContent = '✓ 已下载'; pv.disabled = false;
-      st.textContent = '✓ 已存 ' + r.saved;
-      loadGLB('/files/' + fname);   // 下载完直接预览
-    } catch (e) { dl.textContent = '重试下载'; dl.disabled = false; toast(e.message, true); }
+  ui.dl.onclick = () => pullAndPreview(t, ui, { preview: false });
+  ui.pv.onclick = () => pullAndPreview(t, ui, { preview: true });
+  ui.follow.onchange = () => {
+    if (!ui.follow.value) return;
+    useTaskAsInput(t.id, ui.follow.value);
+    ui.follow.value = '';
   };
-  pv.onclick = () => t.saved && loadGLB('/files/' + t.saved.split('/').pop());
 
   if (isNew) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  if (t.status === 'running') pollTask(t, st, bar, dl);
+  if (t.status === 'running') pollTask(t, ui);
 }
 
-async function pollTask(t, st, bar, dl) {
+async function pullAndPreview(t, ui, { preview = true } = {}) {
+  const fname = t.saved ? fileName(t.saved) : taskFile(t);
+  try {
+    if (!t.saved) {
+      ui.st.textContent = '拉取模型中…';
+      ui.pv.disabled = true; ui.dl.disabled = true;
+      const d = await fetch(`/api/task/${t.id}`).then(r => r.json());
+      if (d.error) throw new Error(d.error);
+      const url = pickModelUrl(d.output);
+      if (!url) throw new Error('没有模型地址：' + JSON.stringify(d.output ?? {}).slice(0, 160));
+      const r = await fetch('/api/download', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, name: fname }),
+      }).then(r => r.json());
+      if (r.error || !r.saved) throw new Error(r.error ?? '下载失败');
+      t.saved = fileName(r.saved); upsertStored(t);
+      ui.dl.disabled = false;
+    }
+    if (preview) {
+      ui.st.textContent = '载入预览…（大模型可能要几秒）';
+      toast('正在载入预览…');
+      await loadGLB('/files/' + fileName(t.saved));
+      ui.st.textContent = '✓ 预览中';
+    } else {
+      ui.st.textContent = '✓ 已存 ' + fileName(t.saved);
+      toast('已保存 ' + fileName(t.saved));
+    }
+    ui.pv.disabled = false;
+  } catch (e) {
+    ui.st.textContent = '✗ ' + e.message;
+    ui.pv.disabled = false; ui.dl.disabled = false;
+    toast(e.message, true);
+  }
+}
+
+async function pollTask(t, ui) {
   let errs = 0;
   for (;;) {
     await new Promise(s => setTimeout(s, 3000));
-    if (!cards.has(t.id)) return;   // 卡片被删，停止轮询
+    if (!cards.has(t.id)) return;
     let d;
     try { d = await fetch(`/api/task/${t.id}`).then(r => r.json()); }
     catch { d = { error: '网络错误' }; }
     if (d.error) {
-      if (++errs >= 5) { st.textContent = '✗ 查询失败（已停止轮询，可删除记录）'; cardFail(t, st); return; }
-      st.textContent = `查询失败 ${errs}/5，重试中…`;
+      if (++errs >= 5) { ui.st.textContent = '✗ 查询失败（已停止轮询）'; cardFail(t, ui); return; }
+      ui.st.textContent = `查询失败 ${errs}/5，重试中…`;
       continue;
     }
     errs = 0;
-    bar.style.width = (d.progress ?? 0) + '%';
-    st.textContent = `${d.status ?? '?'} ${d.progress ?? 0}%`;
+    ui.bar.style.width = (d.progress ?? 0) + '%';
+    ui.st.textContent = `${d.status ?? '?'} ${d.progress ?? 0}%`;
     if (d.status === 'success') {
       t.status = 'success'; upsertStored(t);
-      cardOk(t, st, bar, dl);
-      refreshBalance();   // 余额变了，顺手刷新
-      toast(`${t.name} 生成完成`);
+      ui.card.classList.add('success');
+      ui.bar.style.width = '100%';
+      ui.dl.disabled = false; ui.pv.disabled = false;
+      if (ui.follow) ui.follow.disabled = false;
+      refreshBalance();
+      toast(`${TYPE_NAME[t.name] || t.name} 完成，正在预览…`);
+      await pullAndPreview(t, ui, { preview: true });
       return;
     }
     if (d.status === 'failed' || d.status === 'cancelled') {
       t.status = d.status; upsertStored(t);
-      cardFail(t, st, d.error);
+      cardFail(t, ui, d.error);
       return;
     }
   }
-  function cardOk(t, st, bar, dl) {
-    const c = cards.get(t.id)?.card;
-    c?.classList.add('success');
-    st.textContent = '✓ 完成'; bar.style.width = '100%'; dl.disabled = false;
-  }
-  function cardFail(t, st, err) {
-    const c = cards.get(t.id)?.card;
-    c?.classList.add('failed');
-    st.textContent = '✗ ' + t.status + (err ? ' ' + JSON.stringify(err).slice(0, 120) : '');
-  }
+}
+function cardFail(t, ui, err) {
+  ui.card.classList.add('failed');
+  ui.st.textContent = '✗ ' + t.status + (err ? ' ' + JSON.stringify(err).slice(0, 80) : '');
 }
 
 document.getElementById('clearDone').onclick = () => {
@@ -441,27 +579,79 @@ for (const t of loadTasks()) addTaskCard(t);
 const wrap = document.getElementById('viewerWrap');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 document.getElementById('viewer').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x101014);
 const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
-scene.add(new THREE.HemisphereLight(0xfff2dd, 0x191a20, 1.0));
-const dir = new THREE.DirectionalLight(0xffffff, 1.6); dir.position.set(2, 4, 3); scene.add(dir);
+// 三点光：主光 + 辅光(背面) + 轮廓光，避免转过去一片黑
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+scene.add(new THREE.HemisphereLight(0xfff2dd, 0x3a3d48, 0.7));
+const key = new THREE.DirectionalLight(0xfff5ea, 1.15); key.position.set(2.4, 4.2, 3.2); scene.add(key);
+const fill = new THREE.DirectionalLight(0xc9d6ee, 0.7); fill.position.set(-3.2, 1.8, -2.4); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffffff, 0.45); rim.position.set(0.2, 3.6, -4.0); scene.add(rim);
+// 廉价环境光贴图：金属/PBR 没有 env 时背面几乎全黑，用 PMREM 烘一圈天光
+{
+  const envScene = new THREE.Scene();
+  envScene.background = new THREE.Color(0x6e7380);
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(12, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xb8c2d0, side: THREE.BackSide }));
+  envScene.add(sky);
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(12, 24),
+    new THREE.MeshBasicMaterial({ color: 0x3a3d44 }));
+  ground.rotation.x = -Math.PI / 2;
+  envScene.add(ground);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+  pmrem.dispose();
+}
 const grid = new THREE.GridHelper(4, 20, 0x2c2c33, 0x1c1c22); scene.add(grid);
 
-// 迷你轨道：拖拽旋转 + 滚轮缩放 + 双击复位
-const CAM_HOME = { theta: 0.6, phi: 1.1, dist: 2.2 };
-let theta = CAM_HOME.theta, phi = CAM_HOME.phi, dist = 3, target = new THREE.Vector3(0, 0.4, 0);
-let dragging = false, px = 0, py = 0;
-renderer.domElement.addEventListener('pointerdown', e => { dragging = true; px = e.clientX; py = e.clientY; });
-window.addEventListener('pointerup', () => dragging = false);
+// 迷你轨道：左键旋转 / 右键或 Shift+拖 平移 / 滚轮缩放 / 双击复位
+const CAM_HOME = { theta: 0.6, phi: 1.05, dist: 3.2 };
+let theta = CAM_HOME.theta, phi = CAM_HOME.phi, dist = 3;
+const target = new THREE.Vector3(0, 0.4, 0);
+const homeTarget = new THREE.Vector3(0, 0.4, 0);
+const _right = new THREE.Vector3(), _up = new THREE.Vector3(), _fwd = new THREE.Vector3();
+let dragging = false, panning = false, px = 0, py = 0;
+
+function resetCam() {
+  theta = CAM_HOME.theta; phi = CAM_HOME.phi; dist = CAM_HOME.dist;
+  target.copy(homeTarget);
+}
+
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+renderer.domElement.addEventListener('pointerdown', e => {
+  dragging = true; panning = e.button === 2 || e.shiftKey;
+  px = e.clientX; py = e.clientY;
+  renderer.domElement.setPointerCapture?.(e.pointerId);
+});
+window.addEventListener('pointerup', () => { dragging = false; panning = false; });
 window.addEventListener('pointermove', e => {
   if (!dragging) return;
-  theta -= (e.clientX - px) * 0.006; phi = Math.min(3.0, Math.max(0.15, phi - (e.clientY - py) * 0.006));
+  const dx = e.clientX - px, dy = e.clientY - py;
   px = e.clientX; py = e.clientY;
+  if (panning) {
+    // 沿相机右/上轴平移观察点（与距离成比例，手感稳定）
+    _fwd.subVectors(target, camera.position).normalize();
+    _right.crossVectors(_fwd, camera.up).normalize();
+    _up.crossVectors(_right, _fwd).normalize();
+    const k = dist * 0.0025;
+    target.addScaledVector(_right, -dx * k);
+    target.addScaledVector(_up, dy * k);
+  } else {
+    theta -= dx * 0.006;
+    phi = Math.min(3.0, Math.max(0.15, phi - dy * 0.006));
+  }
 });
-renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); dist = Math.min(20, Math.max(0.3, dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
-renderer.domElement.addEventListener('dblclick', () => { theta = CAM_HOME.theta; phi = CAM_HOME.phi; dist = CAM_HOME.dist; });
+renderer.domElement.addEventListener('wheel', e => {
+  e.preventDefault();
+  dist = Math.min(20, Math.max(0.3, dist * Math.exp(e.deltaY * 0.001)));
+}, { passive: false });
+renderer.domElement.addEventListener('dblclick', resetCam);
 
 let current = null, mixer = null, currentParts = [];
 const clock = new THREE.Clock();
@@ -475,13 +665,18 @@ async function loadGLB(url) {
   mixer = null; animBar.innerHTML = ''; currentParts = [];
   const root = gltf.scene;
   const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
   const s = 1.4 / Math.max(size.x, size.y, size.z, 1e-6);
   root.scale.setScalar(s);
-  root.position.sub(center.multiplyScalar(s));
+  root.updateMatrixWorld(true);
+  const box2 = new THREE.Box3().setFromObject(root);
+  const c = box2.getCenter(new THREE.Vector3());
+  // 底面贴网格（y=0），水平居中 —— 网格是地面，不再从腰部切开
+  root.position.set(root.position.x - c.x, root.position.y - box2.min.y, root.position.z - c.z);
   scene.add(root); current = root;
-  theta = CAM_HOME.theta; phi = CAM_HOME.phi; dist = CAM_HOME.dist;
-  target.set(0, size.y * s / 2, 0);
+  const h = box2.max.y - box2.min.y;
+  homeTarget.set(0, h / 2, 0);
+  resetCam();
   dropHint.style.display = 'none';
   // 分件名单（填 config.clawGLB 用；>12 件截断显示，完整名单用复制按钮）
   root.traverse(o => { if (o.isMesh && o.name) currentParts.push(o.name); });

@@ -112,7 +112,7 @@ export function serve(port = 8787) {
         const safe = path.basename(name ?? 'model.glb');   // 防路径穿越
         const dest = path.join(GEN_DIR, safe);
         await client.download(url, dest);
-        return json(res, 200, { saved: path.relative(ROOT, dest) });
+        return json(res, 200, { saved: safe });
       }
       json(res, 404, { error: 'not found', hint: 'GET /api/health 看服务是否正常' });
     } catch (e) {
