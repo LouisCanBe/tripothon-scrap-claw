@@ -82,7 +82,9 @@ function orbitControls(canvas, cam, { min = 1, max = 30, pano = false } = {}) {
   canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
   canvas.addEventListener('pointermove', e => {
     if (!drag) return;
-    yaw -= (e.clientX - drag.x) * 0.005; pitch -= (e.clientY - drag.y) * 0.005;
+    // 视角拖拽式：往右拖 = 视线右转；往下拖 = 视线往下看（pano 分支 yaw/pitch 语义本就如此，轨道分支 pitch 取反对齐）
+    yaw -= (e.clientX - drag.x) * 0.005;
+    pitch += (pano ? -1 : 1) * (e.clientY - drag.y) * 0.005;
     pitch = Math.max(-1.45, Math.min(1.45, pitch));
     drag = { x: e.clientX, y: e.clientY }; apply();
   });
@@ -156,7 +158,7 @@ function showMesh(url) {
     const box = new THREE.Box3().setFromObject(gltf.scene);
     gltf.scene.position.y -= box.min.y;
     const size = box.getSize(new THREE.Vector3());
-    info.textContent = `GLB 网格 · ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m · 拖拽旋转 / 滚轮缩放 / WASD·方向键平移 / QE 升降（接入游戏：prizePool 同款管线）`;
+    info.textContent = `GLB 网格 · ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m · 拖拽转视角 / 滚轮缩放 / WASD·方向键前后左右 / QE 升降（接入游戏：prizePool 同款管线）`;
   });
   loop(orbitControls(renderer.domElement, camera));
   return dispose;
@@ -167,14 +169,18 @@ async function showSplat(url) {
   const viewer = new GSplat.Viewer({
     rootElement: stage,
     cameraUp: [0, 1, 0],
-    initialCameraPosition: [1.5, 1.8, 4],
-    initialCameraLookAt: [0, 1, 0],
     sharedMemoryForWorkers: false,
+    useBuiltInControls: false,   // 关掉库自带控制（它的 WASD 是屏幕空间平移、方向键旋转、拖拽轴向反直觉），统一用 orbitControls
   });
   await viewer.addSplatScene(url, { progressiveLoad: false, rotation: [1, 0, 0, 0] });   // Marble SPZ 坐标系与 three 相反：绕 X 翻 180°
   viewer.start();
-  info.textContent = 'SPZ 点云 · 左键旋转 / 右键平移 / 滚轮缩放 / WASD·方向键移动（库自带，接入游戏：splat 层与 mesh 层可同屏混合渲染）';
-  return () => { try { viewer.dispose(); } catch {} };
+  // 与 GLB 同款控制：视角拖拽 + WASD/方向键沿地面前后左右 + QE 升降（渲染循环由 viewer 自驱动，这里只跑控制 tick）
+  const tick = orbitControls(viewer.renderer.domElement, viewer.camera, { max: 60 });
+  let last, raf;
+  const step = (t) => { const dt = Math.min((t - (last ?? t)) / 1000, 0.1); last = t; tick(t, dt); raf = requestAnimationFrame(step); };
+  raf = requestAnimationFrame(step);
+  info.textContent = 'SPZ 点云 · 拖拽转视角 / 滚轮缩放 / WASD·方向键前后左右 / QE 升降（接入游戏：splat 层与 mesh 层可同屏混合渲染）';
+  return () => { cancelAnimationFrame(raf); try { viewer.dispose(); } catch {} };
 }
 
 // ---------- 调度 ----------
