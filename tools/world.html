@@ -58,18 +58,25 @@ const fileSel = document.getElementById('fileSel');
 let cleanup = null;   // 当前模式的销毁函数
 
 // ---------- 工具：简单轨道拖拽（pano/mesh 共用） ----------
+// 全局按键状态（SELECT/INPUT 聚焦时不劫持，保留下拉框键盘操作）
+const keys = new Set();
+addEventListener('keydown', e => { const t = e.target.tagName; if (t !== 'INPUT' && t !== 'SELECT' && t !== 'TEXTAREA') keys.add(e.key.toLowerCase()); });
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+
 function orbitControls(canvas, cam, { min = 1, max = 30, pano = false } = {}) {
   let yaw = 0, pitch = 0, dist = 6, drag = null;
+  const target = new THREE.Vector3(0, 0.8, 0);
   const apply = () => {
     if (pano) {   // 球内环视：相机不动，转视线方向
       cam.rotation.set(0, 0, 0, 'YXZ');
       cam.rotation.y = yaw; cam.rotation.x = pitch;
     } else {
       cam.position.set(
-        Math.sin(yaw) * Math.cos(pitch) * dist,
-        Math.sin(pitch) * dist + 1.2,
-        Math.cos(yaw) * Math.cos(pitch) * dist);
-      cam.lookAt(0, 0.8, 0);
+        target.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+        target.y + Math.sin(pitch) * dist + 0.4,
+        target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+      cam.lookAt(target);
     }
   };
   canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
@@ -81,8 +88,23 @@ function orbitControls(canvas, cam, { min = 1, max = 30, pano = false } = {}) {
   });
   canvas.addEventListener('pointerup', () => drag = null);
   if (!pano) canvas.addEventListener('wheel', e => { e.preventDefault(); dist = Math.max(min, Math.min(max, dist * Math.exp(e.deltaY * 0.001))); apply(); }, { passive: false });
+  // WASD/方向键平移目标点（沿相机水平朝向），QE 升降；帧率无关
+  const tick = (t, dt) => {
+    if (pano) return;
+    const speed = 3 * dt;
+    const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    let moved = false;
+    if (keys.has('w') || keys.has('arrowup'))    { target.addScaledVector(fwd, speed); moved = true; }
+    if (keys.has('s') || keys.has('arrowdown'))  { target.addScaledVector(fwd, -speed); moved = true; }
+    if (keys.has('a') || keys.has('arrowleft'))  { target.addScaledVector(right, -speed); moved = true; }
+    if (keys.has('d') || keys.has('arrowright')) { target.addScaledVector(right, speed); moved = true; }
+    if (keys.has('q')) { target.y -= speed; moved = true; }
+    if (keys.has('e')) { target.y += speed; moved = true; }
+    if (moved) apply();
+  };
   apply();
-  return { setDist: d => { dist = d; apply(); } };
+  return tick;
 }
 
 function baseScene() {
@@ -100,7 +122,7 @@ function baseScene() {
   };
   addEventListener('resize', onResize);
   let raf;
-  const loop = (fn) => { const tick = (t) => { fn?.(t); renderer.render(scene, camera); raf = requestAnimationFrame(tick); }; raf = requestAnimationFrame(tick); };
+  const loop = (fn) => { let last; const tick = (t) => { const dt = Math.min((t - (last ?? t)) / 1000, 0.1); last = t; fn?.(t, dt); renderer.render(scene, camera); raf = requestAnimationFrame(tick); }; raf = requestAnimationFrame(tick); };
   return { renderer, scene, camera, loop, dispose: () => { cancelAnimationFrame(raf); removeEventListener('resize', onResize); renderer.dispose(); renderer.domElement.remove(); } };
 }
 
@@ -116,7 +138,7 @@ function showPano(url) {
   });
   camera.position.set(0, 1.6, 0);
   orbitControls(renderer.domElement, camera, { pano: true });
-  loop();
+  loop();   // pano 模式相机固定球心，WASD 无视觉意义，不接线
   return dispose;
 }
 
@@ -134,10 +156,9 @@ function showMesh(url) {
     const box = new THREE.Box3().setFromObject(gltf.scene);
     gltf.scene.position.y -= box.min.y;
     const size = box.getSize(new THREE.Vector3());
-    info.textContent = `GLB 网格 · ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m · 拖拽旋转 / 滚轮缩放（接入游戏：prizePool 同款管线）`;
+    info.textContent = `GLB 网格 · ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m · 拖拽旋转 / 滚轮缩放 / WASD·方向键平移 / QE 升降（接入游戏：prizePool 同款管线）`;
   });
-  orbitControls(renderer.domElement, camera);
-  loop();
+  loop(orbitControls(renderer.domElement, camera));
   return dispose;
 }
 
@@ -152,7 +173,7 @@ async function showSplat(url) {
   });
   await viewer.addSplatScene(url, { progressiveLoad: false, rotation: [1, 0, 0, 0] });   // Marble SPZ 坐标系与 three 相反：绕 X 翻 180°
   viewer.start();
-  info.textContent = 'SPZ 点云 · 左键旋转 / 右键平移 / 滚轮缩放（接入游戏：splat 层与 mesh 层可同屏混合渲染）';
+  info.textContent = 'SPZ 点云 · 左键旋转 / 右键平移 / 滚轮缩放 / WASD·方向键移动（库自带，接入游戏：splat 层与 mesh 层可同屏混合渲染）';
   return () => { try { viewer.dispose(); } catch {} };
 }
 
