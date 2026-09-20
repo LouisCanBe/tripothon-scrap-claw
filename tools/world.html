@@ -64,6 +64,10 @@ addEventListener('keydown', e => { const t = e.target.tagName; if (t !== 'INPUT'
 addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
 
+// 边界（"墙体碰撞"）：target 与相机都被限制在盒内，撞墙即停
+let bounds = null;   // THREE.Box3 | null
+function setBounds(box, margin = 0.3) { bounds = box.clone().expandByScalar(-margin); }
+
 function orbitControls(canvas, cam, { min = 1, max = 30, pano = false } = {}) {
   let yaw = 0, pitch = 0, dist = 6, drag = null;
   const target = new THREE.Vector3(0, 0.8, 0);
@@ -72,10 +76,12 @@ function orbitControls(canvas, cam, { min = 1, max = 30, pano = false } = {}) {
       cam.rotation.set(0, 0, 0, 'YXZ');
       cam.rotation.y = yaw; cam.rotation.x = pitch;
     } else {
+      if (bounds) target.clamp(bounds.min, bounds.max);
       cam.position.set(
         target.x + Math.sin(yaw) * Math.cos(pitch) * dist,
         target.y + Math.sin(pitch) * dist + 0.4,
         target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+      if (bounds) cam.position.clamp(bounds.min, bounds.max);   // 相机也不许穿墙
       cam.lookAt(target);
     }
   };
@@ -158,7 +164,11 @@ function showMesh(url) {
     const box = new THREE.Box3().setFromObject(gltf.scene);
     gltf.scene.position.y -= box.min.y;
     const size = box.getSize(new THREE.Vector3());
-    info.textContent = `GLB 网格 · ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m · 拖拽转视角 / 滚轮缩放 / WASD·方向键前后左右 / QE 升降（接入游戏：prizePool 同款管线）`;
+    // 落地后的精确包围盒 → 边界墙（收缩 0.3m 防贴墙看穿模），线框可视化
+    const worldBox = new THREE.Box3().setFromObject(gltf.scene);
+    setBounds(worldBox);
+    scene.add(new THREE.Box3Helper(worldBox, 0x3a4a5a));
+    info.textContent = `GLB 网格 · ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m · 拖拽转视角 / 滚轮缩放 / WASD·方向键前后左右 / QE 升降 · 边界内活动（线框为墙）`;
   });
   loop(orbitControls(renderer.domElement, camera));
   return dispose;
@@ -174,18 +184,23 @@ async function showSplat(url) {
   });
   await viewer.addSplatScene(url, { progressiveLoad: false, rotation: [1, 0, 0, 0] });   // Marble SPZ 坐标系与 three 相反：绕 X 翻 180°
   viewer.start();
+  // 边界墙：SPZ 无精确包围盒 API，按 Marble 场景尺度给默认盒（同场景精确边界可由 collider GLB 推导）
+  const spzBounds = new THREE.Box3(new THREE.Vector3(-8, 0.2, -8), new THREE.Vector3(8, 4, 8));
+  setBounds(spzBounds, 0);
+  try { viewer.scene.add(new THREE.Box3Helper(spzBounds, 0x3a5a4a)); } catch {}
   // 与 GLB 同款控制：视角拖拽 + WASD/方向键沿地面前后左右 + QE 升降（渲染循环由 viewer 自驱动，这里只跑控制 tick）
-  const tick = orbitControls(viewer.renderer.domElement, viewer.camera, { max: 60 });
+  const tick = orbitControls(viewer.renderer.domElement, viewer.camera, { max: 20 });   // 场景 ~16m 宽，dist 上限收紧，配合边界防穿墙
   let last, raf;
   const step = (t) => { const dt = Math.min((t - (last ?? t)) / 1000, 0.1); last = t; tick(t, dt); raf = requestAnimationFrame(step); };
   raf = requestAnimationFrame(step);
-  info.textContent = 'SPZ 点云 · 拖拽转视角 / 滚轮缩放 / WASD·方向键前后左右 / QE 升降（接入游戏：splat 层与 mesh 层可同屏混合渲染）';
+  info.textContent = 'SPZ 点云 · 拖拽转视角 / 滚轮缩放 / WASD·方向键前后左右 / QE 升降 · 边界内活动（线框为墙）';
   return () => { cancelAnimationFrame(raf); try { viewer.dispose(); } catch {} };
 }
 
 // ---------- 调度 ----------
 function open(url) {
   cleanup?.(); cleanup = null;
+  bounds = null;   // 清掉上一个模式的边界
   stage.innerHTML = '';   // 清残留：SPZ Viewer 自带的 DOM dispose 不一定移除干净
   empty.hidden = true;
   const ext = url.split('.').pop().toLowerCase();
