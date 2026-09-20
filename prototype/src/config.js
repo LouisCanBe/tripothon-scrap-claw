@@ -75,6 +75,16 @@ export const CONFIG = {
     k2: 0.04,                // 鱼眼二阶系数
     grain: 0.055,            // 胶片颗粒强度
     vignette: 0.55,          // 暗角强度
+    bloom: 0.32,             // 泛光强度（0=关；只让灯带/高光晕开，画面不糊）
+    bloomThreshold: 0.72,    // 泛光亮度阈值：只有比它亮的才晕
+  },
+
+  // —— 渲染质感（阴影 / 色调映射 / 环境光）——
+  render: {
+    shadows: true,           // 阴影总开关（关了回到平板光）
+    shadowMapSize: 2048,     // 阴影贴图尺寸（移动端自动减半）
+    exposure: 1.12,          // ACES 曝光（开了色调映射后整体会暗一点，这里补）
+    envIntensity: 0.5,       // 环境贴图强度（IBL 给 PBR 材质反射/补光，别盖过主灯氛围）
   },
 
   frame: {

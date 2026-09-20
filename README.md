@@ -9,13 +9,11 @@ Web3D 抓娃娃机叙事 Demo：四幕方框画幅（记忆）+ 终幕 16:9 故�
 需要一个静态文件服务器（ES Module 不能双击 html 直接开）：
 
 ```powershell
-cd prototype
-python -m http.server 8021     # 或: npx serve -l 8021
+node tools/devServer.mjs 8000    # 推荐：no-store 禁缓存，改代码普通刷新即生效
+# 或传统方式：cd prototype; python -m http.server 8021（改 JS 后需 Ctrl+F5 强刷）
 ```
 
-浏览器打开 **http://localhost:8021/** 即玩。
-
-> 改完代码刷新请用 **Ctrl+F5**（硬刷新）——浏览器会缓存 JS 模块，普通刷新可能跑的是旧代码。
+浏览器打开 **http://localhost:8000/** 即玩。
 
 ### 键位
 
@@ -95,6 +93,9 @@ prototype/              可玩原型（Three.js 0.170，CDN 引入）
   assets/               生成的 GLB（prizes/ 奖品、machine/ 爪子）
 tools/generate.mjs      Tripo 批处理脚本（Node，零依赖）
 tools/tripo.mjs         Tripo API 全接口薄封装：CLI / 可 import / serve 本地转发（给可视化 UI）
+tools/marble.mjs        Marble 世界生成 API 薄封装（同 tripo 三段式，待 key 实测）
+tools/devServer.mjs     开发静态服务器（no-store 禁模块缓存）
 tools/TRIPO.md          接口清单 + 分件可动/绑骨动画/替换流程示例
+tools/TOOLS.md          多服务整合方案（Tripo/Marble/TapTap）
 tools/prompts.json      16 件物品 prompt + 统一风格后缀
 ```

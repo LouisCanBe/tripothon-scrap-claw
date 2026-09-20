@@ -11,7 +11,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { nearestItem, capTextures } from './prizePool.js';
+import { nearestItem, capTextures, enableShadows } from './prizePool.js';
 
 const C = () => CONFIG.claw;
 const lerp = THREE.MathUtils.lerp;
@@ -116,6 +116,7 @@ export class ClawMachine {
       const gltf = await new GLTFLoader().loadAsync(cfg.url);
       const root = gltf.scene;
       if (matchMedia('(pointer: coarse)').matches) capTextures(root, CONFIG.mobile.maxTextureSize);
+      enableShadows(root);
       const byName = {};
       root.traverse(o => { if (o.name) byName[o.name] = o; });
 

@@ -135,8 +135,19 @@ const _sleep = ms => new Promise(r => setTimeout(r, ms));
 const COARSE = matchMedia('(pointer: coarse)').matches;   // 触屏设备（iPad/手机）
 
 // 触屏设备贴图降尺寸：Tripo GLB 可能带 2K/4K 贴图，16 件解码后显存上 GB → iPad 直接崩标签页
-export function capTextures(root, max) {
-  root.traverse(o => {
+// 阴影标志统一设置：不透明 mesh 投影+接影；透明件（玻璃罩等）只接影不投影
+export function enableShadows(root) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const transparent = Array.isArray(o.material)
+      ? o.material.some(m => m?.transparent)
+      : o.material?.transparent;
+    o.castShadow = !transparent;
+    o.receiveShadow = true;
+  });
+}
+
+export function capTextures(root, max) {  root.traverse(o => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     for (const m of mats) {
@@ -200,6 +211,7 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
     }
     const g = normalizeGLB(res.value.scene, item.collider, item.restY);
     if (COARSE) capTextures(g, CONFIG.mobile.maxTextureSize);
+    enableShadows(g);
     g.position.copy(item.mesh.position);
     g.rotation.copy(item.mesh.rotation);
     g.visible = false;

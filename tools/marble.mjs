@@ -1,0 +1,232 @@
+#!/usr/bin/env node
+// ============================================================
+// World Labs Marble API 小工具（World API v1）
+// 文本/图片/全景图/视频 → 可探索 3D 世界（GLB mesh / SPZ 点云 / 全景图）
+//
+// 三种用法（与 tripo.mjs 完全同构）：
+//   1. CLI：    node tools/marble.mjs <命令> [--参数 值]
+//   2. 模块：   import { MarbleClient } from './tools/marble.mjs'
+//   3. 本地服务：node tools/marble.mjs serve --port 8788
+//
+// .env.local：MARBLE_API_KEY=wlt_xxx（或 WLT_API_KEY）；HTTPS_PROXY 走代理
+//
+// 注意：路径按官方文档 docs.worldlabs.ai/api 编写，尚未实测（等 key）。
+//      报错时先核对 PATHS 表与官方文档是否一致。
+// ============================================================
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const POLL_MS = 5000;
+const TIMEOUT_MS = 20 * 60 * 1000;   // 世界生成比单模型慢，放宽到 20 分钟
+
+// ---------- .env.local（与 tripo.mjs 同一套） ----------
+function loadEnvFile() {
+  for (const f of ['.env.local', '.env']) {
+    const p = path.join(ROOT, f);
+    if (!fs.existsSync(p)) continue;
+    const text = fs.readFileSync(p, 'utf8').replace(/^﻿/, '');
+    for (const line of text.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']?([^"'\r\n]*?)["']?\s*$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+    }
+  }
+}
+loadEnvFile();
+
+// 代理自重启（同 tripo.mjs）
+const HAS_PROXY = process.env.HTTPS_PROXY || process.env.https_proxy
+               || process.env.HTTP_PROXY || process.env.http_proxy;
+if (HAS_PROXY && process.env.NODE_USE_ENV_PROXY !== '1' && !process.argv.includes('--no-respawn')) {
+  const { spawnSync } = await import('node:child_process');
+  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
+    stdio: 'inherit',
+    env: { ...process.env, NODE_USE_ENV_PROXY: '1' },
+  });
+  process.exit(r.status ?? 0);
+}
+
+const API = (process.env.MARBLE_API_BASE || 'https://api.worldlabs.ai/marble/v1').replace(/\/$/, '');
+
+// ============================================================
+// 接口路径表（World API v1）
+// ============================================================
+const PATHS = {
+  generate:      ['POST', '/worlds:generate'],                 // 生成世界 → operation_id
+  operation:     ['GET',  '/operations/{id}'],                 // 轮询 → done + response.world_id
+  world:         ['GET',  '/worlds/{id}'],                     // 世界详情（资产 URL）
+  export:        ['POST', '/worlds/{id}:export'],              // 导出 {asset_type:'splats'|'mesh', format}
+  prepareUpload: ['POST', '/media-assets:prepare_upload'],     // 本地图片上传（signed URL 流程）
+};
+
+// ============================================================
+// MarbleClient
+// ============================================================
+export class MarbleClient {
+  constructor({ key = (process.env.MARBLE_API_KEY || process.env.WLT_API_KEY)?.trim(), base = API } = {}) {
+    if (!key) throw new Error('找不到 MARBLE_API_KEY（.env.local 里写 MARBLE_API_KEY=wlt_xxx，platform.worldlabs.ai 申请）');
+    this.key = key;
+    this.base = base.replace(/\/$/, '');
+  }
+
+  get headers() { return { 'WLT-Api-Key': this.key, 'Content-Type': 'application/json' }; }
+
+  async call(method, p, body) {
+    const url = this.base + p;
+    let res;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: this.headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch (e) {
+      const code = e.cause?.code ?? e.message;
+      throw new Error(`网络错误（${code}）→ ${method} ${url}\n    排查：检查代理/防火墙，或 MARBLE_API_BASE 换域名`);
+    }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 402) throw new Error('余额不足（402）：去 platform.worldlabs.ai/billing 充值');
+      throw new Error(`HTTP ${res.status} → ${method} ${url}：${JSON.stringify(json).slice(0, 300)}`);
+    }
+    return json;
+  }
+
+  // 生成世界。input: { text } | { imageUrl } | { panoUrl } | { videoUrl }，opts: model/seed/displayName/tags
+  generate(input, opts = {}) {
+    let world_prompt;
+    if (input.text)     world_prompt = { type: 'text', text_prompt: input.text };
+    else if (input.imageUrl) world_prompt = { type: 'image', image_url: input.imageUrl };
+    else if (input.panoUrl)  world_prompt = { type: 'panorama', image_url: input.panoUrl, is_pano: true };
+    else if (input.videoUrl) world_prompt = { type: 'video', video_url: input.videoUrl };
+    else throw new Error('generate 需要 text / imageUrl / panoUrl / videoUrl 之一');
+    return this.call('POST', '/worlds:generate', strip({
+      display_name: opts.displayName,
+      model: opts.model ?? 'marble-1.1',     // 大世界/室外用 marble-1.1-plus
+      seed: opts.seed,
+      tags: opts.tags,
+      world_prompt,
+    }));
+  }
+
+  getOperation(id) { return this.call('GET', `/operations/${id}`); }
+  getWorld(id)     { return this.call('GET', `/worlds/${id}`); }
+  exportWorld(id, assetType = 'mesh', format = 'glb') {
+    return this.call('POST', `/worlds/${id}:export`, { asset_type: assetType, format });
+  }
+
+  // 轮询 operation → 完成后取 world 详情
+  async poll(operationId, { onProgress, pollMs = POLL_MS, timeoutMs = TIMEOUT_MS } = {}) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      await new Promise(r => setTimeout(r, pollMs));
+      const op = await this.getOperation(operationId);
+      onProgress?.(op.done ? 'done' : 'running', op.progress ?? 0);
+      if (op.done) {
+        if (op.error) throw new Error(`生成失败：${JSON.stringify(op.error)}`);
+        const worldId = op.response?.world_id;
+        return worldId ? this.getWorld(worldId) : op.response;
+      }
+    }
+    throw new Error('轮询超时（20 分钟）');
+  }
+
+  async download(url, dest) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}`);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+    return dest;
+  }
+
+  // 从 world 对象里挑资产 URL（不同版本字段名可能漂移，尽量兜底）
+  assetURL(world, prefer = 'mesh') {
+    const a = world?.assets ?? world ?? {};
+    return a.mesh_glb_url ?? a.mesh_url ?? a.glb_url
+        ?? a.splats_url ?? a.spz_url ?? a.panorama_url ?? a.pano_url ?? null;
+  }
+
+  // 一条龙：生成 → 轮询 → （可选）下载
+  async run(input, { out, onProgress, ...opts } = {}) {
+    const op = await this.generate(input, opts);
+    const operationId = op.operation_id ?? op.id;
+    const world = await this.poll(operationId, { onProgress });
+    const url = this.assetURL(world);
+    if (out && url) await this.download(url, out);
+    return { operationId, world, saved: out && url ? out : null };
+  }
+}
+
+// ============================================================
+// CLI
+// ============================================================
+const COMMANDS = `
+命令（--后参数一律 --key value，value 自动尝试按 JSON 解析）：
+  gen       --text "废弃便利店，黄昏，暖光"        文本生成世界
+            --image <图片URL>                     图片生成
+            --pano <360°全景图URL>                全景图生成
+            [--model marble-1.1|marble-1.1-plus] [--seed 42] [--name 显示名]
+  op        --id <operation_id>                   查生成进度
+  world     --id <world_id>                       世界详情（资产 URL）
+  export    --id <world_id> [--type mesh|splats] [--format glb|ply|spz]
+  call      --method POST --path /worlds:generate --body '{"…"}'   逃生舱
+  serve     [--port 8788]                         本地 HTTP 转发
+
+通用：--wait 轮询到完成；--out <路径> 完成后下载资产；--dry 只打印请求不调用
+例：node tools/marble.mjs gen --text "雨后的小巷，霓虹倒影" --wait --out prototype/assets/worlds/alley.glb
+`;
+
+function parseArgs(argv) {
+  const [cmd, ...rest] = argv;
+  const opts = {};
+  for (let i = 0; i < rest.length; i++) {
+    if (!rest[i].startsWith('--')) continue;
+    const k = rest[i].slice(2);
+    const v = rest[i + 1]?.startsWith('--') || rest[i + 1] === undefined ? true : rest[++i];
+    if (typeof v === 'string') { try { opts[k] = JSON.parse(v); } catch { opts[k] = v; } }
+    else opts[k] = v;
+  }
+  return { cmd, opts };
+}
+
+async function cli() {
+  const { cmd, opts } = parseArgs(process.argv.slice(2));
+  if (!cmd || cmd === 'help' || cmd === '-h') { console.log(COMMANDS); return; }
+
+  if (cmd === 'serve') { const { serve } = await import('./marble.serve.mjs'); return serve(opts.port ?? 8788); }
+
+  const dry = !!opts.dry;
+  const client = dry ? null : new MarbleClient();
+  const show = (label, data) => console.log(label, JSON.stringify(data, null, 2));
+
+  switch (cmd) {
+    case 'gen': {
+      const input = { text: opts.text, imageUrl: opts.image, panoUrl: opts.pano, videoUrl: opts.video };
+      const genOpts = { model: opts.model, seed: opts.seed, displayName: opts.name, tags: opts.tags };
+      if (dry) return show(`[dry] POST ${API}/worlds:generate\n`, { input, ...genOpts });
+      if (opts.wait || opts.out) {
+        const r = await client.run(input, {
+          out: opts.out, ...genOpts,
+          onProgress: (s, p) => process.stdout.write(`\r  ${s} ${p}%   `),
+        });
+        console.log(`\n✓ world=${r.world?.world_id ?? r.world?.id ?? '?'}${r.saved ? ' → ' + r.saved : ''}`);
+        if (!r.saved) show('world:', r.world);
+      } else {
+        show('operation:', await client.generate(input, genOpts));
+      }
+      break;
+    }
+    case 'op':     show('operation:', await client.getOperation(opts.id)); break;
+    case 'world':  show('world:', await client.getWorld(opts.id)); break;
+    case 'export': show('export:', await client.exportWorld(opts.id, opts.type ?? 'mesh', opts.format ?? 'glb')); break;
+    case 'call':   show('result:', await client.call(opts.method ?? 'POST', opts.path, opts.body)); break;
+    default: console.error(`未知命令 "${cmd}"\n${COMMANDS}`);
+  }
+}
+
+const strip = o => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== undefined));
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  cli().catch(e => { console.error(e.message ?? e); process.exit(1); });
+}

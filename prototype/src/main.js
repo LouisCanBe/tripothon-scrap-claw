@@ -8,8 +8,9 @@
 // ============================================================
 import * as THREE from 'three';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CONFIG } from './config.js';
-import { spawnPool, upgradeVisuals, tickUpgrades } from './prizePool.js';
+import { spawnPool, upgradeVisuals, tickUpgrades, enableShadows } from './prizePool.js';
 import { ClawMachine } from './clawMachine.js';
 import { CameraRig } from './cameraRig.js';
 import { FrameMask } from './frameMask.js';
@@ -28,10 +29,23 @@ const COARSE = matchMedia('(pointer: coarse)').matches;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, COARSE ? CONFIG.mobile.maxPixelRatio : 2));
 renderer.setSize(innerWidth, innerHeight);
+// ACES 电影级色调映射：高光滚降更柔，暖灯不过曝（OutputPass 会读这个设置）
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = CONFIG.render.exposure;
+// 阴影：PCF 软阴影；移动端贴图减半保帧率
+renderer.shadowMap.enabled = CONFIG.render.shadows;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0b0d);
+// IBL：RoomEnvironment 给 PBR 材质环境反射与补光（无需外部 HDR 文件）
+{
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = CONFIG.render.envIntensity;
+  pmrem.dispose();
+}
 
 const camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, innerWidth / innerHeight, 0.1, 60);
 
@@ -40,6 +54,14 @@ const hemi = new THREE.HemisphereLight(0xfff2dd, 0x191a20, 0.55);
 scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffe7c4, 1.1);
 key.position.set(2.5, 4, 3);
+// 主光投阴影：范围框住机器即可，太大反而糊
+key.castShadow = CONFIG.render.shadows;
+key.shadow.mapSize.setScalar((COARSE ? 0.5 : 1) * CONFIG.render.shadowMapSize);
+key.shadow.camera.left = key.shadow.camera.bottom = -2.6;
+key.shadow.camera.right = key.shadow.camera.top = 2.6;
+key.shadow.camera.near = 1; key.shadow.camera.far = 12;
+key.shadow.bias = -0.002;              // 防自阴影条纹
+key.shadow.normalBias = 0.02;
 scene.add(key);
 const glow = new THREE.PointLight(0xffd9a0, 10, 7, 1.8);
 glow.position.set(0, 1.7, 0.4);
@@ -50,6 +72,7 @@ const world = new THREE.Group();
 scene.add(world);
 buildMachineShell(world);
 const items = spawnPool(world);
+enableShadows(world);   // 机器壳+几何体奖品统一开阴影（玻璃罩透明自动跳过投影）
 // manifest 有 GLB 的：预编译后逐个弹出热替换；进度喂给加载画面
 const prizesReady = upgradeVisuals(world, items, renderer, camera, (d, t) => {
   prizeDone = d; prizeTotal = t; paintLoading();
@@ -188,6 +211,12 @@ const gui = new GUI({ title: '爪机手感调参' });
   p.add(CONFIG.post, 'k2', 0, 0.2, 0.005);
   p.add(CONFIG.post, 'grain', 0, 0.15, 0.005).listen();
   p.add(CONFIG.post, 'vignette', 0, 1, 0.05);
+  p.add(CONFIG.post, 'bloom', 0, 1.2, 0.02);
+  p.add(CONFIG.post, 'bloomThreshold', 0.3, 1, 0.02);
+
+  const rf = gui.addFolder('渲染质感');
+  rf.add(CONFIG.render, 'exposure', 0.4, 2, 0.02).onChange(v => renderer.toneMappingExposure = v);
+  rf.add(CONFIG.render, 'envIntensity', 0, 1.5, 0.05).onChange(v => scene.environmentIntensity = v);
 
   const act = {
     '跳过当前幕(N)': () => director.skip(),

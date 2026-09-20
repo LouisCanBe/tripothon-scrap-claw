@@ -7,6 +7,7 @@ import { Vector2 } from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CONFIG } from './config.js';
 
@@ -64,11 +65,23 @@ export class Post {
   constructor(renderer, scene, camera) {
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(scene, camera));
+    // 泛光：只让灯带/高光晕开（threshold 守门），第四幕回暖演出更动人
+    // 触屏设备默认关：全屏模糊采样对 iPad GPU 不友好
+    this.bloom = new UnrealBloomPass(
+      new Vector2(innerWidth, innerHeight),
+      CONFIG.post.bloom,
+      0.55,                       // radius：光晕扩散
+      CONFIG.post.bloomThreshold  // threshold
+    );
+    this.composer.addPass(this.bloom);
     this.pass = new ShaderPass(GradeShader);
     this.composer.addPass(this.pass);
     this.composer.addPass(new OutputPass());
     this.fisheyeFade = 1;
     this.fisheyeFadeTarget = 1;
+    // 移动端泛光锁死（H 面板调不动），桌面端随 CONFIG 实时调
+    this._bloomScale = matchMedia('(pointer: coarse)').matches ? 0 : 1;
+    this.bloom.strength = CONFIG.post.bloom * this._bloomScale;
   }
 
   setSize(w, h) {
@@ -84,6 +97,8 @@ export class Post {
   render(dt, t) {
     const p = CONFIG.post;
     this.fisheyeFade += (this.fisheyeFadeTarget - this.fisheyeFade) * (1 - Math.exp(-dt / 0.6));
+    this.bloom.strength = p.bloom * this._bloomScale;   // H 面板实时可调（移动端锁 0）
+    this.bloom.threshold = p.bloomThreshold;
     const u = this.pass.uniforms;
     u.uK1.value = p.k1 * this.fisheyeFade;
     u.uK2.value = p.k2 * this.fisheyeFade;
