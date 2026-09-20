@@ -74,6 +74,10 @@ node tools/devServer.mjs 8000
 - `assets.splats.spz_urls.{100k,500k,full_res}` —— 高斯点云（写实感最强）
 - `assets.caption` —— AI 扩写后的场景描述（回收当 prompt 素材）
 
+⚠️ **坐标系**：Marble 输出的 GLB 和 SPZ 与 three.js 朝向相反，接入时**绕 X 轴翻 180°**
+（GLB：`scene.rotation.x = Math.PI`；SPZ：`addSplatScene(url, { rotation: [1,0,0,0] })`）。
+全景图不受影响。
+
 **预览器**：`node tools/marble.mjs serve` → http://localhost:8788/ 三模式切换
 （全景图 / GLB 网格 / SPZ 点云），SPZ 渲染用 vendor 化的 `@mkkellogg/gaussian-splats-3d`
 （`prototype/vendor/addons/gaussian-splats-3d.js`，three r170 兼容已验证）。

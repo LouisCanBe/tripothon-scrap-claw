@@ -128,8 +128,11 @@ function showMesh(url) {
   const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(3, 5, 4); scene.add(key);
   const grid = new THREE.GridHelper(20, 20, 0x333340, 0x222228); scene.add(grid);
   new GLTFLoader().load(url, (gltf) => {
+    gltf.scene.rotation.x = Math.PI;   // Marble GLB 同样是反的
     scene.add(gltf.scene);
+    // 翻转后重新落地：包围盒底贴回 y=0
     const box = new THREE.Box3().setFromObject(gltf.scene);
+    gltf.scene.position.y -= box.min.y;
     const size = box.getSize(new THREE.Vector3());
     info.textContent = `GLB 网格 · ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m · 拖拽旋转 / 滚轮缩放（接入游戏：prizePool 同款管线）`;
   });
@@ -147,7 +150,7 @@ async function showSplat(url) {
     initialCameraLookAt: [0, 1, 0],
     sharedMemoryForWorkers: false,
   });
-  await viewer.addSplatScene(url, { progressiveLoad: false });
+  await viewer.addSplatScene(url, { progressiveLoad: false, rotation: [1, 0, 0, 0] });   // Marble SPZ 坐标系与 three 相反：绕 X 翻 180°
   viewer.start();
   info.textContent = 'SPZ 点云 · 左键旋转 / 右键平移 / 滚轮缩放（接入游戏：splat 层与 mesh 层可同屏混合渲染）';
   return () => { try { viewer.dispose(); } catch {} };
