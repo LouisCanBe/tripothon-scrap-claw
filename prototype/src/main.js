@@ -17,6 +17,7 @@ import { Post } from './post.js';
 import { Input } from './input.js';
 import { PointerControls } from './pointerControls.js';
 import { OnscreenButtons } from './onscreenButtons.js';
+import { DesignOverlay } from './designOverlay.js';
 import { buildMachineShell } from './machineShell.js';
 import { Director } from './director.js';
 import { DEFAULT_HINT } from './acts.js';
@@ -87,6 +88,7 @@ const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
 const input = new Input();
 const buttons = new OnscreenButtons(input);   // 屏幕按钮（触屏自动显示，H 面板可开）
+const design = new DesignOverlay();           // 设计稿叠加层（G 切换，调试对齐用）
 
 window.addEventListener('framechange', (e) => {
   if (CONFIG.frame.fisheyeFadeOnWide) post.setFisheyeFade(e.detail === 'wide' ? 0 : 1);
@@ -145,6 +147,12 @@ input.on('frameMode', () => {
 input.on('toggleFrame', () => mask.toggle(true));
 input.on('hardCut', () => mask.hardCut());
 
+// —— 设计稿叠加层（调试对齐，不过权限闸）——
+input.on('design', () => design.toggle());
+input.on('designLock', () => design.toggleLock());
+input.on('designReset', () => design.reset());
+input.on('designCycle', (d) => design.cycle(d));
+
 // —— 指针手势：拖拽切视角（过权限闸）/ 滚轮与捏合缩放（用户层，不碰幕级调参）——
 new PointerControls(document.getElementById('stage'), {
   onCycle: (d) => { if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); } },
@@ -185,6 +193,7 @@ const gui = new GUI({ title: '爪机手感调参' });
     '跳过当前幕(N)': () => director.skip(),
     '凑近/站远(V)': () => mask.toggleViewMode(),
     '屏幕按钮': () => buttons.toggle(),
+    '设计稿叠加(G)': () => design.toggle(),
     '右布局(一幕)': () => mask.setLayout('right'),
     '居中(二~四幕)': () => mask.setLayout('center'),
     '展开16:9': () => mask.setLayout('wide'),

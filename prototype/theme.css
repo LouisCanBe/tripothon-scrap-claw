@@ -1,0 +1,35 @@
+/* ============================================================
+   主题文件：全站字体 / 颜色 / 字号变量
+   设计稿定稿后只改这一个文件；想做多方案对比，
+   复制成 theme.alt.css 改值，在 index.html 里换 link 即可。
+   ============================================================ */
+:root {
+  color-scheme: dark;
+
+  /* —— 字体 —— */
+  --font-main: "Courier New", ui-monospace, monospace;             /* 正文/UI：等宽 → 终端打字机感 */
+  --font-hand: "Segoe Script", "Xingkai SC", "STXingkai", cursive; /* 手写体：终幕那行字用 */
+
+  /* —— 字号 —— */
+  --font-size-hud: 13px;    /* 配额任务卡 */
+  --font-size-msg: 15px;    /* 底部字幕 */
+  --font-size-hint: 12px;   /* 底部操作提示 */
+  --letter-spacing: .5px;
+
+  /* —— 颜色 —— */
+  --color-ink: #d8d4c8;        /* 主文案 */
+  --color-ink-dim: #8a877e;    /* 次要提示 */
+  --color-accent: #9db87a;     /* 任务完成 / 强调 */
+  --color-paper: #efe9dc;      /* 纸片元素（旁白框/toast/合成卡） */
+  --color-paper-ink: #26241f;  /* 纸片上的字 */
+  --color-bg: #070708;         /* 全站底色 */
+
+  /* —— 质感 —— */
+  --text-shadow: 0 1px 3px #000;
+  --panel-shadow: 4px 4px 0 rgba(0,0,0,.45);   /* 纸片投影 */
+
+  /* 换自定义字体：把 woff2 放进 prototype/fonts/（中文务必子集化，整包好几 MB），
+     取消下面注释、再把 --font-hand 或 --font-main 改成你的字体名即可：
+  @font-face { font-family: 'MyHand'; src: url('./fonts/hand.woff2') format('woff2'); }
+  */
+}

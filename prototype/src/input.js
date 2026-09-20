@@ -22,6 +22,11 @@ export class Input {
         case 'KeyH':   this.emit('gui'); break;
         case 'KeyN':   this.emit('next'); break;   // 调试：跳过当前幕
         case 'KeyV':   this.emit('frameMode'); break;   // 取景 近/远 切换
+        case 'KeyG':   this.emit('design'); break;      // 设计稿叠加层
+        case 'KeyL':   this.emit('designLock'); break;  // 设计稿锁定/穿透
+        case 'KeyR':   this.emit('designReset'); break; // 设计稿复位
+        case 'BracketLeft':  this.emit('designCycle', -1); break;
+        case 'BracketRight': this.emit('designCycle', 1); break;
       }
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));

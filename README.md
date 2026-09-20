@@ -25,6 +25,7 @@ python -m http.server 8021     # 或: npx serve -l 8021
 | 空格 | 落爪（落下后不可取消） |
 | 1 / 2 / 3，Q / E | 切换 / 循环视角 |
 | V | 取景 凑近 / 站远 切换（二~四幕） |
+| G | 设计稿叠加层（调试对齐 UI，叠加内 `[` `]` 切图 / `R` 复位 / `L` 锁定穿透） |
 | N | 跳过当前幕（调试用） |
 | H | 调参面板显隐 |
 | F / Shift+F | 画幅切换 / 硬切（调试） |
@@ -61,12 +62,25 @@ node tools/generate.mjs                 # 全量 16 件
 GLB 落到 `prototype/assets/prizes/`，manifest 自动重建，刷新页面即热替换。
 爪子分件：`node tools/generate.mjs claw`。详见 `prototype/PARAMS.md` 末节。
 
+## 设计稿工作流（UI 对齐 / 模型风格统一）
+
+**UI 对齐**：设计稿导出 PNG → 放进 `prototype/design/` 并在 `design/manifest.js` 加一行
+（或直接把图片拖进游戏窗口）→ 游戏里按 `G` 半透明叠加在画面上，拖拽对位置、
+滚轮调透明度、`Shift+滚轮` 缩放、`L` 锁定后正常玩游戏对照看。
+主题色值/字体定稿后只改 `prototype/theme.css` 一个文件。
+
+**模型风格统一**：设计稿喂给 Tripo —— 工具页「图片 → 模型」上传设计稿道具图，
+或「四视图 → 模型」喂正/侧/背视图，生成的模型天然贴合美术风格；
+批量管线 `tools/generate.mjs` 的 `prompts.json` 里给条目加 `"image": "路径"` 即走图生模型。
+
 ## 目录结构
 
 ```
 outline.md              设计文档（叙事/机制/美术纲领）
 prototype/              可玩原型（Three.js 0.170，CDN 引入）
-  index.html            页面骨架 + 画幅遮罩/HUD 样式 + 字体变量区
+  index.html            页面骨架 + 画幅遮罩/HUD 样式
+  theme.css             主题变量（字体/颜色/字号，设计稿定稿只改这里）
+  design/               设计稿目录（manifest.js 清单，G 键叠加对照）
   src/
     main.js             装配 + 主循环
     acts.js             五幕编排数据（文案/时长/权限/变焦，改内容只动这里）

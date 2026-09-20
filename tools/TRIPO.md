@@ -143,7 +143,23 @@ mixer.clipAction(gltf.animations[0]).play();
 // 每帧：mixer.update(dt)
 ```
 
-## 六、替换进游戏（奖品）
+## 六、设计稿 → 模型（美术风格统一）
+
+设计稿不只是 UI 参考，直接当生成输入，模型风格天然贴合：
+
+| 设计稿形式 | 走哪个接口 | 说明 |
+|---|---|---|
+| 单张道具图 | `imageToModel` | 工具页「图片 → 模型」上传，或 CLI `node tools/tripo.mjs imageToModel -f 图.png` |
+| 正/侧/背三视图 | `multiviewToModel` | 还原度最高，适合主角级资产 |
+| 已有模型 + 设计稿配色 | `textureModel` | 用设计稿当风格参考重新贴图 |
+
+批量管线同样支持：`tools/prompts.json` 里给条目加 `"image": "路径"` 字段，
+`generate.mjs` 会自动走图生模型（见 `generate.mjs` 的 `buildRequest`）。
+
+流程：设计稿导出 PNG → 工具页上传生成 → 下载进 `prototype/assets/generated/` →
+改名进 `prizes/` 并登记 `assets.manifest.js` → 游戏内自动热替换（详见下节）。
+
+## 七、替换进游戏（奖品）
 
 ```
 node tools/tripo.mjs text --prompt "..." --wait --out prototype/assets/prizes/<id>.glb

@@ -10,27 +10,10 @@
   addEventListener('error', e => __errs.push(String(e.message)));
   addEventListener('unhandledrejection', e => __errs.push(String(e.reason)));
 </script>
+<link rel="stylesheet" href="./theme.css" />
 <style>
-  :root {
-    color-scheme: dark;
-    /* ============ 字体 / 文案样式调整区（全站改这一处） ============ */
-    --font-main: "Courier New", ui-monospace, monospace;             /* 正文/UI：等宽 → 终端打字机感 */
-    --font-hand: "Segoe Script", "Xingkai SC", "STXingkai", cursive; /* 手写体：终幕那行字用 */
-    --font-size-hud: 13px;
-    --font-size-msg: 15px;
-    --font-size-hint: 12px;
-    --letter-spacing: .5px;
-    --color-ink: #d8d4c8;        /* 主文案 */
-    --color-ink-dim: #8a877e;    /* 次要提示 */
-    --color-accent: #9db87a;     /* 任务完成 */
-    --text-shadow: 0 1px 3px #000;
-    /* 换自定义字体：把 woff2 放进 prototype/fonts/（中文务必子集化，整包好几 MB），
-       取消下面注释、再把 --font-hand 或 --font-main 改成你的字体名即可：
-    @font-face { font-family: 'MyHand'; src: url('./fonts/hand.woff2') format('woff2'); }
-    */
-  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #070708; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--color-bg); }
   body { font-family: var(--font-main); color: var(--color-ink); }
 
   /* 舞台：canvas 始终全窗口渲染，用 clip-path 控制可见画幅（见 frameMask.js）
@@ -131,6 +114,14 @@
               font-size: 16px; white-space: pre-line; opacity: 0; transition: all 1.2s; }
   #menuCard.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
   .lil-gui { z-index: 30 !important; --background-color: rgba(14,14,16,.94); }
+
+  /* —— 设计稿叠加层（G 切换，逻辑见 designOverlay.js）—— */
+  #designOverlay { position: fixed; inset: 0; z-index: 35; display: none; overflow: hidden; }
+  #designOverlay img { position: absolute; left: 50%; top: 50%; max-width: 100vw; max-height: 100vh;
+                       transform: translate(-50%, -50%); pointer-events: none; user-select: none; }
+  #designOverlay .d-status { position: absolute; right: 12px; bottom: 10px; padding: 4px 12px;
+                             font-size: 11px; color: var(--color-ink-dim); background: rgba(8,8,10,.7);
+                             border-radius: 4px; pointer-events: none; }
 
   /* —— 加载闸门：GLB 全部就位才开演（线上资产走网络，避免演到一半换装）—— */
   #loading { position: fixed; inset: 0; z-index: 40; background: #070708;

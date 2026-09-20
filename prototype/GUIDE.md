@@ -10,7 +10,8 @@
 
 ### 1. 字体 / 颜色 / 字号 —— 全站只在一处改
 
-`index.html` 顶部 `<style>` 的 `:root` 变量区：
+主题变量已抽离到 **`prototype/theme.css`**（`:root` 变量区），设计稿定稿后只改这一个文件。
+想做多方案对比：复制成 `theme.alt.css` 改值，在 `index.html` 里换 `<link>` 即可。
 
 | 变量 | 控制 |
 |---|---|
@@ -19,9 +20,25 @@
 | `--font-size-hud / msg / hint` | 配额面板 / 字幕 / 底部提示字号 |
 | `--color-ink` / `--color-ink-dim` | 主文案 / 次要提示颜色 |
 | `--color-accent` | 任务完成色（配额打勾） |
-| `--text-shadow` | 文字阴影 |
+| `--color-paper` / `--color-paper-ink` | 纸片元素（旁白框/toast/合成卡）底色与字色 |
+| `--text-shadow` / `--panel-shadow` | 文字阴影 / 纸片投影 |
 
-换自定义字体：woff2 放 `prototype/fonts/`，按 `:root` 里注释掉的 `@font-face` 模板启用。**中文务必做字体子集化**（只打包用到的字），否则单字体好几 MB。
+换自定义字体：woff2 放 `prototype/fonts/`，按 `theme.css` 里注释掉的 `@font-face` 模板启用。**中文务必做字体子集化**（只打包用到的字），否则单字体好几 MB。
+
+### 1.5 设计稿叠加对照（G 键）
+
+把设计稿 PNG 放进 `prototype/design/` 并在 `design/manifest.js` 加一行路径
+（或直接把本地图片拖进游戏窗口），游戏里按 `G` 半透明叠加在画面上：
+
+| 操作 | 效果 |
+|---|---|
+| 拖拽 | 移动设计稿 |
+| 滚轮 / `Shift+滚轮` | 调透明度 / 缩放 |
+| `[` `]` | 切换多张设计稿 |
+| `R` | 复位（居中适应窗口） |
+| `L` | 锁定：鼠标穿透，正常玩游戏对照看 |
+
+逻辑在 `src/designOverlay.js`，纯调试工具，不进发布流程也无妨。
 
 ### 2. 各元素在哪定义
 
