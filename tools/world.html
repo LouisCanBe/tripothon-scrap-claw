@@ -21,6 +21,7 @@
   #info { position: fixed; left: 12px; bottom: 10px; font-size: 12px; color: var(--dim);
           background: rgba(8,8,10,.7); padding: 4px 10px; border-radius: 4px; pointer-events: none; }
   #empty { position: fixed; inset: 52px 0 0 0; display: grid; place-items: center; color: var(--dim); }
+  #empty[hidden] { display: none !important; }   /* 关键：display:grid 会覆盖 hidden 属性，提示层一直拦截鼠标 */
 </style>
 </head>
 <body>
@@ -155,6 +156,7 @@ async function showSplat(url) {
 // ---------- 调度 ----------
 function open(url) {
   cleanup?.(); cleanup = null;
+  stage.innerHTML = '';   // 清残留：SPZ Viewer 自带的 DOM dispose 不一定移除干净
   empty.hidden = true;
   const ext = url.split('.').pop().toLowerCase();
   const name = decodeURIComponent(url.split('/').pop());
