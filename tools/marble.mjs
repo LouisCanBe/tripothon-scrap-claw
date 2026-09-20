@@ -140,11 +140,16 @@ export class MarbleClient {
     return dest;
   }
 
-  // 从 world 对象里挑资产 URL（不同版本字段名可能漂移，尽量兜底）
+  // 从 world 对象里挑资产 URL。实测结构（2026-09）：
+  //   assets.mesh.collider_mesh_url  免费基础 GLB（hq_mesh_url 要 3500 积分导出）
+  //   assets.imagery.pano_url        全景图 PNG
+  //   assets.splats.spz_urls.{500k,100k,full_res}  高斯点云
   assetURL(world, prefer = 'mesh') {
-    const a = world?.assets ?? world ?? {};
-    return a.mesh_glb_url ?? a.mesh_url ?? a.glb_url
-        ?? a.splats_url ?? a.spz_url ?? a.panorama_url ?? a.pano_url ?? null;
+    const a = world?.assets ?? {};
+    if (prefer === 'mesh')  return a.mesh?.collider_mesh_url ?? a.mesh?.hq_mesh_url ?? null;
+    if (prefer === 'pano')  return a.imagery?.pano_url ?? null;
+    if (prefer === 'spz')   return a.splats?.spz_urls?.['100k'] ?? a.splats?.spz_urls?.full_res ?? null;
+    return a.mesh?.collider_mesh_url ?? a.imagery?.pano_url ?? a.splats?.spz_urls?.full_res ?? null;
   }
 
   // 一条龙：生成 → 轮询 → （可选）下载

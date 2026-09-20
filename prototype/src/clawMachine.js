@@ -117,6 +117,9 @@ export class ClawMachine {
       const root = gltf.scene;
       if (matchMedia('(pointer: coarse)').matches) capTextures(root, CONFIG.mobile.maxTextureSize);
       enableShadows(root);
+      // Tripo 金属件是 metalness=1 全金属：IBL 下会反射整个环境导致过曝发白，
+      // 单独压低环境反射，保留金属质感但不白花
+      root.traverse(o => { if (o.isMesh && o.material?.metalness !== undefined) o.material.envMapIntensity = 0.3; });
       const byName = {};
       root.traverse(o => { if (o.name) byName[o.name] = o; });
 

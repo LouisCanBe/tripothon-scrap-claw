@@ -23,6 +23,20 @@ import { MarbleClient } from './marble.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WORLD_DIR = path.join(ROOT, 'prototype', 'assets', 'worlds');
 
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
+               '.css': 'text/css', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg',
+               '.spz': 'application/octet-stream', '.webp': 'image/webp' };
+
+// 静态文件：防路径穿越（resolve 后必须还在 base 下）
+function sendFile(res, base, rel) {
+  const p = path.resolve(base, rel);
+  if (!p.startsWith(path.resolve(base)) || !fs.existsSync(p) || !fs.statSync(p).isFile()) return false;
+  res.writeHead(200, { 'Content-Type': MIME[path.extname(p).toLowerCase()] ?? 'application/octet-stream',
+                       'Access-Control-Allow-Origin': '*' });
+  fs.createReadStream(p).pipe(res);
+  return true;
+}
+
 const json = (res, code, data) => {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
   res.end(JSON.stringify(data));
@@ -50,6 +64,25 @@ export function serve(port = 8788) {
     }
     const u = new URL(req.url, 'http://x');
     try {
+      // —— 静态：预览器 + vendor + 已下载的世界资产 ——
+      if (req.method === 'GET') {
+        if (u.pathname === '/' || u.pathname === '/index.html') {
+          if (!sendFile(res, path.join(ROOT, 'tools'), 'world.html')) json(res, 404, { error: 'world.html 不存在' });
+          return;
+        }
+        if (u.pathname.startsWith('/vendor/')) {
+          if (!sendFile(res, path.join(ROOT, 'prototype', 'vendor'), decodeURIComponent(u.pathname.slice(8)))) json(res, 404, { error: 'not found' });
+          return;
+        }
+        if (u.pathname.startsWith('/worlds/')) {
+          if (!sendFile(res, WORLD_DIR, decodeURIComponent(u.pathname.slice(8)))) json(res, 404, { error: 'not found' });
+          return;
+        }
+        if (u.pathname === '/api/marble/files') {   // 列 worlds 目录（预览器文件列表）
+          const files = fs.existsSync(WORLD_DIR) ? fs.readdirSync(WORLD_DIR).filter(f => !f.startsWith('.')) : [];
+          return json(res, 200, { files });
+        }
+      }
       if (u.pathname === '/api/marble/health') return json(res, 200, { ok: true, service: 'marble' });
 
       if (u.pathname === '/api/marble/gen' && req.method === 'POST') {

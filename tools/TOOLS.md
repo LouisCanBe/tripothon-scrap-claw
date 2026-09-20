@@ -7,7 +7,7 @@
 | 服务 | 用途 | 工具 | 状态 |
 |---|---|---|---|
 | **Tripo3D** | 道具/爪子模型生成（text/image/multiview → GLB） | `tools/tripo.mjs` + `tripo.serve.mjs` + `tools/ui.html` | ✅ 已实测跑通 |
-| **Marble（World Labs）** | 3D 世界/场景生成（text/image/pano → GLB mesh / SPZ 点云 / 全景图） | `tools/marble.mjs` + `marble.serve.mjs` | ⏳ 代码就绪，待 API key 实测 |
+| **Marble（World Labs）** | 3D 世界/场景生成（text/image/pano → GLB mesh / SPZ 点云 / 全景图） | `tools/marble.mjs` + `marble.serve.mjs` + `tools/world.html` | ✅ 已实测跑通（draft 档 32s 出世界） |
 | **TapTap** | 游戏包体上传发布 | 官方 TapRails CLI / APK 上传 API | 📋 待开发者凭证 |
 | **tapnow** | ？ | ？ | ❓ 待确认是什么服务 |
 
@@ -50,7 +50,7 @@ node tools/devServer.mjs 8000
 4. **Marble → 游戏**：生成的全景图可直接当终幕"实景"背景（`hooks.onReveal` 换成全景天空盒），
    GLB mesh 可做新场景——低模娃娃机（记忆）vs Marble 写实世界（现实）的画风对比本身就是叙事
 
-## Marble API 速查（v1）
+## Marble API 速查（v1，已实测）
 
 | 操作 | 端点 | 说明 |
 |---|---|---|
@@ -59,5 +59,23 @@ node tools/devServer.mjs 8000
 | 世界详情 | `GET /marble/v1/worlds/{id}` | 资产 URL（mesh/splats/panorama） |
 | 导出 | `POST /marble/v1/worlds/{id}:export` | `{asset_type:'mesh',format:'glb'}` 或 splats/ply |
 
-模型档位：`marble-1.1`（标准）/ `marble-1.1-plus`（大世界、室外，费 credit）。
+**定价**（1250 积分 = $1，响应里 `cost.total_credits` 可对账）：
+
+| 档位 | 积分 | 折合 | 用途 |
+|---|---|---|---|
+| `marble-1.0-draft` | 150 | $0.12 | **测试/草稿用这个** |
+| `marble-1.1` | 1,500 + 80 文本费 | ~$1.26 | 正式质量 |
+| `marble-1.1-plus` | 1,500 + 0~1,500 浮动 | ~$1.3~2.5 | 大世界/室外 |
+| HQ mesh 导出 | 3,500 | $2.80 | 高精度网格（贵，慎用） |
+
+**实测资产生成物**（draft 档就全给，免费）：
+- `assets.mesh.collider_mesh_url` —— 基础 GLB 网格（素模，可做碰撞/占位）
+- `assets.imagery.pano_url` —— 全景图 PNG（终幕实景背景最简方案：`scene.background` 一行）
+- `assets.splats.spz_urls.{100k,500k,full_res}` —— 高斯点云（写实感最强）
+- `assets.caption` —— AI 扩写后的场景描述（回收当 prompt 素材）
+
+**预览器**：`node tools/marble.mjs serve` → http://localhost:8788/ 三模式切换
+（全景图 / GLB 网格 / SPZ 点云），SPZ 渲染用 vendor 化的 `@mkkellogg/gaussian-splats-3d`
+（`prototype/vendor/addons/gaussian-splats-3d.js`，three r170 兼容已验证）。
+
 鉴权头：`WLT-Api-Key`。402 = 余额不足。

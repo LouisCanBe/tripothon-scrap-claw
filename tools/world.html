@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Marble 世界预览器</title>
+<style>
+  :root { color-scheme: dark; --ink: #d8d4c8; --dim: #8a877e; --accent: #9db87a; --bg: #0b0b0d; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg);
+               font-family: ui-monospace, "Courier New", monospace; color: var(--ink); }
+  #bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; flex-wrap: wrap;
+         background: #121216; border-bottom: 1px solid #26262c; font-size: 13px; }
+  #bar b { color: var(--accent); }
+  select, button { background: #1c1c22; color: var(--ink); border: 1px solid #3a3a44;
+                   padding: 5px 10px; border-radius: 4px; font: inherit; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #111; }
+  #stage { position: fixed; inset: 52px 0 0 0; }
+  #stage canvas { display: block; }
+  #info { position: fixed; left: 12px; bottom: 10px; font-size: 12px; color: var(--dim);
+          background: rgba(8,8,10,.7); padding: 4px 10px; border-radius: 4px; pointer-events: none; }
+  #empty { position: fixed; inset: 52px 0 0 0; display: grid; place-items: center; color: var(--dim); }
+</style>
+</head>
+<body>
+<div id="bar">
+  <b>Marble 世界预览</b>
+  <select id="fileSel"></select>
+  <button id="btnPano">全景图</button>
+  <button id="btnMesh">GLB 网格</button>
+  <button id="btnSplat">SPZ 点云</button>
+  <span id="cost" style="color:var(--dim)"></span>
+</div>
+<div id="stage"></div>
+<div id="empty" hidden>把 .png / .glb / .spz 拖进来，或从左上选已下载的资产</div>
+<div id="info"></div>
+
+<script type="importmap">
+{ "imports": { "three": "/vendor/three.module.js", "three/addons/": "/vendor/addons/" } }
+</script>
+<script type="module">
+// ============================================================
+// Marble 资产三模式预览（= 接入正式游戏前的渲染技术验证）：
+//   全景图  球内贴图 + 拖拽环视     → 终幕实景背景的最简方案
+//   GLB     碰撞网格 + orbit        → 现有 prizePool 管线同款
+//   SPZ     gaussian-splats-3d 库   → 写实世界最佳观感（最重）
+// ============================================================
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as GSplat from '/vendor/addons/gaussian-splats-3d.js';
+
+const stage = document.getElementById('stage');
+const info = document.getElementById('info');
+const empty = document.getElementById('empty');
+const fileSel = document.getElementById('fileSel');
+let cleanup = null;   // 当前模式的销毁函数
+
+// ---------- 工具：简单轨道拖拽（pano/mesh 共用） ----------
+function orbitControls(canvas, cam, { min = 1, max = 30, pano = false } = {}) {
+  let yaw = 0, pitch = 0, dist = 6, drag = null;
+  const apply = () => {
+    if (pano) {   // 球内环视：相机不动，转视线方向
+      cam.rotation.set(0, 0, 0, 'YXZ');
+      cam.rotation.y = yaw; cam.rotation.x = pitch;
+    } else {
+      cam.position.set(
+        Math.sin(yaw) * Math.cos(pitch) * dist,
+        Math.sin(pitch) * dist + 1.2,
+        Math.cos(yaw) * Math.cos(pitch) * dist);
+      cam.lookAt(0, 0.8, 0);
+    }
+  };
+  canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', e => {
+    if (!drag) return;
+    yaw -= (e.clientX - drag.x) * 0.005; pitch -= (e.clientY - drag.y) * 0.005;
+    pitch = Math.max(-1.45, Math.min(1.45, pitch));
+    drag = { x: e.clientX, y: e.clientY }; apply();
+  });
+  canvas.addEventListener('pointerup', () => drag = null);
+  if (!pano) canvas.addEventListener('wheel', e => { e.preventDefault(); dist = Math.max(min, Math.min(max, dist * Math.exp(e.deltaY * 0.001))); apply(); }, { passive: false });
+  apply();
+  return { setDist: d => { dist = d; apply(); } };
+}
+
+function baseScene() {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(stage.clientWidth, stage.clientHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  stage.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(70, stage.clientWidth / stage.clientHeight, 0.05, 200);
+  const onResize = () => {
+    renderer.setSize(stage.clientWidth, stage.clientHeight);
+    camera.aspect = stage.clientWidth / stage.clientHeight;
+    camera.updateProjectionMatrix();
+  };
+  addEventListener('resize', onResize);
+  let raf;
+  const loop = (fn) => { const tick = (t) => { fn?.(t); renderer.render(scene, camera); raf = requestAnimationFrame(tick); }; raf = requestAnimationFrame(tick); };
+  return { renderer, scene, camera, loop, dispose: () => { cancelAnimationFrame(raf); removeEventListener('resize', onResize); renderer.dispose(); renderer.domElement.remove(); } };
+}
+
+// ---------- 模式 1：全景图 ----------
+function showPano(url) {
+  const { scene, camera, loop, dispose, renderer } = baseScene();
+  new THREE.TextureLoader().load(url, (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    scene.background = tex;
+    scene.backgroundIntensity = 1;
+    info.textContent = '全景图 · 拖拽环视（接入游戏：scene.background 一行的事）';
+  });
+  camera.position.set(0, 1.6, 0);
+  orbitControls(renderer.domElement, camera, { pano: true });
+  loop();
+  return dispose;
+}
+
+// ---------- 模式 2：GLB 网格 ----------
+function showMesh(url) {
+  const { scene, camera, loop, dispose, renderer } = baseScene();
+  scene.background = new THREE.Color(0x141418);
+  scene.add(new THREE.HemisphereLight(0xfff2dd, 0x191a20, 0.7));
+  const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(3, 5, 4); scene.add(key);
+  const grid = new THREE.GridHelper(20, 20, 0x333340, 0x222228); scene.add(grid);
+  new GLTFLoader().load(url, (gltf) => {
+    scene.add(gltf.scene);
+    const box = new THREE.Box3().setFromObject(gltf.scene);
+    const size = box.getSize(new THREE.Vector3());
+    info.textContent = `GLB 网格 · ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m · 拖拽旋转 / 滚轮缩放（接入游戏：prizePool 同款管线）`;
+  });
+  orbitControls(renderer.domElement, camera);
+  loop();
+  return dispose;
+}
+
+// ---------- 模式 3：SPZ 高斯点云 ----------
+async function showSplat(url) {
+  const viewer = new GSplat.Viewer({
+    rootElement: stage,
+    cameraUp: [0, 1, 0],
+    initialCameraPosition: [1.5, 1.8, 4],
+    initialCameraLookAt: [0, 1, 0],
+    sharedMemoryForWorkers: false,
+  });
+  await viewer.addSplatScene(url, { progressiveLoad: false });
+  viewer.start();
+  info.textContent = 'SPZ 点云 · 左键旋转 / 右键平移 / 滚轮缩放（接入游戏：splat 层与 mesh 层可同屏混合渲染）';
+  return () => { try { viewer.dispose(); } catch {} };
+}
+
+// ---------- 调度 ----------
+function open(url) {
+  cleanup?.(); cleanup = null;
+  empty.hidden = true;
+  const ext = url.split('.').pop().toLowerCase();
+  const name = decodeURIComponent(url.split('/').pop());
+  document.querySelectorAll('#bar button[data-m]').forEach(b => b.classList.remove('on'));
+  const mode = ext === 'png' || ext === 'jpg' || ext === 'webp' ? 'pano' : ext === 'glb' ? 'mesh' : 'splat';
+  document.querySelector(`#bar button[data-m="${mode}"]`)?.classList.add('on');
+  info.textContent = `加载中… ${name}`;
+  if (mode === 'pano') cleanup = showPano(url);
+  else if (mode === 'mesh') cleanup = showMesh(url);
+  else showSplat(url).then(d => cleanup = d).catch(e => info.textContent = 'SPZ 加载失败：' + e.message);
+}
+
+// 强制切模式（比如想用点云看 GLB 之外的文件时用不到，但 tab 要能用）
+document.getElementById('btnPano').dataset.m = 'pano';
+document.getElementById('btnMesh').dataset.m = 'mesh';
+document.getElementById('btnSplat').dataset.m = 'splat';
+
+// ---------- 文件列表 ----------
+async function refreshFiles() {
+  const { files } = await fetch('/api/marble/files').then(r => r.json()).catch(() => ({ files: [] }));
+  fileSel.innerHTML = '<option value="">选择已下载资产…</option>' +
+    files.map(f => `<option value="/worlds/${encodeURIComponent(f)}">${f}</option>`).join('');
+  if (!files.length) empty.hidden = false;
+}
+fileSel.addEventListener('change', () => fileSel.value && open(fileSel.value));
+refreshFiles();
+
+// ---------- 拖拽本地文件 ----------
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => {
+  const f = e.dataTransfer?.files?.[0];
+  if (!f) return;
+  e.preventDefault();
+  open(URL.createObjectURL(f));
+});
+</script>
+</body>
+</html>
