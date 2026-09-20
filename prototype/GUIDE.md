@@ -27,7 +27,7 @@
 
 ### 1.5 设计稿叠加对照（G 键）
 
-把设计稿 PNG 放进 `prototype/design/` 并在 `design/manifest.js` 加一行路径
+把设计稿 PNG 放进 `prototype/design/` 并在 `design/manifest.json` 加一行路径
 （或直接把本地图片拖进游戏窗口），游戏里按 `G` 半透明叠加在画面上：
 
 | 操作 | 效果 |

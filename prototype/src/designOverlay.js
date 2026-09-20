@@ -13,8 +13,10 @@
 //
 // 事件策略：显示且未锁定时 overlay 拦截全部鼠标（拖图/调参）；
 // 锁定后 pointer-events: none 完全穿透，游戏操作不受影响。
+//
+// 清单走 fetch（带时间戳，永不缓存）：改 manifest.json 后刷新即生效，
+// 不会像 ES module 那样被浏览器模块缓存咬住。
 // ============================================================
-import { DESIGN_SHEETS } from '../design/manifest.js';
 
 export class DesignOverlay {
   constructor() {
@@ -24,8 +26,13 @@ export class DesignOverlay {
     this.opacity = 0.5;
     this.scale = 1;
     this.x = 0; this.y = 0;          // 相对居中的偏移 px
-    this.sheets = [...DESIGN_SHEETS];
+    this.sheets = [];
     this._customURL = null;          // 拖入的本地图片
+
+    fetch('./design/manifest.json?_=' + Date.now())
+      .then(r => r.ok ? r.json() : [])
+      .then(list => { this.sheets = list; if (this.visible) this._load(); this._apply(); })
+      .catch(() => {});
 
     // DOM
     this.root = document.createElement('div');

@@ -64,7 +64,7 @@ GLB 落到 `prototype/assets/prizes/`，manifest 自动重建，刷新页面即�
 
 ## 设计稿工作流（UI 对齐 / 模型风格统一）
 
-**UI 对齐**：设计稿导出 PNG → 放进 `prototype/design/` 并在 `design/manifest.js` 加一行
+**UI 对齐**：设计稿导出 PNG → 放进 `prototype/design/` 并在 `design/manifest.json` 加一行
 （或直接把图片拖进游戏窗口）→ 游戏里按 `G` 半透明叠加在画面上，拖拽对位置、
 滚轮调透明度、`Shift+滚轮` 缩放、`L` 锁定后正常玩游戏对照看。
 主题色值/字体定稿后只改 `prototype/theme.css` 一个文件。
@@ -80,7 +80,7 @@ outline.md              设计文档（叙事/机制/美术纲领）
 prototype/              可玩原型（Three.js 0.170，CDN 引入）
   index.html            页面骨架 + 画幅遮罩/HUD 样式
   theme.css             主题变量（字体/颜色/字号，设计稿定稿只改这里）
-  design/               设计稿目录（manifest.js 清单，G 键叠加对照）
+  design/               设计稿目录（manifest.json 清单，G 键叠加对照）
   src/
     main.js             装配 + 主循环
     acts.js             五幕编排数据（文案/时长/权限/变焦，改内容只动这里）
