@@ -50,36 +50,12 @@ node tools/devServer.mjs 8000
 4. **Marble → 游戏**：生成的全景图可直接当终幕"实景"背景（`hooks.onReveal` 换成全景天空盒），
    GLB mesh 可做新场景——低模娃娃机（记忆）vs Marble 写实世界（现实）的画风对比本身就是叙事
 
-## Marble API 速查（v1，已实测）
+## Marble 接入
 
-| 操作 | 端点 | 说明 |
-|---|---|---|
-| 生成世界 | `POST /marble/v1/worlds:generate` | world_prompt.type: text / image / panorama / video |
-| 轮询 | `GET /marble/v1/operations/{id}` | done 后取 response.world_id |
-| 世界详情 | `GET /marble/v1/worlds/{id}` | 资产 URL（mesh/splats/panorama） |
-| 导出 | `POST /marble/v1/worlds/{id}:export` | `{asset_type:'mesh',format:'glb'}` 或 splats/ply |
+详细手册（API 速查、定价、三种资产接入路径、坐标系约定、预览器交互规范、已知坑、实测档案）见 **[tools/MARBLE.md](./MARBLE.md)**。
 
-**定价**（1250 积分 = $1，响应里 `cost.total_credits` 可对账）：
-
-| 档位 | 积分 | 折合 | 用途 |
-|---|---|---|---|
-| `marble-1.0-draft` | 150 | $0.12 | **测试/草稿用这个** |
-| `marble-1.1` | 1,500 + 80 文本费 | ~$1.26 | 正式质量 |
-| `marble-1.1-plus` | 1,500 + 0~1,500 浮动 | ~$1.3~2.5 | 大世界/室外 |
-| HQ mesh 导出 | 3,500 | $2.80 | 高精度网格（贵，慎用） |
-
-**实测资产生成物**（draft 档就全给，免费）：
-- `assets.mesh.collider_mesh_url` —— 基础 GLB 网格（素模，可做碰撞/占位）
-- `assets.imagery.pano_url` —— 全景图 PNG（终幕实景背景最简方案：`scene.background` 一行）
-- `assets.splats.spz_urls.{100k,500k,full_res}` —— 高斯点云（写实感最强）
-- `assets.caption` —— AI 扩写后的场景描述（回收当 prompt 素材）
-
-⚠️ **坐标系**：Marble 输出的 GLB 和 SPZ 与 three.js 朝向相反，接入时**绕 X 轴翻 180°**
-（GLB：`scene.rotation.x = Math.PI`；SPZ：`addSplatScene(url, { rotation: [1,0,0,0] })`）。
-全景图不受影响。
-
-**预览器**：`node tools/marble.mjs serve` → http://localhost:8788/ 三模式切换
-（全景图 / GLB 网格 / SPZ 点云），SPZ 渲染用 vendor 化的 `@mkkellogg/gaussian-splats-3d`
-（`prototype/vendor/addons/gaussian-splats-3d.js`，three r170 兼容已验证）。
-
-鉴权头：`WLT-Api-Key`。402 = 余额不足。
+要点速记：
+- 测试用 `marble-1.0-draft` 档（150 积分 ≈ $0.12，三种资产全给）
+- 资产：全景图 → `scene.background`；GLB → 碰撞/占位；SPZ → 写实场景层
+- ⚠️ GLB/SPZ 与 three.js 朝向相反，接入必须绕 X 翻 180°（全景图不用）
+- 预览器：`node tools/marble.mjs serve` → http://localhost:8788/ ，双范式控制（V 切换）+ 边界碰撞
