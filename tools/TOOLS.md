@@ -31,7 +31,7 @@ tools/<service>.serve.mjs  # 本地 HTTP 转发（绕 CORS，key 不出前端）
 
 ```bash
 # 推荐：统一工具台（单端口，Tab 切换 Tripo / Marble / PixVerse / 剪影对照）
-node tools/hub.serve.mjs              # 默认 http://localhost:8780/
+node tools/hub.serve.mjs              # 默认 http://localhost:8780/（配了 HTTPS_PROXY 时会像 tripo serve 一样自动带代理重启子进程）
 
 # 也可单独起各服务（调试时用）
 node tools/tripo.mjs serve            # → 8787  tools/ui.html

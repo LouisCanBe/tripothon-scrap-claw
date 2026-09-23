@@ -731,15 +731,36 @@ new ResizeObserver(resize).observe(wrap); resize();
 
 // ================= 服务状态 =================
 function refreshBalance() {
-  fetch('/api/balance').then(r => r.json()).then(d => {
-    document.getElementById('balance').innerHTML =
-      d.balance !== undefined ? `余额：<b>${Number(d.balance).toLocaleString()}</b>` : '';
-  }).catch(() => {});
+  fetch('/api/balance').then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    const bal = d.balance ?? d.remaining ?? d.credits;
+    const frozen = d.frozen;
+    const el = document.getElementById('balance');
+    if (bal === undefined || bal === null) {
+      el.textContent = 'API 积分：—';
+      return;
+    }
+    let html = `API 积分：<b>${Number(bal).toLocaleString()}</b>`;
+    if (frozen) html += ` <span style="opacity:.7">(冻结 ${Number(frozen).toLocaleString()})</span>`;
+    el.innerHTML = html;
+  }).catch(e => {
+    const msg = String(e.message || e);
+    const hint = /UND_ERR_CONNECT|网络错误|ETIMEDOUT/i.test(msg)
+      ? '（检查 Clash 是否开启、.env.local 的 HTTPS_PROXY，改完后重启 Hub）' : '';
+    document.getElementById('balance').textContent = 'API 积分：' + msg.slice(0, 120) + hint;
+  });
 }
 document.getElementById('balRefresh').onclick = refreshBalance;
 fetch('/api/health').then(r => r.json())
   .then(() => document.getElementById('health').innerHTML = '服务：<b>已连接</b>')
   .catch(() => document.getElementById('health').textContent = '服务：未连接（先跑 node tools/tripo.mjs serve）');
+fetch('/api/config').then(r => r.json()).then(c => {
+  if (c.api_base) {
+    const hint = document.querySelector('header .stat[style*="margin-left"]');
+    if (hint) hint.textContent = c.api_base.replace(/^https:\/\//, '');
+  }
+}).catch(() => {});
 refreshBalance();
 
 renderFields();

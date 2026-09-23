@@ -38,14 +38,17 @@ loadEnvFile();
 // 代理自重启（同 tripo.mjs）
 const HAS_PROXY = process.env.HTTPS_PROXY || process.env.https_proxy
                || process.env.HTTP_PROXY || process.env.http_proxy;
-if (HAS_PROXY && import.meta.main && !process.env.SCRAPCLAW_LIB_MODE
-    && process.env.NODE_USE_ENV_PROXY !== '1' && !process.argv.includes('--no-respawn')) {
-  const { spawnSync } = await import('node:child_process');
-  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
-    stdio: 'inherit',
-    env: { ...process.env, NODE_USE_ENV_PROXY: '1' },
-  });
-  process.exit(r.status ?? 0);
+if (HAS_PROXY && process.env.NODE_USE_ENV_PROXY !== '1') {
+  if (import.meta.main && !process.env.SCRAPCLAW_LIB_MODE && !process.argv.includes('--no-respawn')) {
+    const { spawnSync } = await import('node:child_process');
+    const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
+      stdio: 'inherit',
+      env: { ...process.env, NODE_USE_ENV_PROXY: '1' },
+    });
+    process.exit(r.status ?? 0);
+  } else {
+    process.env.NODE_USE_ENV_PROXY = '1';
+  }
 }
 
 const API = (process.env.MARBLE_API_BASE || 'https://api.worldlabs.ai/marble/v1').replace(/\/$/, '');

@@ -22,7 +22,6 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TripoClient } from './tripo.mjs';
 import { sendFile, json, readBody, corsPreflight } from './http-util.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,6 +30,16 @@ export const GEN_DIR = path.join(ROOT, 'prototype', 'assets', 'generated');
 /** @returns {Promise<'handled'|'skip'>} */
 export async function handleTripoApi(req, res, u, client) {
   if (u.pathname === '/api/health') { json(res, 200, { ok: true, service: 'tripo' }); return 'handled'; }
+  if (u.pathname === '/api/config' && req.method === 'GET') {
+    json(res, 200, {
+      api_base: client.base,
+      key_prefix: client.key ? client.key.slice(0, 8) + '…' : null,
+      hint: client.base.includes('tripo3d.ai')
+        ? '国际站 key → platform.tripo3d.ai'
+        : '国内站 key → platform.tripo3d.com',
+    });
+    return 'handled';
+  }
   if (u.pathname === '/api/balance') { json(res, 200, await client.getBalance()); return 'handled'; }
 
   let m;
@@ -85,7 +94,10 @@ export function handleTripoStatic(req, res, u) {
   return false;
 }
 
-export function serve(port = 8787) {
+export async function serve(port = 8787) {
+  const { bootstrapNetworkEnv } = await import('./env-bootstrap.mjs');
+  await bootstrapNetworkEnv();
+  const { TripoClient } = await import('./tripo.mjs');
   let client;
   try { client = new TripoClient(); }
   catch (e) { console.error(e.message); process.exit(1); }

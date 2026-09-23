@@ -84,7 +84,9 @@ export function handlePixverseStatic(req, res, u) {
   return false;
 }
 
-export function serve(port = 8789) {
+export async function serve(port = 8789) {
+  const { bootstrapNetworkEnv } = await import('./env-bootstrap.mjs');
+  await bootstrapNetworkEnv();
   let client;
   try { client = new PixVerseClient(); }
   catch (e) { console.error(e.message); process.exit(1); }

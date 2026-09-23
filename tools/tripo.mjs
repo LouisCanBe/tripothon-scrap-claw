@@ -29,7 +29,7 @@ function loadEnvFile() {
     const text = fs.readFileSync(p, 'utf8').replace(/^﻿/, '');
     for (const line of text.split(/\r?\n/)) {
       const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']?([^"'\r\n]*?)["']?\s*$/);
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+      if (m && (f === '.env.local' || !process.env[m[1]])) process.env[m[1]] = m[2];
     }
   }
 }
@@ -38,17 +38,22 @@ loadEnvFile();
 // 代理：Node 只在启动时读 NODE_USE_ENV_PROXY → 配了代理就带开关重启自身一次
 const HAS_PROXY = process.env.HTTPS_PROXY || process.env.https_proxy
                || process.env.HTTP_PROXY || process.env.http_proxy;
-if (HAS_PROXY && import.meta.main && !process.env.SCRAPCLAW_LIB_MODE
-    && process.env.NODE_USE_ENV_PROXY !== '1' && !process.argv.includes('--no-respawn')) {
-  const { spawnSync } = await import('node:child_process');
-  const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
-    stdio: 'inherit',
-    env: { ...process.env, NODE_USE_ENV_PROXY: '1' },
-  });
-  process.exit(r.status ?? 0);
+if (HAS_PROXY && process.env.NODE_USE_ENV_PROXY !== '1') {
+  if (import.meta.main && !process.env.SCRAPCLAW_LIB_MODE && !process.argv.includes('--no-respawn')) {
+    const { spawnSync } = await import('node:child_process');
+    const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
+      stdio: 'inherit',
+      env: { ...process.env, NODE_USE_ENV_PROXY: '1' },
+    });
+    process.exit(r.status ?? 0);
+  } else {
+    process.env.NODE_USE_ENV_PROXY = '1';
+  }
 }
 
-const API = (process.env.TRIPO_API_BASE || 'https://openapi.tripo3d.com/v3').replace(/\/$/, '');
+export function tripoApiBase() {
+  return (process.env.TRIPO_API_BASE || 'https://openapi.tripo3d.com/v3').replace(/\/$/, '');
+}
 
 // ============================================================
 // 接口路径表（v3）
@@ -80,10 +85,10 @@ const PATHS = {
 // TripoClient：薄封装。submit 返回原始 data；poll 到成功返回 output；download 落盘
 // ============================================================
 export class TripoClient {
-  constructor({ key = process.env.TRIPO_API_KEY?.trim(), base = API } = {}) {
+  constructor({ key = process.env.TRIPO_API_KEY?.trim(), base } = {}) {
     if (!key) throw new Error('找不到 TRIPO_API_KEY（.env.local 里写 TRIPO_API_KEY=tsk_xxx）');
     this.key = key;
-    this.base = base.replace(/\/$/, '');
+    this.base = (base ?? tripoApiBase()).replace(/\/$/, '');
   }
 
   get headers() { return { Authorization: `Bearer ${this.key}`, 'Content-Type': 'application/json' }; }
@@ -225,8 +230,8 @@ async function cli() {
   // dry 模式：只打印将发出的请求
   if (dry && !['task', 'balance'].includes(cmd)) {
     const table = { text: 'textToModel', image: 'imageToModel', multiview: 'multiviewToModel', refine: 'refine', texture: 'texture', convert: 'convert', rig: 'rig', retarget: 'retarget' };
-    if (table[cmd]) return show(`[dry] POST ${API}${PATHS[table[cmd]][1]}\n`, buildBody(cmd, opts));
-    if (cmd === 'call') return show(`[dry] ${opts.method} ${API}${opts.path}\n`, opts.body);
+    if (table[cmd]) return show(`[dry] POST ${tripoApiBase()}${PATHS[table[cmd]][1]}\n`, buildBody(cmd, opts));
+    if (cmd === 'call') return show(`[dry] ${opts.method} ${tripoApiBase()}${opts.path}\n`, opts.body);
   }
 
   switch (cmd) {

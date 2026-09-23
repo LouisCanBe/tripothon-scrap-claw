@@ -21,6 +21,8 @@
                padding: 6px 14px; font: inherit; cursor: pointer; }
   nav button:hover { color: var(--ink); border-color: #3a3a44; }
   nav button.on { color: #1a1a1a; background: var(--accent); border-color: var(--accent-muted); font-weight: 600; }
+  nav button .tab-credits { margin-left: 5px; font-size: 11px; font-weight: normal; opacity: 0.85; }
+  nav button.on .tab-credits { color: #3d3510; }
   main { flex: 1; min-height: 0; position: relative; }
   .panel { position: absolute; inset: 0; display: none; }
   .panel.on { display: block; }
@@ -45,7 +47,7 @@
   <div id="status">检测服务…</div>
 </header>
 <nav>
-  <button type="button" class="on" data-tab="tripo">Tripo 模型</button>
+  <button type="button" class="on" data-tab="tripo">Tripo 模型<span class="tab-credits" id="hubTripoCredits"></span></button>
   <button type="button" data-tab="marble">Marble 世界</button>
   <button type="button" data-tab="pixverse">PixVerse 视频</button>
   <button type="button" data-tab="art">剪影对照</button>
@@ -74,11 +76,31 @@
 <script>
 const tabs = document.querySelectorAll('nav button');
 const panels = { tripo: 'p-tripo', marble: 'p-marble', pixverse: 'p-pixverse', art: 'p-art' };
+function formatTripoBalance(d) {
+  if (!d || typeof d !== 'object') return null;
+  const bal = d.balance ?? d.remaining ?? d.credits;
+  return bal !== undefined && bal !== null ? Number(bal) : null;
+}
+
+async function refreshHubTripoCredits() {
+  const el = document.getElementById('hubTripoCredits');
+  if (!el) return;
+  try {
+    const d = await fetch('/api/balance').then(r => r.json());
+    const bal = formatTripoBalance(d);
+    el.textContent = bal !== null && !Number.isNaN(bal) ? ` · ${bal.toLocaleString()} 积分` : '';
+  } catch {
+    el.textContent = '';
+  }
+}
+
 tabs.forEach(btn => btn.addEventListener('click', () => {
   tabs.forEach(b => b.classList.toggle('on', b === btn));
   Object.values(panels).forEach(id => document.getElementById(id).classList.remove('on'));
   document.getElementById(panels[btn.dataset.tab]).classList.add('on');
+  if (btn.dataset.tab === 'tripo') refreshHubTripoCredits();
 }));
+refreshHubTripoCredits();
 
 fetch('/api/hub/status').then(r => r.json()).then(d => {
   const el = document.getElementById('status');

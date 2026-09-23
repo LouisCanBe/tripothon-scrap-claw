@@ -7,8 +7,12 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sendFile, json, corsPreflight } from './http-util.mjs';
+import { loadEnvFile, hasProxyEnv } from './env-bootstrap.mjs';
+
+loadEnvFile();
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TOOLS = path.join(ROOT, 'tools');
@@ -106,6 +110,8 @@ function parsePort(argv) {
 }
 
 async function boot() {
+  const { bootstrapNetworkEnv } = await import('./env-bootstrap.mjs');
+  await bootstrapNetworkEnv();
   process.env.SCRAPCLAW_LIB_MODE = '1';
   let tripoMod, marbleMod, pixMod, tripoServe, marbleServe, pixServe;
   try {
@@ -138,6 +144,17 @@ async function boot() {
 
 const runHub = import.meta.main
   || (process.argv[1] && /hub\.serve\.mjs$/i.test(process.argv[1].replace(/\\/g, '/')));
-if (runHub) {
+
+function startHub() {
+  // 与 node tools/tripo.mjs serve 相同：进程启动时带上 NODE_USE_ENV_PROXY（库模式不会走 tripo 自重启）
+  if (hasProxyEnv() && process.env.NODE_USE_ENV_PROXY !== '1' && !process.argv.includes('--no-respawn')) {
+    const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
+      stdio: 'inherit',
+      env: { ...process.env, NODE_USE_ENV_PROXY: '1' },
+    });
+    process.exit(r.status ?? 0);
+  }
   boot().catch(e => { console.error(e.message ?? e); process.exit(1); });
 }
+
+if (runHub) startHub();
