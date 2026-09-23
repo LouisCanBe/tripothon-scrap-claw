@@ -48,8 +48,8 @@
 </header>
 <nav>
   <button type="button" class="on" data-tab="tripo">Tripo 模型<span class="tab-credits" id="hubTripoCredits"></span></button>
-  <button type="button" data-tab="marble">Marble 世界</button>
-  <button type="button" data-tab="pixverse">PixVerse 视频</button>
+  <button type="button" data-tab="marble">Marble 世界<span class="tab-credits" id="hubMarbleCredits"></span></button>
+  <button type="button" data-tab="pixverse">PixVerse 视频<span class="tab-credits" id="hubPixverseCredits"></span></button>
   <button type="button" data-tab="art">剪影对照</button>
 </nav>
 <main>
@@ -76,31 +76,67 @@
 <script>
 const tabs = document.querySelectorAll('nav button');
 const panels = { tripo: 'p-tripo', marble: 'p-marble', pixverse: 'p-pixverse', art: 'p-art' };
-function formatTripoBalance(d) {
-  if (!d || typeof d !== 'object') return null;
-  const bal = d.balance ?? d.remaining ?? d.credits;
-  return bal !== undefined && bal !== null ? Number(bal) : null;
+function tabCreditsText(n) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return '';
+  return ` · ${Number(n).toLocaleString()} 积分`;
+}
+function setTabCredits(elId, n) {
+  const el = document.getElementById(elId);
+  if (el) el.textContent = tabCreditsText(n);
 }
 
 async function refreshHubTripoCredits() {
-  const el = document.getElementById('hubTripoCredits');
-  if (!el) return;
   try {
     const d = await fetch('/api/balance').then(r => r.json());
-    const bal = formatTripoBalance(d);
-    el.textContent = bal !== null && !Number.isNaN(bal) ? ` · ${bal.toLocaleString()} 积分` : '';
+    if (d.error) throw new Error(d.error);
+    const bal = d.balance ?? d.remaining ?? d.credits;
+    setTabCredits('hubTripoCredits', bal != null ? Number(bal) : null);
   } catch {
-    el.textContent = '';
+    setTabCredits('hubTripoCredits', null);
   }
+}
+
+async function refreshHubMarbleCredits() {
+  try {
+    const b = await fetch('/api/marble/credits').then(r => r.json());
+    if (b.error) throw new Error(b.error);
+    const n = b.remaining_credits ?? b.remaining ?? b.credits ?? b.balance;
+    setTabCredits('hubMarbleCredits', n != null ? Number(n) : null);
+  } catch {
+    setTabCredits('hubMarbleCredits', null);
+  }
+}
+
+async function refreshHubPixverseCredits() {
+  try {
+    const b = await fetch('/api/pixverse/balance').then(r => r.json());
+    if (b.error) throw new Error(b.error);
+    const monthly = Number(b.credit_monthly ?? 0);
+    const pack = Number(b.credit_package ?? 0);
+    const sum = monthly + pack;
+    const alt = b.credit ?? b.credits ?? b.balance ?? b.remain;
+    const n = sum > 0 ? sum : (alt != null ? Number(alt) : null);
+    setTabCredits('hubPixverseCredits', n);
+  } catch {
+    setTabCredits('hubPixverseCredits', null);
+  }
+}
+
+function refreshHubCredits() {
+  return Promise.all([
+    refreshHubTripoCredits(),
+    refreshHubMarbleCredits(),
+    refreshHubPixverseCredits(),
+  ]);
 }
 
 tabs.forEach(btn => btn.addEventListener('click', () => {
   tabs.forEach(b => b.classList.toggle('on', b === btn));
   Object.values(panels).forEach(id => document.getElementById(id).classList.remove('on'));
   document.getElementById(panels[btn.dataset.tab]).classList.add('on');
-  if (btn.dataset.tab === 'tripo') refreshHubTripoCredits();
+  refreshHubCredits();
 }));
-refreshHubTripoCredits();
+refreshHubCredits();
 
 fetch('/api/hub/status').then(r => r.json()).then(d => {
   const el = document.getElementById('status');

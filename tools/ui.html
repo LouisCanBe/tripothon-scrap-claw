@@ -499,6 +499,24 @@ function addTaskCard(t, isNew = false) {
   if (t.status === 'running') pollTask(t, ui);
 }
 
+/** 从 Tripo 任务 output 里取出可下载的 GLB/模型 URL（与 tripo.mjs run() 一致并兼容嵌套字段） */
+function pickModelUrl(output) {
+  if (!output) return null;
+  if (typeof output === 'string' && /^https?:\/\//i.test(output)) return output;
+  const direct = output.model_url ?? (typeof output.model === 'string' ? output.model : null) ?? output.url;
+  if (direct) return direct;
+  for (const key of ['pbr_model', 'base_model', 'model', 'result']) {
+    const v = output[key];
+    if (!v) continue;
+    if (typeof v === 'string' && /^https?:\/\//i.test(v)) return v;
+    if (typeof v === 'object') {
+      const u = v.model_url ?? v.url ?? v.glb ?? v.file;
+      if (u) return u;
+    }
+  }
+  return null;
+}
+
 async function pullAndPreview(t, ui, { preview = true } = {}) {
   const fname = t.saved ? fileName(t.saved) : taskFile(t);
   try {
