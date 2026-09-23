@@ -75,6 +75,10 @@
   #viewerInfo { position: absolute; left: 12px; bottom: 10px; z-index: 2; color: var(--dim);
                 font-size: 11px; white-space: pre-wrap; max-width: 60%; pointer-events: none;
                 text-shadow: 0 1px 3px #000; }
+  #viewFxBar { position: absolute; left: 12px; top: 10px; z-index: 2; display: flex; gap: 8px; align-items: center;
+               flex-wrap: wrap; font-size: 12px; color: var(--dim); }
+  #viewFxBar label { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--ink); }
+  #viewFxBar input { accent-color: var(--accent); }
   #animBar { position: absolute; right: 12px; top: 10px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap;
              justify-content: flex-end; }
   #dropHint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -126,6 +130,10 @@
     <div id="viewerWrap">
       <div id="viewer"></div>
       <div id="dropHint">下载任务产物后自动预览<br/>也可以直接把 .glb 文件拖进来<br/><br/>左键旋转 · 右键/Shift+拖 平移 · 滚轮缩放 · 双击复位</div>
+      <div id="viewFxBar">
+        <label title="赛璐璐阶梯色 + 描边，适合娃娃/玩偶测试"><input type="checkbox" id="comicFx" checked /> 漫画渲染</label>
+        <span id="comicFxHint">Toon + 描边</span>
+      </div>
       <div id="animBar"></div>
       <div id="viewerInfo"></div>
     </div>
@@ -139,6 +147,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { applyComicStyle, suggestComicForAsset } from '/comic-render.mjs';
 
 // ================= toast =================
 function toast(text, isErr = false) {
@@ -657,6 +666,21 @@ const clock = new THREE.Clock();
 const infoEl = document.getElementById('viewerInfo');
 const animBar = document.getElementById('animBar');
 const dropHint = document.getElementById('dropHint');
+const comicFxEl = document.getElementById('comicFx');
+let comicFxOn = comicFxEl?.checked ?? true;
+
+function refreshComicFx() {
+  if (!current) return;
+  applyComicStyle(current, comicFxOn);
+  renderer.toneMappingExposure = comicFxOn ? 1.15 : 1.05;
+  key.intensity = comicFxOn ? 1.35 : 1.15;
+  if ('environmentIntensity' in scene) scene.environmentIntensity = comicFxOn ? 0.12 : 1;
+}
+comicFxEl?.addEventListener('change', () => {
+  comicFxOn = comicFxEl.checked;
+  localStorage.setItem('tripo.comicFxManual', '1');
+  refreshComicFx();
+});
 
 async function loadGLB(url) {
   const gltf = await new GLTFLoader().loadAsync(url);
@@ -673,6 +697,14 @@ async function loadGLB(url) {
   // 底面贴网格（y=0），水平居中 —— 网格是地面，不再从腰部切开
   root.position.set(root.position.x - c.x, root.position.y - box2.min.y, root.position.z - c.z);
   scene.add(root); current = root;
+  const fname = url.split('/').pop()?.split('?')[0] || '';
+  if (suggestComicForAsset(fname)) {
+    comicFxOn = true;
+    if (comicFxEl) comicFxEl.checked = true;
+  } else {
+    comicFxOn = comicFxEl?.checked ?? true;
+  }
+  refreshComicFx();
   const h = box2.max.y - box2.min.y;
   homeTarget.set(0, h / 2, 0);
   resetCam();

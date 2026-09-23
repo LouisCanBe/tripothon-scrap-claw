@@ -28,6 +28,7 @@ function hubStatic(req, res, u, dirs) {
 
   if (p === '/' || p === '/index.html') return sendFile(res, TOOLS, 'hub.html');
   if (p === '/console-theme.css') return sendFile(res, TOOLS, 'console-theme.css');
+  if (p === '/comic-render.mjs') return sendFile(res, TOOLS, 'comic-render.mjs');
 
   const panel = {
     '/tripo': 'ui.html', '/tripo/': 'ui.html',

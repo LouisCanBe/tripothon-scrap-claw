@@ -49,6 +49,8 @@ node tools/devServer.mjs 8000
 
 美术剪影对照流程见根目录 **`ART-美术设定.md`**，配对表 **`tools/art-pairs.json`**。
 
+**Tripo 预览器**：左侧「漫画渲染」= 实时 Toon + 描边（`tools/comic-render.mjs`，后续可接到游戏里娃娃奖品）。
+
 ## 后续整合路线（按需做，不提前过度设计）
 
 1. ~~统一 serve hub~~ ✅ `tools/hub.serve.mjs` + `tools/hub.html`

@@ -91,6 +91,9 @@ export function handleTripoStatic(req, res, u) {
   if (u.pathname === '/console-theme.css') {
     return sendFile(res, path.join(ROOT, 'tools'), 'console-theme.css');
   }
+  if (u.pathname === '/comic-render.mjs') {
+    return sendFile(res, path.join(ROOT, 'tools'), 'comic-render.mjs');
+  }
   return false;
 }
 
