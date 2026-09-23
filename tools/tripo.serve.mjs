@@ -23,33 +23,67 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TripoClient } from './tripo.mjs';
+import { sendFile, json, readBody, corsPreflight } from './http-util.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const GEN_DIR = path.join(ROOT, 'prototype', 'assets', 'generated');
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const GEN_DIR = path.join(ROOT, 'prototype', 'assets', 'generated');
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
-               '.css': 'text/css', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg' };
+/** @returns {Promise<'handled'|'skip'>} */
+export async function handleTripoApi(req, res, u, client) {
+  if (u.pathname === '/api/health') { json(res, 200, { ok: true, service: 'tripo' }); return 'handled'; }
+  if (u.pathname === '/api/balance') { json(res, 200, await client.getBalance()); return 'handled'; }
 
-// 静态文件：防路径穿越（resolve 后必须还在 base 下）
-function sendFile(res, base, rel) {
-  const p = path.resolve(base, rel);
-  if (!p.startsWith(path.resolve(base)) || !fs.existsSync(p) || !fs.statSync(p).isFile()) return false;
-  res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] ?? 'application/octet-stream',
-                       'Access-Control-Allow-Origin': '*' });
-  fs.createReadStream(p).pipe(res);
-  return true;
+  let m;
+  if ((m = u.pathname.match(/^\/api\/task\/([\w-]+)$/))) {
+    json(res, 200, await client.getTask(m[1]));
+    return 'handled';
+  }
+  if ((m = u.pathname.match(/^\/api\/gen\/(\w+)$/)) && req.method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString() || '{}');
+    json(res, 200, { task_id: await client.submit(m[1], body) });
+    return 'handled';
+  }
+  if (u.pathname === '/api/call' && req.method === 'POST') {
+    const { method = 'POST', path: p, body } = JSON.parse((await readBody(req)).toString());
+    json(res, 200, await client.call(method, p, body));
+    return 'handled';
+  }
+  if (u.pathname === '/api/upload' && req.method === 'POST') {
+    const name = path.basename(u.searchParams.get('filename') ?? 'upload.bin');
+    const tmp = path.join(GEN_DIR, '.tmp-' + name);
+    fs.mkdirSync(GEN_DIR, { recursive: true });
+    fs.writeFileSync(tmp, await readBody(req));
+    try { json(res, 200, { file_token: await client.uploadFile(tmp) }); }
+    finally { fs.rmSync(tmp, { force: true }); }
+    return 'handled';
+  }
+  if (u.pathname === '/api/download' && req.method === 'POST') {
+    const { url, name } = JSON.parse((await readBody(req)).toString());
+    const safe = path.basename(name ?? 'model.glb');
+    const dest = path.join(GEN_DIR, safe);
+    await client.download(url, dest);
+    json(res, 200, { saved: safe });
+    return 'handled';
+  }
+  return 'skip';
 }
 
-const json = (res, code, data) => {
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-  res.end(JSON.stringify(data));
-};
-const readBody = (req) => new Promise((ok, no) => {
-  const chunks = [];
-  req.on('data', c => chunks.push(c));
-  req.on('end', () => ok(Buffer.concat(chunks)));
-  req.on('error', no);
-});
+export function handleTripoStatic(req, res, u) {
+  if (req.method !== 'GET') return false;
+  if (u.pathname === '/' || u.pathname === '/index.html') {
+    return sendFile(res, path.join(ROOT, 'tools'), 'ui.html');
+  }
+  if (u.pathname.startsWith('/vendor/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'vendor'), decodeURIComponent(u.pathname.slice(8)));
+  }
+  if (u.pathname.startsWith('/files/')) {
+    return sendFile(res, GEN_DIR, decodeURIComponent(u.pathname.slice(7)));
+  }
+  if (u.pathname === '/console-theme.css') {
+    return sendFile(res, path.join(ROOT, 'tools'), 'console-theme.css');
+  }
+  return false;
+}
 
 export function serve(port = 8787) {
   let client;
@@ -57,63 +91,11 @@ export function serve(port = 8787) {
   catch (e) { console.error(e.message); process.exit(1); }
 
   http.createServer(async (req, res) => {
-    // CORS 预检
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      });
-      return res.end();
-    }
+    if (req.method === 'OPTIONS') return corsPreflight(res);
     const u = new URL(req.url, 'http://x');
     try {
-      // —— 静态 ——
-      if (req.method === 'GET') {
-        if (u.pathname === '/' || u.pathname === '/index.html') {
-          if (!sendFile(res, path.join(ROOT, 'tools'), 'ui.html')) json(res, 404, { error: 'ui.html 不存在' });
-          return;
-        }
-        if (u.pathname.startsWith('/vendor/')) {
-          if (!sendFile(res, path.join(ROOT, 'prototype', 'vendor'), decodeURIComponent(u.pathname.slice(8)))) json(res, 404, { error: 'not found' });
-          return;
-        }
-        if (u.pathname.startsWith('/files/')) {
-          if (!sendFile(res, GEN_DIR, decodeURIComponent(u.pathname.slice(7)))) json(res, 404, { error: 'not found' });
-          return;
-        }
-      }
-      // —— API ——
-      if (u.pathname === '/api/health')  return json(res, 200, { ok: true });
-      if (u.pathname === '/api/balance') return json(res, 200, await client.getBalance());
-
-      let m;
-      if ((m = u.pathname.match(/^\/api\/task\/([\w-]+)$/))) {
-        return json(res, 200, await client.getTask(m[1]));
-      }
-      if ((m = u.pathname.match(/^\/api\/gen\/(\w+)$/)) && req.method === 'POST') {
-        const body = JSON.parse((await readBody(req)).toString() || '{}');
-        return json(res, 200, { task_id: await client.submit(m[1], body) });
-      }
-      if (u.pathname === '/api/call' && req.method === 'POST') {
-        const { method = 'POST', path: p, body } = JSON.parse((await readBody(req)).toString());
-        return json(res, 200, await client.call(method, p, body));
-      }
-      if (u.pathname === '/api/upload' && req.method === 'POST') {
-        const name = path.basename(u.searchParams.get('filename') ?? 'upload.bin');
-        const tmp = path.join(GEN_DIR, '.tmp-' + name);
-        fs.mkdirSync(GEN_DIR, { recursive: true });
-        fs.writeFileSync(tmp, await readBody(req));
-        try { return json(res, 200, { file_token: await client.uploadFile(tmp) }); }
-        finally { fs.rmSync(tmp, { force: true }); }
-      }
-      if (u.pathname === '/api/download' && req.method === 'POST') {
-        const { url, name } = JSON.parse((await readBody(req)).toString());
-        const safe = path.basename(name ?? 'model.glb');   // 防路径穿越
-        const dest = path.join(GEN_DIR, safe);
-        await client.download(url, dest);
-        return json(res, 200, { saved: safe });
-      }
+      if (handleTripoStatic(req, res, u)) return;
+      if (await handleTripoApi(req, res, u, client) === 'handled') return;
       json(res, 404, { error: 'not found', hint: 'GET /api/health 看服务是否正常' });
     } catch (e) {
       json(res, 500, { error: e.message ?? String(e) });

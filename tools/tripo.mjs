@@ -15,7 +15,7 @@
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const POLL_MS = 3000;
@@ -38,7 +38,8 @@ loadEnvFile();
 // 代理：Node 只在启动时读 NODE_USE_ENV_PROXY → 配了代理就带开关重启自身一次
 const HAS_PROXY = process.env.HTTPS_PROXY || process.env.https_proxy
                || process.env.HTTP_PROXY || process.env.http_proxy;
-if (HAS_PROXY && process.env.NODE_USE_ENV_PROXY !== '1' && !process.argv.includes('--no-respawn')) {
+if (HAS_PROXY && import.meta.main && !process.env.SCRAPCLAW_LIB_MODE
+    && process.env.NODE_USE_ENV_PROXY !== '1' && !process.argv.includes('--no-respawn')) {
   const { spawnSync } = await import('node:child_process');
   const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
     stdio: 'inherit',
@@ -268,7 +269,7 @@ function buildBody(cmd, o) {
 }
 const strip = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 
-// 直接运行（非 import）时进 CLI
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// 直接运行（非 import）时进 CLI；被 Hub 等库模式加载时设 SCRAPCLAW_LIB_MODE=1 跳过
+if (import.meta.main && !process.env.SCRAPCLAW_LIB_MODE) {
   cli().catch(e => { console.error(e.message ?? e); process.exit(1); });
 }

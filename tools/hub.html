@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>拾荒娃娃机 · AI 工具台</title>
+<link rel="stylesheet" href="/console-theme.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0c; color: var(--ink); font: 13px/1.6 ui-monospace, "Courier New", monospace;
+         height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #2a2a30;
+            background: linear-gradient(180deg, #121218 0%, #0a0a0c 100%); }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: 2px; color: var(--accent); }
+  header .sub { color: var(--dim); font-size: 11px; }
+  #status { margin-left: auto; font-size: 11px; color: var(--dim); display: flex; gap: 10px; flex-wrap: wrap; }
+  #status .ok b { color: var(--accent); font-weight: normal; }
+  #status .bad b { color: var(--err); font-weight: normal; }
+  nav { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid #222228; background: #0e0e12; }
+  nav button { background: transparent; color: var(--dim); border: 1px solid transparent; border-radius: 6px;
+               padding: 6px 14px; font: inherit; cursor: pointer; }
+  nav button:hover { color: var(--ink); border-color: #3a3a44; }
+  nav button.on { color: #1a1a1a; background: var(--accent); border-color: var(--accent-muted); font-weight: 600; }
+  main { flex: 1; min-height: 0; position: relative; }
+  .panel { position: absolute; inset: 0; display: none; }
+  .panel.on { display: block; }
+  .panel iframe { width: 100%; height: 100%; border: none; background: #0b0b0d; }
+  #artPanel { padding: 20px 24px; overflow-y: auto; max-width: 720px; }
+  #artPanel h2 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 16px 0 8px; }
+  #artPanel h2:first-child { margin-top: 0; }
+  #artPanel p, #artPanel li { color: var(--ink); margin: 6px 0; }
+  #artPanel a { color: var(--accent); }
+  #artPanel code { background: #141418; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  #pairs { margin-top: 12px; border: 1px solid #2c2c33; border-radius: 8px; padding: 10px 12px; background: #101014; }
+  #pairs .row { display: grid; grid-template-columns: 1fr 1fr 80px; gap: 8px; font-size: 12px; padding: 4px 0;
+                 border-bottom: 1px solid #1e1e24; }
+  #pairs .row:last-child { border: none; }
+  #pairs .h { color: var(--dim); font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI 工具台</h1>
+  <span class="sub">Tripo · Marble · PixVerse</span>
+  <div id="status">检测服务…</div>
+</header>
+<nav>
+  <button type="button" class="on" data-tab="tripo">Tripo 模型</button>
+  <button type="button" data-tab="marble">Marble 世界</button>
+  <button type="button" data-tab="pixverse">PixVerse 视频</button>
+  <button type="button" data-tab="art">剪影对照</button>
+</nav>
+<main>
+  <div class="panel on" id="p-tripo"><iframe title="Tripo" src="/tripo/"></iframe></div>
+  <div class="panel" id="p-marble"><iframe title="Marble" src="/marble/"></iframe></div>
+  <div class="panel" id="p-pixverse"><iframe title="PixVerse" src="/pixverse/"></iframe></div>
+  <div class="panel" id="p-art">
+    <div id="artPanel">
+      <h2>记忆 / 现实 对照原则</h2>
+      <p>同一<strong>剪影</strong>对应两件模型：一套「食物/记忆」，一套「垃圾/现实」。平面缩略图要几乎一样，立体才分出真假。</p>
+      <h2>推荐管线（在 Tripo 页操作）</h2>
+      <ol>
+        <li>出<strong>共用剪影</strong>（侧视或 45°，纯色底，只锁外轮廓）。</li>
+        <li>先做<strong>记忆版</strong>四视图 → <code>四视图 → 模型</code> → 验收剪影。</li>
+        <li>再做<strong>现实版</strong>四视图：构图与剪影对齐，只改材质/腐烂/锈迹 → 再跑四视图生成。</li>
+        <li>若拓扑已锁死：记忆版 GLB → <code>重新贴图</code> / 图生贴图，比重做网格省积分。</li>
+      </ol>
+      <p>详设见仓库根目录 <a href="/docs/ART" target="_blank">ART-美术设定.md</a> · 配对表 <code>tools/art-pairs.json</code></p>
+      <h2>配对进度</h2>
+      <div id="pairs">加载中…</div>
+    </div>
+  </div>
+</main>
+<script>
+const tabs = document.querySelectorAll('nav button');
+const panels = { tripo: 'p-tripo', marble: 'p-marble', pixverse: 'p-pixverse', art: 'p-art' };
+tabs.forEach(btn => btn.addEventListener('click', () => {
+  tabs.forEach(b => b.classList.toggle('on', b === btn));
+  Object.values(panels).forEach(id => document.getElementById(id).classList.remove('on'));
+  document.getElementById(panels[btn.dataset.tab]).classList.add('on');
+}));
+
+fetch('/api/hub/status').then(r => r.json()).then(d => {
+  const el = document.getElementById('status');
+  const chip = (name, s) => {
+    const cls = s.ok ? 'ok' : 'bad';
+    const t = s.ok ? '就绪' : (s.error || '未配置').slice(0, 40);
+    return `<span class="${cls}">${name} <b>${t}</b></span>`;
+  };
+  el.innerHTML = chip('Tripo', d.services.tripo) + chip('Marble', d.services.marble) + chip('PixVerse', d.services.pixverse);
+}).catch(() => { document.getElementById('status').textContent = 'Hub 异常'; });
+
+fetch('/art-pairs.json').then(r => r.json()).then(data => {
+  const box = document.getElementById('pairs');
+  const rows = data.pairs || [];
+  box.innerHTML = '<div class="row h"><span>记忆</span><span>现实</span><span>状态</span></div>'
+    + rows.map(p => `<div class="row"><span>${p.memory.label}</span><span>${p.reality.label}</span><span>${p.status || '—'}</span></div>`).join('');
+}).catch(() => { document.getElementById('pairs').textContent = '未找到 art-pairs.json'; });
+</script>
+</body>
+</html>

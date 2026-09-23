@@ -8,6 +8,7 @@
 |---|---|---|---|
 | **Tripo3D** | 道具/爪子模型生成（text/image/multiview → GLB） | `tools/tripo.mjs` + `tripo.serve.mjs` + `tools/ui.html` | ✅ 已实测跑通 |
 | **Marble（World Labs）** | 3D 世界/场景生成（text/image/pano → GLB mesh / SPZ 点云 / 全景图） | `tools/marble.mjs` + `marble.serve.mjs` + `tools/world.html` | ✅ 已实测跑通（draft 档 32s 出世界） |
+| **PixVerse** | 分镜/幕间视频（text/image → MP4；首尾帧过渡） | `tools/pixverse.mjs` + `pixverse.serve.mjs` + `tools/video.html` | 📋 工具就绪，待 key 实测 |
 | **TapTap** | 游戏包体上传发布 | 官方 TapRails CLI / APK 上传 API | 📋 待开发者凭证 |
 | **tapnow** | ？ | ？ | ❓ 待确认是什么服务 |
 
@@ -24,28 +25,34 @@ tools/<service>.serve.mjs  # 本地 HTTP 转发（绕 CORS，key 不出前端）
 2. **代理自重启**：检测到 `HTTPS_PROXY` 自动带 `NODE_USE_ENV_PROXY` 重启一次
 3. **CLI 三件套**：`--dry`（只打印请求）/ `--wait`（轮询）/ `--out`（下载落盘）
 4. **逃生舱**：`call` 命令可裸调任意路径，新接口不用等封装
-5. **下载目录分服务**：Tripo → `prototype/assets/generated/`，Marble → `prototype/assets/worlds/`
+5. **下载目录分服务**：Tripo → `prototype/assets/generated/`，Marble → `prototype/assets/worlds/`，PixVerse → `prototype/assets/videos/`
 
 ## 快速上手
 
 ```bash
-# Tripo（已可用）
+# 推荐：统一工具台（单端口，Tab 切换 Tripo / Marble / PixVerse / 剪影对照）
+node tools/hub.serve.mjs              # 默认 http://localhost:8780/
+
+# 也可单独起各服务（调试时用）
+node tools/tripo.mjs serve            # → 8787  tools/ui.html
+node tools/marble.mjs serve           # → 8788  tools/world.html
+node tools/pixverse.mjs serve         # → 8789  tools/video.html
+
+# CLI 示例
 node tools/tripo.mjs text --prompt "生锈的罐头" --wait --out prototype/assets/generated/can.glb
-node tools/tripo.mjs serve          # → 可视化控制台 tools/ui.html
-
-# Marble（先 .env.local 加 MARBLE_API_KEY=wlt_xxx，platform.worldlabs.ai 申请）
 node tools/marble.mjs gen --text "雨后小巷，霓虹倒影" --wait --out prototype/assets/worlds/alley.glb
-node tools/marble.mjs serve         # → 8788 端口转发
+node tools/pixverse.mjs text --prompt "雨夜小巷" --wait --out prototype/assets/videos/test.mp4
 
-# 开发服务器（no-store 禁缓存，改代码刷新即生效）
+# 游戏开发服务器
 node tools/devServer.mjs 8000
 ```
 
+美术剪影对照流程见根目录 **`ART-美术设定.md`**，配对表 **`tools/art-pairs.json`**。
+
 ## 后续整合路线（按需做，不提前过度设计）
 
-1. **统一 serve hub**：现在 tripo(8787)/marble(8788) 各起一个端口。服务多起来后合并成
-   单服务器按前缀路由：`/api/tripo/*`、`/api/marble/*`、`/api/taptap/*`
-2. **ui.html 加服务 tab**：控制台顶部切服务，任务卡列表按服务分组
+1. ~~统一 serve hub~~ ✅ `tools/hub.serve.mjs` + `tools/hub.html`
+2. Hub 内任务队列跨服务汇总（可选）
 3. **TapTap 发布流水线**：`npm run release` = 打包 zip → TapRails 上传 → 输出审核链接
 4. **Marble → 游戏**：生成的全景图可直接当终幕"实景"背景（`hooks.onReveal` 换成全景天空盒），
    GLB mesh 可做新场景——低模娃娃机（记忆）vs Marble 写实世界（现实）的画风对比本身就是叙事
@@ -59,3 +66,12 @@ node tools/devServer.mjs 8000
 - 资产：全景图 → `scene.background`；GLB → 碰撞/占位；SPZ → 写实场景层
 - ⚠️ GLB/SPZ 与 three.js 朝向相反，接入必须绕 X 翻 180°（全景图不用）
 - 预览器：`node tools/marble.mjs serve` → http://localhost:8788/ ，双范式控制（V 切换）+ 边界碰撞
+
+## PixVerse 接入
+
+详细手册（API 约定、积分估算、游戏叙事接入、已知坑）见 **[tools/PIXVERSE.md](./PIXVERSE.md)**。
+
+要点速记：
+- 测试锁 **540p + 5s**；API 积分与网页会员积分**不通用**
+- 每个请求新 `Ai-trace-id`（UUID），重复会返回旧结果
+- 控制台：`node tools/pixverse.mjs serve` → http://localhost:8789/

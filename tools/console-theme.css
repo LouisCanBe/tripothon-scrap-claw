@@ -1,0 +1,10 @@
+/* 工具控制台统一主题（Tripo 品牌感：深底 + 黄强调） */
+:root {
+  color-scheme: dark;
+  --ink: #e8e4d8;
+  --dim: #9a9688;
+  --accent: #f0c419;
+  --accent-muted: #c9a012;
+  --paper: #f5e6a8;
+  --err: #e07070;
+}

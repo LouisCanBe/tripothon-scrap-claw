@@ -15,7 +15,7 @@
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const POLL_MS = 5000;
@@ -38,7 +38,8 @@ loadEnvFile();
 // 代理自重启（同 tripo.mjs）
 const HAS_PROXY = process.env.HTTPS_PROXY || process.env.https_proxy
                || process.env.HTTP_PROXY || process.env.http_proxy;
-if (HAS_PROXY && process.env.NODE_USE_ENV_PROXY !== '1' && !process.argv.includes('--no-respawn')) {
+if (HAS_PROXY && import.meta.main && !process.env.SCRAPCLAW_LIB_MODE
+    && process.env.NODE_USE_ENV_PROXY !== '1' && !process.argv.includes('--no-respawn')) {
   const { spawnSync } = await import('node:child_process');
   const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
     stdio: 'inherit',
@@ -93,23 +94,55 @@ export class MarbleClient {
     return json;
   }
 
-  // 生成世界。input: { text } | { imageUrl } | { panoUrl } | { videoUrl }，opts: model/seed/displayName/tags
+  // 本地文件 → media_asset_id（图片 jpg/png/webp，视频 mp4）
+  async uploadMedia(filePath, kind = 'image') {
+    const file_name = path.basename(filePath).slice(0, 64);
+    const extension = (path.extname(file_name).slice(1) || (kind === 'video' ? 'mp4' : 'png')).toLowerCase();
+    const prep = await this.call('POST', '/media-assets:prepare_upload', { file_name, kind, extension });
+    const info = prep.upload_info ?? {};
+    const id = prep.media_asset?.media_asset_id;
+    if (!info.upload_url || !id) throw new Error('prepare_upload 未返回 upload_url / media_asset_id');
+    const buf = fs.readFileSync(filePath);
+    const headers = { ...(info.required_headers ?? {}) };
+    if (!headers['Content-Type'] && !headers['content-type']) {
+      headers['Content-Type'] = kind === 'video' ? 'video/mp4' : `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+    }
+    const res = await fetch(info.upload_url, { method: info.upload_method || 'PUT', headers, body: buf });
+    if (!res.ok) throw new Error(`文件上传失败 HTTP ${res.status}`);
+    return id;
+  }
+
+  // 生成世界。文本直接传；图片/全景/视频用 mediaAssetId（本地上传）或公网 uri。
   generate(input, opts = {}) {
     let world_prompt;
-    if (input.text)     world_prompt = { type: 'text', text_prompt: input.text };
-    else if (input.imageUrl) world_prompt = { type: 'image', image_url: input.imageUrl };
-    else if (input.panoUrl)  world_prompt = { type: 'panorama', image_url: input.panoUrl, is_pano: true };
-    else if (input.videoUrl) world_prompt = { type: 'video', video_url: input.videoUrl };
-    else throw new Error('generate 需要 text / imageUrl / panoUrl / videoUrl 之一');
+    const guide = input.text;
+    if (input.mediaAssetId) {
+      const ref = { source: 'media_asset', media_asset_id: input.mediaAssetId };
+      world_prompt = input.kind === 'video'
+        ? strip({ type: 'video', video_prompt: ref, text_prompt: guide })
+        : strip({ type: 'image', image_prompt: ref, is_pano: input.isPano ?? 'auto', text_prompt: guide });
+    } else if (input.imageUrl || input.panoUrl) {
+      world_prompt = strip({
+        type: 'image',
+        image_prompt: { source: 'uri', uri: input.imageUrl || input.panoUrl },
+        is_pano: input.panoUrl ? true : 'auto',
+        text_prompt: guide,
+      });
+    } else if (input.videoUrl) {
+      world_prompt = strip({ type: 'video', video_prompt: { source: 'uri', uri: input.videoUrl }, text_prompt: guide });
+    } else if (guide) {
+      world_prompt = { type: 'text', text_prompt: guide };
+    } else throw new Error('generate 需要 text，或图片/全景/视频（本地上传或公网 URL）');
     return this.call('POST', '/worlds:generate', strip({
       display_name: opts.displayName,
-      model: opts.model ?? 'marble-1.1',     // 大世界/室外用 marble-1.1-plus
+      model: opts.model ?? 'marble-1.0-draft',   // 测试默认 draft（150 积分）；正式用 marble-1.1 / plus
       seed: opts.seed,
       tags: opts.tags,
       world_prompt,
     }));
   }
 
+  getCredits() { return this.call('GET', '/credits'); }
   getOperation(id) { return this.call('GET', `/operations/${id}`); }
   getWorld(id)     { return this.call('GET', `/worlds/${id}`); }
   exportWorld(id, assetType = 'mesh', format = 'glb') {
@@ -168,10 +201,12 @@ export class MarbleClient {
 // ============================================================
 const COMMANDS = `
 命令（--后参数一律 --key value，value 自动尝试按 JSON 解析）：
+  credits                                       查询 API 剩余积分（与 Marble 网页会员分开）
   gen       --text "废弃便利店，黄昏，暖光"        文本生成世界
             --image <图片URL>                     图片生成
             --pano <360°全景图URL>                全景图生成
-            [--model marble-1.1|marble-1.1-plus] [--seed 42] [--name 显示名]
+            [--model marble-1.0-draft|marble-1.1|marble-1.1-plus] [--seed 42] [--name 显示名]
+            默认模型 marble-1.0-draft。图片/全景/视频须是可公网访问的 URL。
   op        --id <operation_id>                   查生成进度
   world     --id <world_id>                       世界详情（资产 URL）
   export    --id <world_id> [--type mesh|splats] [--format glb|ply|spz]
@@ -206,6 +241,14 @@ async function cli() {
   const show = (label, data) => console.log(label, JSON.stringify(data, null, 2));
 
   switch (cmd) {
+    case 'credits':
+    case 'balance': {
+      if (dry) return show('[dry] GET /credits', {});
+      const b = await client.getCredits();
+      console.log(`剩余 API 积分：${b.remaining_credits}`);
+      show('credits:', b);
+      break;
+    }
     case 'gen': {
       const input = { text: opts.text, imageUrl: opts.image, panoUrl: opts.pano, videoUrl: opts.video };
       const genOpts = { model: opts.model, seed: opts.seed, displayName: opts.name, tags: opts.tags };
@@ -232,6 +275,6 @@ async function cli() {
 
 const strip = o => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== undefined));
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.main && !process.env.SCRAPCLAW_LIB_MODE) {
   cli().catch(e => { console.error(e.message ?? e); process.exit(1); });
 }

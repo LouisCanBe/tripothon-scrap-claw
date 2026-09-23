@@ -4,8 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Marble 世界预览器</title>
+<link rel="stylesheet" href="/console-theme.css" />
 <style>
-  :root { color-scheme: dark; --ink: #d8d4c8; --dim: #8a877e; --accent: #9db87a; --bg: #0b0b0d; }
+  :root { --bg: #0b0b0d; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; background: var(--bg);
                font-family: ui-monospace, "Courier New", monospace; color: var(--ink); }
@@ -17,6 +18,19 @@
   button:hover, select:hover { border-color: var(--accent); }
   button.on { background: var(--accent); color: #111; }
   #stage { position: fixed; inset: 52px 0 0 0; }
+  body.panel #stage, body.panel #empty { left: 340px; }
+  #panel { position: fixed; top: 52px; left: 0; bottom: 0; width: 340px; overflow: auto;
+           background: #101014; border-right: 1px solid #26262c; padding: 14px 16px; z-index: 3;
+           display: none; font-size: 12px; }
+  body.panel #panel { display: block; }
+  #panel h2 { font-size: 12px; letter-spacing: 2px; color: var(--dim); font-weight: normal; margin: 12px 0 6px; }
+  #panel label { display: block; color: var(--dim); margin: 8px 0 3px; }
+  #panel input, #panel textarea, #panel select { width: 100%; background: #1c1c22; color: var(--ink);
+    border: 1px solid #3a3a44; border-radius: 4px; padding: 6px 8px; font: inherit; }
+  #panel textarea { min-height: 72px; resize: vertical; }
+  #panel button.primary { width: 100%; margin-top: 12px; background: var(--accent); color: #111; border-color: var(--accent); }
+  #panel .hint { color: var(--dim); margin-top: 8px; line-height: 1.5; }
+  #genStatus { margin-top: 10px; color: var(--accent); white-space: pre-wrap; }
   #stage canvas { display: block; }
   #info { position: fixed; left: 12px; bottom: 10px; font-size: 12px; color: var(--dim);
           background: rgba(8,8,10,.7); padding: 4px 10px; border-radius: 4px; pointer-events: none; }
@@ -31,8 +45,41 @@
   <button id="btnPano">全景图</button>
   <button id="btnMesh">GLB 网格</button>
   <button id="btnSplat">SPZ 点云</button>
+  <button id="btnGen" type="button">生成</button>
   <span id="cost" style="color:var(--dim)"></span>
+  <button id="btnBal" type="button" title="刷新积分">↻</button>
 </div>
+<aside id="panel">
+  <h2>生成世界</h2>
+  <label>输入</label>
+  <select id="inKind">
+    <option value="text">文本</option>
+    <option value="image">图片 URL</option>
+    <option value="pano">全景图 URL</option>
+    <option value="video">视频 URL</option>
+  </select>
+  <div id="textWrap">
+    <label>Prompt</label>
+    <textarea id="prompt" placeholder="塌顶废墟，尘光，远处一台仍亮着的娃娃机，前景一只手伸向锈罐头"></textarea>
+  </div>
+  <div id="urlWrap" hidden>
+    <label>本地文件</label>
+    <input id="mediaFile" type="file" accept="image/png,image/jpeg,image/webp,video/mp4" />
+    <label>或公网 URL（二选一）</label>
+    <input id="mediaUrl" placeholder="https://…" />
+  </div>
+  <label>模型</label>
+  <select id="model">
+    <option value="marble-1.0-draft">draft · 150 积分（测试）</option>
+    <option value="marble-1.1">1.1 · 约 1580 积分</option>
+    <option value="marble-1.1-plus">1.1-plus · 约 1500–3000 积分</option>
+  </select>
+  <label>文件名前缀</label>
+  <input id="slug" placeholder="reveal-ruins" />
+  <button class="primary" id="btnSubmit" type="button">提交并下载</button>
+  <p class="hint">文本直接生成。图片（jpg/png/webp）、全景、视频（mp4）可以选本地文件，也可以填公网 URL。图片和视频可再写一句补充描述。完成后自动保存全景、碰撞 GLB、100k SPZ。</p>
+  <div id="genStatus"></div>
+</aside>
 <div id="stage"></div>
 <div id="empty" hidden>把 .png / .glb / .spz 拖进来，或从左上选已下载的资产</div>
 <div id="info"></div>
@@ -282,6 +329,86 @@ async function refreshFiles() {
 }
 fileSel.addEventListener('change', () => fileSel.value && open(fileSel.value));
 refreshFiles();
+
+async function refreshCredits() {
+  const el = document.getElementById('cost');
+  try {
+    const b = await fetch('/api/marble/credits').then(async r => {
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j;
+    });
+    el.textContent = 'API 积分 ' + b.remaining_credits;
+  } catch (e) { el.textContent = '积分 ' + e.message; }
+}
+document.getElementById('btnBal').onclick = refreshCredits;
+refreshCredits();
+
+document.getElementById('btnGen').onclick = () => document.body.classList.toggle('panel');
+document.getElementById('inKind').onchange = () => {
+  const text = document.getElementById('inKind').value === 'text';
+  document.getElementById('urlWrap').hidden = text;
+  document.querySelector('#textWrap label').textContent = text ? 'Prompt' : '补充描述（可选）';
+};
+document.getElementById('btnSubmit').onclick = async () => {
+  const btn = document.getElementById('btnSubmit');
+  const status = document.getElementById('genStatus');
+  const kind = document.getElementById('inKind').value;
+  const prompt = document.getElementById('prompt').value.trim();
+  const body = { model: document.getElementById('model').value, displayName: document.getElementById('slug').value.trim() || undefined, text: prompt || undefined };
+  if (kind === 'text' && !prompt) { status.textContent = '请填写 prompt'; return; }
+  btn.disabled = true;
+  try {
+    if (kind !== 'text') {
+      const file = document.getElementById('mediaFile').files?.[0];
+      const url = document.getElementById('mediaUrl').value.trim();
+      if (file) {
+        status.textContent = '上传文件…';
+        const upKind = kind === 'video' ? 'video' : 'image';
+        const up = await fetch('/api/marble/upload?filename=' + encodeURIComponent(file.name) + '&kind=' + upKind, { method: 'POST', body: file }).then(async r => {
+          const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j;
+        });
+        body.mediaAssetId = up.media_asset_id;
+        body.kind = upKind;
+        if (kind === 'pano') body.isPano = true;
+        if (kind === 'image') body.isPano = false;
+      } else if (/^https?:\/\//.test(url)) {
+        if (kind === 'image') body.imageUrl = url;
+        else if (kind === 'pano') body.panoUrl = url;
+        else body.videoUrl = url;
+      } else throw new Error('请选择本地文件，或填写 http(s) 地址');
+    }
+    status.textContent = '提交中…';
+    const gen = await fetch('/api/marble/gen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(async r => {
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j;
+    });
+    const opId = gen.operation_id ?? gen.id ?? gen.name;
+    if (!opId) throw new Error('未返回 operation_id：' + JSON.stringify(gen).slice(0, 180));
+    status.textContent = '生成中\n' + opId;
+    let worldId = null;
+    for (let i = 0; i < 240; i++) {
+      await new Promise(r => setTimeout(r, 4000));
+      const op = await fetch('/api/marble/operation/' + encodeURIComponent(opId)).then(async r => {
+        const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j;
+      });
+      if (op.error) throw new Error(typeof op.error === 'string' ? op.error : JSON.stringify(op.error));
+      status.textContent = (op.done ? '完成，正在下载…' : '生成中 ' + (op.progress ?? '') + '%') + '\n' + opId;
+      if (op.done) { worldId = op.response?.world_id ?? op.response?.world?.world_id; break; }
+    }
+    if (!worldId) throw new Error('超时或没有 world_id');
+    const slug = document.getElementById('slug').value.trim() || ('world-' + Date.now());
+    const saved = await fetch('/api/marble/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ worldId, name: slug }) }).then(async r => {
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j;
+    });
+    status.textContent = '已保存\n' + Object.values(saved.saved || {}).join('\n');
+    await refreshFiles();
+    if (saved.saved?.pano) open('/worlds/' + encodeURIComponent(saved.saved.pano));
+    else if (saved.saved?.spz) open('/worlds/' + encodeURIComponent(saved.saved.spz));
+    refreshCredits();
+  } catch (e) {
+    status.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+};
 
 // ---------- 拖拽本地文件 ----------
 addEventListener('dragover', e => e.preventDefault());

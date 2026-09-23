@@ -9,7 +9,7 @@
 ```bash
 # .env.local 加 MARBLE_API_KEY=wlt_xxx（platform.worldlabs.ai 申请，已 gitignore）
 node tools/marble.mjs gen --text "雨后小巷，霓虹倒影" --wait --out prototype/assets/worlds/alley.glb
-node tools/marble.mjs serve        # → http://localhost:8788/ 预览器（tools/world.html）
+node tools/marble.mjs serve        # → http://localhost:8788/ 预览 + 生成（点「生成」）
 ```
 
 - 生成是**离线批处理**（同 Tripo 哲学：key 不出前端、demo 可离线、资产可策展）
@@ -108,7 +108,8 @@ viewer.start();
 
 `node tools/marble.mjs serve` → http://localhost:8788/
 
-- 左上角下拉选 `prototype/assets/worlds/` 里已下载的资产，按扩展名自动进对应模式；也支持拖拽本地文件进去
+- 顶栏「生成」：文本，或图片 / 全景 / 视频（本地文件或公网 URL）。本地文件走 `media-assets:prepare_upload` 再生成。默认 `marble-1.0-draft`（150 积分）。完成后自动下载全景、collider GLB、100k SPZ。
+- 左上角下拉选 `prototype/assets/worlds/` 里已下载的资产，按扩展名自动进对应模式；也支持拖拽本地文件进去预览
 - 顶栏按钮可强制切换模式（比如用 SPZ 模式强行加载 GLB 对比）
 
 ### 交互规范（双范式，V 键切换）—— 正式游戏相机控制直接参考这套

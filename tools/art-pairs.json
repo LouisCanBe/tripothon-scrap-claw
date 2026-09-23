@@ -1,0 +1,38 @@
+{
+  "_note": "剪影对照配对表：memory/reality 各对应 Tripo 资产 id 或 prototype/assets/prizes 文件名，status 随手填 todo/done",
+  "silhouette_dir": "概念设定/silhouettes",
+  "pairs": [
+    {
+      "id": "bread",
+      "silhouette": "boxy-loaf",
+      "memory": { "label": "面包", "glb": "bread.glb", "multiview": "" },
+      "reality": { "label": "发霉块", "glb": "moldy.glb", "multiview": "" },
+      "status": "todo",
+      "strategy": "multiview_pair"
+    },
+    {
+      "id": "can",
+      "silhouette": "short-cylinder",
+      "memory": { "label": "豆子罐头", "glb": "can.glb", "multiview": "" },
+      "reality": { "label": "锈罐头", "glb": "rustcan.glb", "multiview": "" },
+      "status": "todo",
+      "strategy": "multiview_pair"
+    },
+    {
+      "id": "apple",
+      "silhouette": "round-fruit",
+      "memory": { "label": "青苹果", "glb": "", "multiview": "" },
+      "reality": { "label": "瘪苹果", "glb": "apple.glb", "multiview": "" },
+      "status": "todo",
+      "strategy": "texture_reuse"
+    },
+    {
+      "id": "carton",
+      "silhouette": "rect-box",
+      "memory": { "label": "牛奶盒", "glb": "carton.glb", "multiview": "" },
+      "reality": { "label": "空盒/口粮袋", "glb": "", "multiview": "" },
+      "status": "todo",
+      "strategy": "multiview_pair"
+    }
+  ]
+}

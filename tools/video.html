@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PixVerse API 控制台</title>
+<link rel="stylesheet" href="/console-theme.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0b0b0d; color: var(--ink); font: 13px/1.7 "Courier New", ui-monospace, monospace;
+         min-height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 14px 20px; border-bottom: 1px solid #26262b; flex-wrap: wrap; }
+  header h1 { font-size: 16px; letter-spacing: 3px; font-weight: normal; color: var(--accent); }
+  header .stat { color: var(--dim); font-size: 12px; }
+  header .stat b { color: var(--accent); font-weight: normal; }
+  main { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+  #form { padding: 16px 20px; border-right: 1px solid #26262b; overflow-y: auto; }
+  #form h2, #right h2 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 14px 0 8px; }
+  #form h2:first-child { margin-top: 0; }
+  label { display: block; margin: 8px 0 2px; color: var(--dim); font-size: 12px; }
+  input, select, textarea { width: 100%; background: #141418; color: var(--ink); border: 1px solid #2c2c33;
+    border-radius: 4px; padding: 6px 8px; font: inherit; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 64px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button { background: var(--paper); color: #26241f; border: 2px solid #26241f; border-radius: 4px;
+    padding: 7px 18px; font: inherit; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.4); }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid #3a3a42; box-shadow: none; padding: 4px 10px; font-size: 12px; }
+  button:disabled { opacity: .4; cursor: default; }
+  .hint { color: var(--dim); font-size: 11px; margin-top: 6px; }
+  .cost { color: #c9a87a; font-size: 11px; margin: 8px 0; }
+  #right { display: flex; flex-direction: column; min-height: 0; }
+  #tasks { padding: 8px 20px; display: flex; flex-direction: column; gap: 8px; max-height: 38%; overflow-y: auto; }
+  .task { border: 1px solid #2c2c33; border-radius: 8px; padding: 10px 12px; background: #101014; }
+  .task .meta { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .task .st { color: var(--dim); font-size: 12px; }
+  .task.success .st { color: var(--accent); }
+  .task.failed .st { color: #c66; }
+  .task .ops { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  #playerWrap { flex: 1; border-top: 1px solid #26262b; position: relative; min-height: 280px; background: #08080a;
+    display: flex; align-items: center; justify-content: center; }
+  #player { max-width: 100%; max-height: 100%; }
+  #empty { color: #3a3a42; font-size: 13px; letter-spacing: 2px; text-align: center; padding: 20px; }
+  #toasts { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 50; pointer-events: none; }
+  .toast { padding: 7px 18px; background: var(--paper); border: 2px solid #26241f; border-radius: 4px;
+    opacity: 0; transition: opacity .25s; }
+  .toast.in { opacity: 1; }
+  .toast.err { background: #e8c9c9; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PixVerse API 控制台</h1>
+  <span class="stat" id="health">服务：检测中…</span>
+  <span class="stat" id="balance"></span>
+  <button class="ghost" id="balRefresh">↻</button>
+  <span class="stat" style="margin-left:auto">测试建议 540p·5s · V 键无关</span>
+</header>
+<main>
+  <section id="form">
+    <h2>生成类型</h2>
+    <select id="mode">
+      <option value="text">文本 → 视频</option>
+      <option value="image">图片 → 视频</option>
+      <option value="transition">首尾帧 → 过渡</option>
+    </select>
+    <div id="fileFields" hidden>
+      <label id="file1Label">参考图</label>
+      <input type="file" id="file1" accept="image/png,image/jpeg,image/webp" />
+      <div id="file2Wrap" hidden>
+        <label>尾帧图</label>
+        <input type="file" id="file2" accept="image/png,image/jpeg,image/webp" />
+      </div>
+    </div>
+    <label>Prompt</label>
+    <textarea id="prompt" placeholder="雨夜霓虹小巷，地面水洼倒映灯光，慢推镜头"></textarea>
+    <div class="row2">
+      <div><label>模型</label><select id="model"><option value="v5.5">v5.5（稳）</option><option value="v6">v6</option></select></div>
+      <div><label>时长</label><select id="duration"><option value="5">5 秒</option><option value="8">8 秒</option></select></div>
+    </div>
+    <div class="row2">
+      <div><label>画质</label><select id="quality">
+        <option value="360p">360p（省积分）</option>
+        <option value="540p" selected>540p（推荐测试）</option>
+        <option value="720p">720p</option>
+        <option value="1080p">1080p（贵）</option>
+      </select></div>
+      <div><label>画幅</label><select id="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option></select></div>
+    </div>
+    <div class="row2">
+      <div><label>运动</label><select id="motion"><option value="normal">normal</option><option value="fast">fast</option></select></div>
+      <div><label>负向词</label><input id="negative" placeholder="blur, text, watermark" /></div>
+    </div>
+    <p class="cost">粗估单次：540p·5s 约 30–80 积分 · API 积分与网页会员分开</p>
+    <button id="submit" style="margin-top:10px">提交生成</button>
+    <p class="hint">Ctrl+Enter 提交 · 任务自动轮询 · 完成后可预览/下载</p>
+  </section>
+  <section id="right">
+    <div style="padding:12px 20px 0"><h2 style="margin:0">任务队列</h2></div>
+    <div id="tasks"></div>
+    <div id="playerWrap">
+      <video id="player" controls playsinline hidden></video>
+      <div id="empty">选任务「预览」或完成自动播放</div>
+    </div>
+  </section>
+</main>
+<div id="toasts"></div>
+<script>
+const $ = id => document.getElementById(id);
+const api = p => fetch('/api/pixverse' + p).then(async r => {
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+  return j;
+});
+const toast = (msg, err) => {
+  const el = document.createElement('div');
+  el.className = 'toast' + (err ? ' err' : '');
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+  setTimeout(() => { el.classList.remove('in'); setTimeout(() => el.remove(), 300); }, 2800);
+};
+
+const LS = 'pixverse_tasks_v1';
+let tasks = JSON.parse(localStorage.getItem(LS) || '[]');
+const save = () => localStorage.setItem(LS, JSON.stringify(tasks.slice(0, 30)));
+
+const STATUS = { 1: '完成', 5: '生成中', 6: '已删除', 7: '审核未过', 8: '生成失败' };
+
+function params() {
+  return {
+    prompt: $('prompt').value.trim(),
+    model: $('model').value,
+    duration: +$('duration').value,
+    quality: $('quality').value,
+    aspect_ratio: $('aspect').value,
+    motion_mode: $('motion').value,
+    negative_prompt: $('negative').value.trim() || undefined,
+  };
+}
+
+async function uploadInput(input) {
+  const f = input.files?.[0];
+  if (!f) throw new Error('请选择图片');
+  const r = await fetch('/api/pixverse/upload?filename=' + encodeURIComponent(f.name), { method: 'POST', body: f });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || '上传失败');
+  return j.img_id ?? j.ImgId ?? j.id;
+}
+
+async function refreshBalance() {
+  try {
+    const b = await api('/balance');
+    const monthly = b.credit_monthly ?? 0, pack = b.credit_package ?? 0;
+    const total = monthly + pack;
+    $('balance').innerHTML = 'API 积分：<b>' + total + '</b>'
+      + (monthly || pack ? ` <span style="opacity:.7">(月赠 ${monthly} + 充值包 ${pack})</span>` : '')
+      + (total === 0 ? ' <span style="color:#c9a87a">← 与网页会员分开，需 Billing 充值</span>' : '');
+  } catch (e) { $('balance').textContent = '积分：' + e.message; }
+}
+
+function renderTasks() {
+  $('tasks').innerHTML = tasks.length ? '' : '<p class="hint" style="padding:0 20px">暂无任务</p>';
+  tasks.forEach((t, i) => {
+    const el = document.createElement('div');
+    el.className = 'task' + (t.status === 1 ? ' success' : t.failed ? ' failed' : '');
+    el.innerHTML = `
+      <div class="meta">
+        <span>${t.kind}</span>
+        <span class="st">${t.label || '等待'}</span>
+        <span style="color:var(--dim);font-size:11px">#${t.videoId}</span>
+      </div>
+      <div style="font-size:11px;color:var(--dim);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.prompt || ''}</div>
+      <div class="ops">
+        <button class="ghost" data-a="poll" ${t.status === 1 ? 'disabled' : ''}>刷新</button>
+        <button class="ghost" data-a="preview" ${t.url ? '' : 'disabled'}>预览</button>
+        <button class="ghost" data-a="dl" ${t.url ? '' : 'disabled'}>下载</button>
+        <button class="ghost" data-a="del" style="margin-left:auto">删除</button>
+      </div>`;
+    el.querySelector('[data-a=poll]').onclick = () => pollOne(i);
+    el.querySelector('[data-a=preview]').onclick = () => play(t.url || (t.saved ? '/videos/' + t.saved : null));
+    el.querySelector('[data-a=dl]').onclick = () => downloadTask(i);
+    el.querySelector('[data-a=del]').onclick = () => { tasks.splice(i, 1); save(); renderTasks(); };
+    $('tasks').appendChild(el);
+  });
+}
+
+function play(url) {
+  if (!url) return toast('尚无视频 URL', true);
+  $('empty').hidden = true;
+  const v = $('player');
+  v.hidden = false;
+  v.src = url.startsWith('http') ? url : url;
+  v.play().catch(() => {});
+}
+
+async function downloadTask(i) {
+  const t = tasks[i];
+  if (!t.url) return;
+  const name = (t.kind + '-' + t.videoId + '.mp4').replace(/[^\w.-]/g, '_');
+  toast('下载中…');
+  const r = await api('/download', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: t.url, name }) });
+  t.saved = r.saved;
+  save();
+  renderTasks();
+  play('/videos/' + r.saved);
+  toast('已保存 videos/' + r.saved);
+}
+
+async function pollOne(i) {
+  const t = tasks[i];
+  try {
+    const r = await api('/video/' + t.videoId);
+    t.status = r.status;
+    t.label = STATUS[r.status] || ('status ' + r.status);
+    t.failed = r.status === 6 || r.status === 7 || r.status === 8;
+    if (r.status === 1) { t.url = r.url ?? r.video_url; toast('生成完成'); play(t.url); }
+    save(); renderTasks();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function pollLoop() {
+  const pending = tasks.map((t, i) => ({ t, i })).filter(x => x.t.status !== 1 && !x.t.failed);
+  for (const { i } of pending) await pollOne(i);
+}
+
+$('mode').onchange = () => {
+  const m = $('mode').value;
+  $('fileFields').hidden = m === 'text';
+  $('file2Wrap').hidden = m !== 'transition';
+  $('file1Label').textContent = m === 'transition' ? '首帧图' : '参考图';
+};
+
+$('submit').onclick = submit;
+document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') submit(); });
+
+async function submit() {
+  const mode = $('mode').value;
+  const p = params();
+  if (mode === 'text' && !p.prompt) return toast('请填写 prompt', true);
+  $('submit').disabled = true;
+  try {
+    let resp;
+    if (mode === 'text') {
+      resp = await api('/text', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+    } else if (mode === 'image') {
+      const img_id = await uploadInput($('file1'));
+      resp = await api('/image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...p, img_id }) });
+    } else {
+      const first = await uploadInput($('file1'));
+      const last = await uploadInput($('file2'));
+      resp = await api('/transition', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...p, first_frame_img_id: first, last_frame_img_id: last }) });
+    }
+    const videoId = resp.video_id ?? resp.VideoId ?? resp.id;
+    if (!videoId) throw new Error('未返回 video_id：' + JSON.stringify(resp));
+    tasks.unshift({ kind: mode, videoId, prompt: p.prompt, status: 5, label: '生成中', created: Date.now() });
+    save(); renderTasks();
+    toast('已提交 #' + videoId);
+    setTimeout(pollLoop, 3000);
+  } catch (e) { toast(e.message, true); }
+  finally { $('submit').disabled = false; }
+}
+
+(async () => {
+  try {
+    await api('/health');
+    $('health').textContent = '服务：正常';
+    await refreshBalance();
+  } catch (e) { $('health').textContent = '服务：' + e.message; }
+  renderTasks();
+  setInterval(pollLoop, 5000);
+})();
+$('balRefresh').onclick = refreshBalance;
+$('mode').dispatchEvent(new Event('change'));
+</script>
+</body>
+</html>

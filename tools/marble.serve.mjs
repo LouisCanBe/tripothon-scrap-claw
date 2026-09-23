@@ -19,34 +19,96 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MarbleClient } from './marble.mjs';
+import { sendFile, json, readBody, corsPreflight } from './http-util.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const WORLD_DIR = path.join(ROOT, 'prototype', 'assets', 'worlds');
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+export const WORLD_DIR = path.join(ROOT, 'prototype', 'assets', 'worlds');
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
-               '.css': 'text/css', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg',
-               '.spz': 'application/octet-stream', '.webp': 'image/webp' };
+/** @returns {Promise<'handled'|'skip'>} */
+export async function handleMarbleApi(req, res, u, client) {
+  if (req.method === 'GET' && u.pathname === '/api/marble/files') {
+    const files = fs.existsSync(WORLD_DIR) ? fs.readdirSync(WORLD_DIR).filter(f => !f.startsWith('.')) : [];
+    json(res, 200, { files });
+    return 'handled';
+  }
+  if (u.pathname === '/api/marble/health') { json(res, 200, { ok: true, service: 'marble' }); return 'handled'; }
+  if (u.pathname === '/api/marble/credits') { json(res, 200, await client.getCredits()); return 'handled'; }
 
-// 静态文件：防路径穿越（resolve 后必须还在 base 下）
-function sendFile(res, base, rel) {
-  const p = path.resolve(base, rel);
-  if (!p.startsWith(path.resolve(base)) || !fs.existsSync(p) || !fs.statSync(p).isFile()) return false;
-  res.writeHead(200, { 'Content-Type': MIME[path.extname(p).toLowerCase()] ?? 'application/octet-stream',
-                       'Access-Control-Allow-Origin': '*' });
-  fs.createReadStream(p).pipe(res);
-  return true;
+  if (u.pathname === '/api/marble/upload' && req.method === 'POST') {
+    const name = path.basename(u.searchParams.get('filename') ?? 'upload.png').slice(0, 64);
+    const kind = u.searchParams.get('kind') === 'video' ? 'video' : 'image';
+    const tmp = path.join(WORLD_DIR, '.tmp-' + name);
+    fs.mkdirSync(WORLD_DIR, { recursive: true });
+    fs.writeFileSync(tmp, await readBody(req));
+    try {
+      const media_asset_id = await client.uploadMedia(tmp, kind);
+      json(res, 200, { media_asset_id });
+    } finally { fs.rmSync(tmp, { force: true }); }
+    return 'handled';
+  }
+
+  if (u.pathname === '/api/marble/gen' && req.method === 'POST') {
+    const { text, imageUrl, panoUrl, videoUrl, mediaAssetId, kind, isPano, ...opts } = JSON.parse((await readBody(req)).toString() || '{}');
+    json(res, 200, await client.generate({ text, imageUrl, panoUrl, videoUrl, mediaAssetId, kind, isPano }, opts));
+    return 'handled';
+  }
+
+  let m;
+  if ((m = u.pathname.match(/^\/api\/marble\/operation\/([^/]+)$/))) {
+    json(res, 200, await client.getOperation(decodeURIComponent(m[1])));
+    return 'handled';
+  }
+  if ((m = u.pathname.match(/^\/api\/marble\/world\/([^/]+)$/))) {
+    json(res, 200, await client.getWorld(decodeURIComponent(m[1])));
+    return 'handled';
+  }
+  if ((m = u.pathname.match(/^\/api\/marble\/export\/([\w-]+)$/)) && req.method === 'POST') {
+    const { asset_type = 'mesh', format = 'glb' } = JSON.parse((await readBody(req)).toString() || '{}');
+    json(res, 200, await client.exportWorld(m[1], asset_type, format));
+    return 'handled';
+  }
+  if (u.pathname === '/api/marble/save' && req.method === 'POST') {
+    const { worldId, name } = JSON.parse((await readBody(req)).toString() || '{}');
+    const world = await client.getWorld(worldId);
+    const slug = String(name || worldId).replace(/[^\w\-]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'world';
+    const saved = {};
+    for (const [prefer, tag, ext] of [['pano', 'pano', '.png'], ['mesh', 'collider', '.glb'], ['spz', '100k', '.spz']]) {
+      const url = client.assetURL(world, prefer);
+      if (!url) continue;
+      const filename = `${slug}-${tag}${ext}`;
+      await client.download(url, path.join(WORLD_DIR, filename));
+      saved[prefer] = filename;
+    }
+    json(res, 200, { worldId, saved, caption: world.assets?.caption ?? world.caption ?? null });
+    return 'handled';
+  }
+  if (u.pathname === '/api/marble/download' && req.method === 'POST') {
+    const { url, name } = JSON.parse((await readBody(req)).toString());
+    const safe = path.basename(name ?? 'world.glb');
+    const dest = path.join(WORLD_DIR, safe);
+    await client.download(url, dest);
+    json(res, 200, { saved: safe });
+    return 'handled';
+  }
+  return 'skip';
 }
 
-const json = (res, code, data) => {
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-  res.end(JSON.stringify(data));
-};
-const readBody = (req) => new Promise((ok, no) => {
-  const chunks = [];
-  req.on('data', c => chunks.push(c));
-  req.on('end', () => ok(Buffer.concat(chunks)));
-  req.on('error', no);
-});
+export function handleMarbleStatic(req, res, u) {
+  if (req.method !== 'GET') return false;
+  if (u.pathname === '/' || u.pathname === '/index.html') {
+    return sendFile(res, path.join(ROOT, 'tools'), 'world.html');
+  }
+  if (u.pathname.startsWith('/vendor/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'vendor'), decodeURIComponent(u.pathname.slice(8)));
+  }
+  if (u.pathname.startsWith('/worlds/')) {
+    return sendFile(res, WORLD_DIR, decodeURIComponent(u.pathname.slice(8)));
+  }
+  if (u.pathname === '/console-theme.css') {
+    return sendFile(res, path.join(ROOT, 'tools'), 'console-theme.css');
+  }
+  return false;
+}
 
 export function serve(port = 8788) {
   let client;
@@ -54,60 +116,11 @@ export function serve(port = 8788) {
   catch (e) { console.error(e.message); process.exit(1); }
 
   http.createServer(async (req, res) => {
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      });
-      return res.end();
-    }
+    if (req.method === 'OPTIONS') return corsPreflight(res);
     const u = new URL(req.url, 'http://x');
     try {
-      // —— 静态：预览器 + vendor + 已下载的世界资产 ——
-      if (req.method === 'GET') {
-        if (u.pathname === '/' || u.pathname === '/index.html') {
-          if (!sendFile(res, path.join(ROOT, 'tools'), 'world.html')) json(res, 404, { error: 'world.html 不存在' });
-          return;
-        }
-        if (u.pathname.startsWith('/vendor/')) {
-          if (!sendFile(res, path.join(ROOT, 'prototype', 'vendor'), decodeURIComponent(u.pathname.slice(8)))) json(res, 404, { error: 'not found' });
-          return;
-        }
-        if (u.pathname.startsWith('/worlds/')) {
-          if (!sendFile(res, WORLD_DIR, decodeURIComponent(u.pathname.slice(8)))) json(res, 404, { error: 'not found' });
-          return;
-        }
-        if (u.pathname === '/api/marble/files') {   // 列 worlds 目录（预览器文件列表）
-          const files = fs.existsSync(WORLD_DIR) ? fs.readdirSync(WORLD_DIR).filter(f => !f.startsWith('.')) : [];
-          return json(res, 200, { files });
-        }
-      }
-      if (u.pathname === '/api/marble/health') return json(res, 200, { ok: true, service: 'marble' });
-
-      if (u.pathname === '/api/marble/gen' && req.method === 'POST') {
-        const { text, imageUrl, panoUrl, videoUrl, ...opts } = JSON.parse((await readBody(req)).toString() || '{}');
-        return json(res, 200, await client.generate({ text, imageUrl, panoUrl, videoUrl }, opts));
-      }
-
-      let m;
-      if ((m = u.pathname.match(/^\/api\/marble\/operation\/([\w-]+)$/))) {
-        return json(res, 200, await client.getOperation(m[1]));
-      }
-      if ((m = u.pathname.match(/^\/api\/marble\/world\/([\w-]+)$/))) {
-        return json(res, 200, await client.getWorld(m[1]));
-      }
-      if ((m = u.pathname.match(/^\/api\/marble\/export\/([\w-]+)$/)) && req.method === 'POST') {
-        const { asset_type = 'mesh', format = 'glb' } = JSON.parse((await readBody(req)).toString() || '{}');
-        return json(res, 200, await client.exportWorld(m[1], asset_type, format));
-      }
-      if (u.pathname === '/api/marble/download' && req.method === 'POST') {
-        const { url, name } = JSON.parse((await readBody(req)).toString());
-        const safe = path.basename(name ?? 'world.glb');   // 防路径穿越
-        const dest = path.join(WORLD_DIR, safe);
-        await client.download(url, dest);
-        return json(res, 200, { saved: safe });
-      }
+      if (handleMarbleStatic(req, res, u)) return;
+      if (await handleMarbleApi(req, res, u, client) === 'handled') return;
       json(res, 404, { error: 'not found', hint: 'GET /api/marble/health 看服务是否正常' });
     } catch (e) {
       json(res, 500, { error: e.message ?? String(e) });

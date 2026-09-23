@@ -2,7 +2,7 @@
 
 Web3D 抓娃娃机叙事 Demo：四幕方框画幅（记忆）+ 终幕 16:9 故障转场露废墟实景（现实反转）。
 全部美术资产走 Tripo AI 生成，机制边界锁死（三爪抓取 / 三视角 / 鱼眼弱第一人称）。
-设计文档见 `outline.md`，调参指南见 `prototype/PARAMS.md`，界面/模型二开索引见 `prototype/GUIDE.md`。
+完整项目方案（产品、运营、盲盒与共创）见 `PROJECT-方案说明.md`；设计文档见 `outline.md`；参赛与裸眼 3D 见 `CONCEPT-参赛与裸眼3D.md`；调参见 `prototype/PARAMS.md`；界面/模型二开见 `prototype/GUIDE.md`。
 
 ## 启动（玩 / 调试）
 
@@ -60,6 +60,14 @@ node tools/generate.mjs                 # 全量 16 件
 GLB 落到 `prototype/assets/prizes/`，manifest 自动重建，刷新页面即热替换。
 爪子分件：`node tools/generate.mjs claw`。详见 `prototype/PARAMS.md` 末节。
 
+## AI 工具台（Tripo + Marble + PixVerse）
+
+```bash
+node tools/hub.serve.mjs    # http://localhost:8780/  黄强调色统一控制台
+```
+
+剪影记忆/现实对照：`ART-美术设定.md`、`tools/art-pairs.json`。
+
 ## 设计稿工作流（UI 对齐 / 模型风格统一）
 
 **UI 对齐**：设计稿导出 PNG → 放进 `prototype/design/` 并在 `design/manifest.json` 加一行
@@ -94,9 +102,11 @@ prototype/              可玩原型（Three.js 0.170，CDN 引入）
 tools/generate.mjs      Tripo 批处理脚本（Node，零依赖）
 tools/tripo.mjs         Tripo API 全接口薄封装：CLI / 可 import / serve 本地转发（给可视化 UI）
 tools/marble.mjs        Marble 世界生成 API 薄封装（同 tripo 三段式，已实测）
+tools/pixverse.mjs      PixVerse 视频生成 API 薄封装（text/image/transition → MP4）
 tools/devServer.mjs     开发静态服务器（no-store 禁模块缓存）
 tools/TRIPO.md          接口清单 + 分件可动/绑骨动画/替换流程示例
 tools/MARBLE.md         Marble 场景接入手册（资产路径/坐标系/预览器交互/已知坑）
-tools/TOOLS.md          多服务整合方案（Tripo/Marble/TapTap）
+tools/PIXVERSE.md       PixVerse 视频接入手册（积分估算/叙事接入/已知坑）
+tools/TOOLS.md          多服务整合方案（Tripo/Marble/PixVerse/TapTap）
 tools/prompts.json      16 件物品 prompt + 统一风格后缀
 ```
