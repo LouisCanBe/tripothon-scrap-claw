@@ -11,7 +11,8 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../prototype');
+const TOOLS = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
+const ROOT = path.resolve(TOOLS, '../prototype');
 const PORT = +(process.argv[2] || 8000);
 
 const MIME = {
@@ -31,6 +32,13 @@ http.createServer((req, res) => {
   try {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (p === '/') p = '/index.html';
+    if (p === '/comic-render.mjs') {
+      const comic = path.join(TOOLS, 'comic-render.mjs');
+      if (existsSync(comic)) {
+        res.writeHead(200, { 'Content-Type': MIME['.mjs'], 'Cache-Control': 'no-store' });
+        return createReadStream(comic).pipe(res);
+      }
+    }
     const file = path.join(ROOT, p);
     if (!file.startsWith(ROOT) || !existsSync(file) || !statSync(file).isFile()) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

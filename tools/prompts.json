@@ -23,5 +23,9 @@
     "foil":    { "prompt": "a crumpled ball of aluminum foil" }
   },
 
-  "_claw": { "prompt": "a three-pronged mechanical claw from an arcade claw machine, industrial metal, open gripper", "model": "v3.1-20260211" }
+  "_claw": {
+    "prompt": "arcade claw machine gripper ONLY: exactly three identical symmetrical metal prongs in tripod layout, open position, no extra arms, no humanoid, no base cabinet, industrial steel, simple geometry",
+    "model": "v3.1-20260211",
+    "note": "generate_parts 常分出十几片且形态非三爪；生成后必须在 Hub 预览+染色确认 prongGroups 再 useTripoGLB"
+  }
 }

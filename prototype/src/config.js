@@ -14,8 +14,7 @@ export const CONFIG = {
     boundsZ: [-0.90, 0.90],  // 爪子可达范围（前后）
 
     // —— 落爪时序（紧张感核心；落下后输入锁死、不可取消）——
-    restY: 1.55,             // 待机/巡移高度
-    grabY: 0.50,             // 下抓到底高度（爪尖刚好触地）
+    restY: 1.55,             // 待机/巡移高度（逻辑见 restYBase）
     dropSpeed: 2.4,          // 下落速度
     liftSpeed: 1.35,         // 上升速度（比下落慢 → 悬心感）
     closeDelay: 0.18,        // 到底→合爪的停顿（屏息感）
@@ -26,7 +25,25 @@ export const CONFIG = {
     // —— 爪力与滑落（难度旋钮核心）——
     gripStrength: 0.85,      // 全局爪力 0~1；p(抓住) = gripStrength × item.gripFactor
     baseSlipProb: 0.38,      // 滑落权重；p(上升中滑落) = baseSlipProb × (1 - gripStrength × gripFactor)
-    grabRadius: 0.30,        // 合爪判定半径（水平距离）
+    grabRadius: 0.75,        // 合爪判定半径；≈ grabRadiusBase × pool.visualScale
+    grabRadiusBase: 0.30,
+    // 垂直（米）：grabY/hang 只跟爪 meshVisualScale；grabRadius 跟 pool.visualScale
+    grabY: 0.50,             // 落爪停高度（claw 组 y）；灰盒尖深≈tipDepthBase → 尖近池底
+    grabYBase: 0.50,
+    restYBase: 1.55,
+    tipDepthBase: 0.53,      // 灰盒爪尖相对 crown 的向下伸出（× meshVisualScale）
+    hangOffsetBase: 0.52,    // 抓住时奖品在爪尖下（× meshVisualScale）
+    deliverDropBase: 0.75,
+    meshVisualScale: 1.0,    // 爪模型展示倍率（≠ pool.visualScale）
+    useLambertMaterials: true, // 爪组用 Lambert，切断 IBL 镜面闪
+    envMapIntensity: 0,        // 若仍用 Standard 时环境反射
+    metalRoughness: 0.88,
+    metalness: 0.12,
+    comicFx: {
+      enabled: false,
+      outline: 0.032,
+      outlineColor: 0x141210,
+    },
     wobbleAmp: 0.022,        // 上升途中奖品抖动幅度（滑落预兆演出）
     wobbleFreq: 9.0,         // 抖动频率
 
@@ -40,10 +57,13 @@ export const CONFIG = {
   // 判定/状态机不变，只替换视觉；加载失败自动回退 procedural 爪。
   // 分件归属用浏览器染色法确认：staticParts 不动；prongGroups 同组共享一个开合关节。
   clawGLB: {
+    useTripoGLB: true,       // 仓库 8 分件版（part_0..7）；失败回退灰盒三爪
+    requireProngCount: 3,
     url: 'assets/machine/claw_parts.glb',
-    scale: 0.58,           // 模型高约 1.0 → 缩到 procedural 爪的体量（尖深≈0.53）
+    scale: 0.58,
+    scaleWithPrize: 1.15,    // 略放大以配合 2.5× 娃娃，勿与 meshVisualScale 叠乘过大
     offsetY: -0.24,        // 缩放后整体下移：顶盖≈+0.05 接吊缆，爪尖≈-0.53
-    staticParts: ['tripo_part_0', 'tripo_part_2', 'tripo_part_5', 'tripo_part_7'], // 外壳/中柱/细杆/顶盖
+    staticParts: ['tripo_part_0', 'tripo_part_2', 'tripo_part_5', 'tripo_part_7'],
     prongGroups: [         // 三条爪臂；part_6 小关节贴在前臂上，同组随动
       ['tripo_part_1', 'tripo_part_6'],
       ['tripo_part_3'],
@@ -79,6 +99,34 @@ export const CONFIG = {
     bloomThreshold: 0.8,     // 泛光亮度阈值：只有比它亮的才晕（0.72 时金属爪会晕开）
   },
 
+  // —— 主场景灯光（见 prototype/LIGHTING.md）——
+  lights: {
+    hemi: { sky: 0xfff2dd, ground: 0x191a20, intensity: 0.55 },
+    key: {
+      color: 0xffe7c4,
+      intensity: 1.1,
+      position: [2.5, 4, 3],
+      shadowHalf: 2.6,
+      shadowNear: 1,
+      shadowFar: 12,
+      shadowBias: -0.002,
+      shadowNormalBias: 0.02,
+    },
+    glow: {
+      color: 0xffd9a0,
+      intensity: 5.5,       // 原 10：机内点光过强易把爪打闪
+      distance: 7,
+      decay: 1.8,
+      position: [0, 1.85, 0.35],
+    },
+    revealCold: {
+      keyColor: 0xa8b8cc,
+      keyIntensity: 0.35,
+      hemiIntensity: 0.15,
+      envMul: 0.35,
+    },
+  },
+
   // —— 渲染质感（阴影 / 色调映射 / 环境光）——
   render: {
     shadows: true,           // 阴影总开关（关了回到平板光）
@@ -98,6 +146,50 @@ export const CONFIG = {
   pool: {
     boundsX: [-1.30, 1.30],
     boundsZ: [-0.85, 0.85],
+    boundsWallMargin: 0.06,  // 按娃娃足迹 clamp 时额外留白（防穿模）
+    // 奖品视觉体量：槽位尺寸来自 prizePool PRIZE_TABLE[].collider，再乘此系数（GLB 走 normalizeGLB 同倍率）
+    visualScale: 2.5,
+    // Tripo 娃娃若横躺：绕 X 额外旋转（弧度），与 Hub 预览里手动摆正同理，默认 0 等你验证后再调
+    glbExtraRotX: 0,
+
+    // 漫画渲染（与 tools/ui.html「漫画渲染」同参，只作用于奖池 mesh）
+    comicFx: {
+      enabled: false,
+      outline: 0.028,
+      outlineColor: 0x141210,
+      exposure: 1.15,
+      keyIntensity: 1.35,
+      envIntensity: 0.12,
+    },
+  },
+
+  // 终幕 Marble：mode 'pano' = 仅全景（与工具台 PNG 一致）；'immersive' = SPZ + collider 边界 + WASD
+  reveal: {
+    mode: 'pano',
+    pano: 'assets/worlds/reveal-draft-pano.png',
+    colliderGlb: 'assets/worlds/reveal-draft-collider.glb',
+    spz: 'assets/worlds/reveal-draft-100k.spz',
+    boundsMargin: 0.45,        // AABB 内缩（越大越不容易贴到盒边）
+    collisionSkin: 0.35,       // 沿 collider 网格射线阻挡的留白（米）
+    showBoundsHelper: false,   // true：显示 collider 包围盒线框，核对是否贴 SPZ
+    moveSpeed: 4,              // immersive 行走速度（sceneControls.moveSpeed）
+    backgroundIntensity: 1.0,
+    yawOffset: 0,              // 全景与机位朝向对不齐时微调（弧度）
+    lookSensitivity: 0.005,    // 与 Marble 工具台默认一致
+    keyLookSpeed: 1.8,         // 仅 keyboardLook:true 时生效
+    pitchMin: -1.45,
+    pitchMax: 1.45,
+    fov: 78,
+    // 终幕相机能力开关（SceneControls.features，见 sceneControls.js）
+    controls: {
+      pointerLook: true,       // 画布拖拽环视（与 world.html pano 相同）
+      moveWalk: false,         // pano 模式请保持 false；immersive 会在 onReveal 里改成 fpsWalk
+      moveVertical: true,      // immersive 会强制开启；pano 下无效
+      keyboardLook: false,     // false = WASD 不转视角（工具台全景 likewise）
+      wheelFov: true,
+      wheelOrbitDist: false,
+      modeToggle: false,
+    },
   },
 
   // —— 触屏/低性能设备防护（iPad/手机防崩）——

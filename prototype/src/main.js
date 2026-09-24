@@ -22,6 +22,14 @@ import { DesignOverlay } from './designOverlay.js';
 import { buildMachineShell } from './machineShell.js';
 import { Director } from './director.js';
 import { DEFAULT_HINT } from './acts.js';
+import { SceneControls, SceneControlPresets } from './sceneControls.js';
+import { mountMarbleImmersive } from './revealMarble.js';
+import { refreshPrizeComicFx } from './prizeComicFx.js';
+import { refreshClawComicFx } from './clawComicFx.js';
+import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
+import { createSceneLights, applyRevealColdLighting } from './sceneLighting.js';
+
+loadPoolDevOverrides();
 
 // —— 渲染器 ——
 // 触屏设备（iPad/手机）降渲染分辨率上限：Retina ×2 全幅 + 后处理极易爆显存崩标签页
@@ -49,33 +57,26 @@ scene.background = new THREE.Color(0x0b0b0d);
 
 const camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, innerWidth / innerHeight, 0.1, 60);
 
-// —— 灯光：记忆层的"暖"（终幕转冷）——
-const hemi = new THREE.HemisphereLight(0xfff2dd, 0x191a20, 0.55);
-scene.add(hemi);
-const key = new THREE.DirectionalLight(0xffe7c4, 1.1);
-key.position.set(2.5, 4, 3);
-// 主光投阴影：范围框住机器即可，太大反而糊
-key.castShadow = CONFIG.render.shadows;
-key.shadow.mapSize.setScalar((COARSE ? 0.5 : 1) * CONFIG.render.shadowMapSize);
-key.shadow.camera.left = key.shadow.camera.bottom = -2.6;
-key.shadow.camera.right = key.shadow.camera.top = 2.6;
-key.shadow.camera.near = 1; key.shadow.camera.far = 12;
-key.shadow.bias = -0.002;              // 防自阴影条纹
-key.shadow.normalBias = 0.02;
-scene.add(key);
-const glow = new THREE.PointLight(0xffd9a0, 10, 7, 1.8);
-glow.position.set(0, 1.7, 0.4);
-scene.add(glow);
+const { hemi, key, glow } = createSceneLights(scene, {
+  shadows: CONFIG.render.shadows,
+  shadowMapSize: CONFIG.render.shadowMapSize,
+  coarse: COARSE,
+});
 
 // —— 世界组：机器 + 奖池 + 爪（终幕整组隐藏，切实景）——
 const world = new THREE.Group();
 scene.add(world);
+const revealRoot = new THREE.Group();
+scene.add(revealRoot);
+let revealImmersive = null;
 buildMachineShell(world);
 const items = spawnPool(world);
 enableShadows(world);   // 机器壳+几何体奖品统一开阴影（玻璃罩透明自动跳过投影）
 // manifest 有 GLB 的：预编译后逐个弹出热替换；进度喂给加载画面
 const prizesReady = upgradeVisuals(world, items, renderer, camera, (d, t) => {
   prizeDone = d; prizeTotal = t; paintLoading();
+}).then(() => {
+  refreshPrizeComicFx(items, { renderer, key, scene });
 });
 
 // —— 飘字 toast（收集反馈 / 模式切换提示）——
@@ -93,6 +94,7 @@ function toast(text) {
 // —— 爪机 ——
 let director;   // 前向声明：claw 的 hooks 里闭包引用
 const claw = new ClawMachine(world, items, {
+  onClawVisualReady: () => refreshClawComicFx(claw),
   onMessage: (t) => director?.msg(t),
   onCollect: (item) => {
     const el = document.getElementById('collected');
@@ -101,8 +103,12 @@ const claw = new ClawMachine(world, items, {
     director?.notify('collect', item);
   },
 });
-const clawReady = claw.upgradeClawVisual(renderer, camera)   // AI 分件爪热替换（失败回退 procedural）
-  .then(() => { clawLoaded = true; paintLoading(); });
+const clawReady = claw.upgradeClawVisual(renderer, camera)
+  .then(() => {
+    refreshClawComicFx(claw);
+    clawLoaded = true;
+    paintLoading();
+  });
 
 // —— 镜头 / 画幅 / 后处理 / 输入 ——
 const rig = new CameraRig(camera);
@@ -117,42 +123,149 @@ window.addEventListener('framechange', (e) => {
   if (CONFIG.frame.fisheyeFadeOnWide) post.setFisheyeFade(e.detail === 'wide' ? 0 : 1);
 });
 
-// —— 终幕实景（占位版：冷调废墟角落 + 压扁的罐头；正式版换生成的实景资产）——
-function onReveal() {
-  world.visible = false;
-  key.color.set(0x8ea6c2); key.intensity = 0.5;
-  hemi.intensity = 0.22;
-  glow.visible = false;
-  scene.fog = new THREE.Fog(0x05060a, 3.5, 13);
+// —— 终幕 Marble 全景（预加载，reveal 时切背景）——
+const panoLoader = new THREE.TextureLoader();
+let revealPanoTex = null;
+panoLoader.load(
+  CONFIG.reveal.pano,
+  (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    revealPanoTex = tex;
+  },
+  undefined,
+  (err) => console.warn('[reveal] 全景加载失败', CONFIG.reveal.pano, err),
+);
 
-  const g = new THREE.Group();
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(30, 30),
-    new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2;
-  g.add(ground);
+function applyRevealPano(tex) {
+  scene.background = tex;
+  scene.backgroundIntensity = CONFIG.reveal.backgroundIntensity ?? 1;
+}
 
-  const squashed = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06, 0.06, 0.028, 16),
-    new THREE.MeshStandardMaterial({ color: 0x7a5238, roughness: 0.8, metalness: 0.5 }));
-  squashed.position.set(0.25, 0.014, 0.9);
-  g.add(squashed);
+function onRevealColdLighting() {
+  scene.fog = null;
+  applyRevealColdLighting({ key, glow, hemi }, scene);
+}
 
-  const rubbleMat = new THREE.MeshStandardMaterial({ color: 0x191b1f, roughness: 1 });
-  for (const [x, y, z, s] of [[-0.9, 0.16, 0.2, 0.5], [0.8, 0.22, -0.3, 0.7], [-0.3, 0.12, 1.4, 0.4]]) {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(s, s * 0.6, s * 0.7), rubbleMat);
-    b.position.set(x, y, z);
-    b.rotation.y = Math.random() * 3;
-    g.add(b);
+const revealCtl = new SceneControls(camera, {
+  mode: 'fps',
+  features: { ...SceneControlPresets.panoLook.features, ...CONFIG.reveal.controls },
+  lookSensitivity: CONFIG.reveal.lookSensitivity ?? 0.005,
+  keyLookSpeed: CONFIG.reveal.keyLookSpeed ?? 1.8,
+  yawOffset: CONFIG.reveal.yawOffset ?? 0,
+  baseFov: CONFIG.reveal.fov ?? CONFIG.camera.fov,
+});
+let revealControlsOn = false;
+const elHint = document.getElementById('hint');
+const elViewDots = document.getElementById('viewDots');
+
+function applyRevealFeatures() {
+  const immersive = CONFIG.reveal.mode === 'immersive';
+  const c = CONFIG.reveal.controls;
+  if (immersive) {
+    revealCtl.setFeatures({
+      ...SceneControlPresets.fpsWalk.features,
+      ...c,
+      moveWalk: true,
+      moveVertical: c.moveVertical ?? true,
+      keyboardLook: false,
+      modeToggle: true,
+    });
+  } else {
+    revealCtl.setFeatures({
+      ...SceneControlPresets.panoLook.features,
+      ...c,
+      moveWalk: false,
+      keyboardLook: false,
+    });
   }
-  scene.add(g);
+}
+
+function enableRevealControls({ recapture = true } = {}) {
+  if (recapture) revealCtl.captureFromCamera();
+  revealCtl.attachPointer(renderer.domElement);
+  revealCtl.setEnabled(true);
+  revealControlsOn = true;
+  pointerCtl.setLookMode(false);
+  pointerCtl.setStagePassthrough(true);
+  if (elViewDots) elViewDots.style.opacity = '0.25';
+  const immersive = CONFIG.reveal.mode === 'immersive';
+  elHint.textContent = immersive
+    ? '按住拖拽环视 · WASD 走动 · QE 升降 · 滚轮 FOV · V 切换环视'
+    : '按住拖拽环视 · 滚轮缩放视野';
+  elHint.style.opacity = '1';
+  toast(immersive ? '沉浸式废墟' : '环视废墟实景');
+}
+
+async function teardownRevealAssets() {
+  revealImmersive?.dispose();
+  revealImmersive = null;
+  revealRoot.clear();
+  revealCtl.setColliderMeshes(null);
+  revealCtl.setBounds(null);
+}
+
+async function onReveal() {
+  world.visible = false;
+  onRevealColdLighting();
+  await teardownRevealAssets();
+  applyRevealFeatures();
+
+  if (CONFIG.reveal.mode === 'immersive') {
+    scene.background = null;
+    try {
+      revealImmersive = await mountMarbleImmersive(revealRoot, {
+        colliderUrl: CONFIG.reveal.colliderGlb,
+        spzUrl: CONFIG.reveal.spz,
+        showBoundsHelper: !!CONFIG.reveal.showBoundsHelper,
+      });
+      const { bounds } = revealImmersive;
+      const center = bounds.getCenter(new THREE.Vector3());
+      const size = bounds.getSize(new THREE.Vector3());
+      revealCtl.yaw = 0;
+      revealCtl.pitch = 0;
+      revealCtl.pos.set(center.x, bounds.min.y + 1.55, center.z + size.z * 0.15);
+      revealCtl.setBounds(bounds, CONFIG.reveal.boundsMargin ?? 0.3);
+      revealCtl.setColliderMeshes(
+        revealImmersive.colliderMeshes,
+        CONFIG.reveal.collisionSkin ?? 0.35,
+      );
+      if (CONFIG.reveal.moveSpeed) revealCtl.moveSpeed = CONFIG.reveal.moveSpeed;
+      revealCtl.apply();
+      applyRevealFeatures();
+    } catch (e) {
+      console.error('[reveal immersive]', e);
+      toast('沉浸式加载失败，回退全景', true);
+      CONFIG.reveal.mode = 'pano';
+      applyRevealFeatures();
+      if (revealPanoTex) applyRevealPano(revealPanoTex);
+    }
+  } else if (revealPanoTex) {
+    applyRevealPano(revealPanoTex);
+  } else {
+    panoLoader.load(CONFIG.reveal.pano, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      revealPanoTex = tex;
+      applyRevealPano(tex);
+    });
+  }
+  enableRevealControls({ recapture: CONFIG.reveal.mode !== 'immersive' });
+}
+
+/** 控制台：await __debug.revealPreview('immersive') */
+async function revealPreview(mode) {
+  if (mode === 'pano' || mode === 'immersive') CONFIG.reveal.mode = mode;
+  director?.mask?.setLayout('wide', false);
+  await onReveal();
+  return `mode=${CONFIG.reveal.mode} moveWalk=${revealCtl.features.moveWalk} pos=${revealCtl.pos.toArray().map(n => n.toFixed(2)).join(',')}`;
 }
 
 // —— 导演（流程编排中枢）——
 director = new Director({
   mask, claw, rig,
   lights: { key, glow, hemi },
-  hooks: { onReveal },
+  hooks: { onReveal, onLightsCold: onRevealColdLighting },
 });
 
 // —— 输入接线（带幕间权限闸）——
@@ -162,6 +275,11 @@ input.on('cycle', (d) => { if (director.allow('view')) { rig.cycle(d); director.
 input.on('next', () => director.skip());
 // 近/远取景切换：仅居中画幅幕开放（一幕右布局用 far 会穿帮）
 input.on('frameMode', () => {
+  if (revealControlsOn && revealCtl.features.modeToggle) {
+    revealCtl.toggleMode();
+    toast(revealCtl.mode === 'fps' ? '第一人称' : '环视');
+    return;
+  }
   if (director.act?.layout === 'center') {
     mask.toggleViewMode();
     toast(mask.viewMode === 'near' ? '凑近' : '站远');
@@ -176,10 +294,13 @@ input.on('designLock', () => design.toggleLock());
 input.on('designReset', () => design.reset());
 input.on('designCycle', (d) => design.cycle(d));
 
-// —— 指针手势：拖拽切视角（过权限闸）/ 滚轮与捏合缩放（用户层，不碰幕级调参）——
-new PointerControls(document.getElementById('stage'), {
+// —— 指针手势：拖拽切视角（过权限闸）/ 终幕环视 / 滚轮与捏合缩放 ——
+const pointerCtl = new PointerControls(document.getElementById('stage'), {
   onCycle: (d) => { if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); } },
-  onZoomFactor: (f) => rig.setUserZoom(rig.userZoom * f),
+  onZoomFactor: (f) => {
+    if (revealControlsOn) revealCtl.applyWheelFactor(f);   // 触屏双指捏合（滚轮走 canvas 上的 sceneControls）
+    else rig.setUserZoom(rig.userZoom * f);
+  },
 });
 
 // —— 调参面板（H 切换显隐；画幅按钮是调试入口，正常流程由导演接管）——
@@ -198,7 +319,7 @@ const gui = new GUI({ title: '爪机手感调参' });
   const g = gui.addFolder('爪力 / 滑落（导演按幕覆盖）');
   g.add(CONFIG.claw, 'gripStrength', 0, 1, 0.01).listen();
   g.add(CONFIG.claw, 'baseSlipProb', 0, 1, 0.01);
-  g.add(CONFIG.claw, 'grabRadius', 0.15, 0.5, 0.01);
+  g.add(CONFIG.claw, 'grabRadius', 0.2, 1.2, 0.02).name('grabRadius(联动scale)');
   g.add(CONFIG.claw, 'wobbleAmp', 0, 0.06, 0.001);
 
   const c = gui.addFolder('镜头');
@@ -214,9 +335,72 @@ const gui = new GUI({ title: '爪机手感调参' });
   p.add(CONFIG.post, 'bloom', 0, 1.2, 0.02);
   p.add(CONFIG.post, 'bloomThreshold', 0.3, 1, 0.02);
 
+  const lf = gui.addFolder('场景灯光');
+  lf.add(CONFIG.lights.hemi, 'intensity', 0, 1.2, 0.02).onChange(v => { hemi.intensity = v; });
+  lf.add(CONFIG.lights.key, 'intensity', 0, 2.5, 0.05).onChange(v => {
+    if (!CONFIG.pool.comicFx.enabled) key.intensity = v;
+  });
+  lf.add(CONFIG.lights.glow, 'intensity', 0, 14, 0.2).onChange(v => { glow.intensity = v; });
+  lf.add(CONFIG.lights.glow.position, '1', 1.2, 2.4, 0.02).name('glow.y').onChange(v => { glow.position.y = v; });
+
+  const cf = gui.addFolder('爪子 / 漫画');
+  const clawComic = CONFIG.claw.comicFx;
+  const refreshClawComic = () => refreshClawComicFx(claw);
+  cf.add(clawComic, 'enabled').name('漫画渲染(仅爪)').onChange(() => { refreshClawComic(); savePoolDev(); });
+  cf.add(clawComic, 'outline', 0, 0.08, 0.002).name('描边').onChange(() => {
+    if (clawComic.enabled) refreshClawComic();
+    savePoolDev();
+  });
+  cf.addColor(clawComic, 'outlineColor').name('描边色').onChange(() => {
+    if (clawComic.enabled) refreshClawComic();
+    savePoolDev();
+  });
+
   const rf = gui.addFolder('渲染质感');
-  rf.add(CONFIG.render, 'exposure', 0.4, 2, 0.02).onChange(v => renderer.toneMappingExposure = v);
-  rf.add(CONFIG.render, 'envIntensity', 0, 1.5, 0.05).onChange(v => scene.environmentIntensity = v);
+  rf.add(CONFIG.render, 'exposure', 0.4, 2, 0.02).onChange(v => {
+    if (!CONFIG.pool.comicFx.enabled) renderer.toneMappingExposure = v;
+  });
+  rf.add(CONFIG.render, 'envIntensity', 0, 1.5, 0.05).onChange(v => {
+    if (!CONFIG.pool.comicFx.enabled) scene.environmentIntensity = v;
+  });
+
+  const pf = gui.addFolder('奖品 / 漫画（Hub 同参）');
+  const savePoolDev = () => savePoolDevOverrides();
+  pf.add(CONFIG.pool, 'visualScale', 0.6, 2.5, 0.05).name('visualScale').onChange((v) => {
+    retunePoolVisualScale(items, v);
+    savePoolDev();
+  });
+  pf.add(CONFIG.pool, 'glbExtraRotX', -Math.PI, Math.PI, 0.05).name('glbExtraRotX(刷新)').onFinishChange(() => {
+    savePoolDev();
+    toast('glbExtraRotX 已保存，刷新页面后载入');
+  });
+  const comic = CONFIG.pool.comicFx;
+  const refreshComic = () => refreshPrizeComicFx(items, { renderer, key, scene });
+  pf.add(comic, 'enabled').name('漫画渲染').onChange(() => { refreshComic(); savePoolDev(); });
+  pf.add(comic, 'outline', 0, 0.08, 0.002).name('描边厚度').onChange(() => {
+    if (comic.enabled) refreshComic();
+    savePoolDev();
+  });
+  pf.addColor(comic, 'outlineColor').name('描边色').onChange(() => {
+    if (comic.enabled) refreshComic();
+    savePoolDev();
+  });
+  pf.add(comic, 'exposure', 0.6, 2, 0.02).name('曝光(comic)').onChange(() => {
+    if (comic.enabled) refreshComic();
+    savePoolDev();
+  });
+  pf.add(comic, 'keyIntensity', 0.4, 2.5, 0.05).name('主光(comic)').onChange(() => {
+    if (comic.enabled) refreshComic();
+    savePoolDev();
+  });
+  pf.add(comic, 'envIntensity', 0, 1, 0.02).name('环境(comic)').onChange(() => {
+    if (comic.enabled) refreshComic();
+    savePoolDev();
+  });
+  pf.add({ 清除本地调试参数: () => {
+    localStorage.removeItem('tripo.poolDev');
+    toast('已清除，刷新后恢复 config 默认');
+  } }, '清除本地调试参数');
 
   const act = {
     '跳过当前幕(N)': () => director.skip(),
@@ -233,7 +417,10 @@ let guiOn = true;
 input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
 
 // —— 调试钩子（控制台/自动化用）——
-window.__debug = { claw, rig, director, mask, items, CONFIG, toast };
+window.__debug = {
+  claw, rig, director, mask, items, CONFIG, toast,
+  revealCtl, enableRevealControls, revealPreview, onReveal,
+};
 
 // 取景绑定：投影平移把机器中心钉在画幅中心（移轴式偏移，无放大、无畸变、与窗口宽度无关），
 // near/far 只是变焦倍率差（nearZoom）。偏移量与倍率都走阻尼 → 转场/切换全部平滑。
@@ -298,9 +485,13 @@ function tick() {
   applyViewRect();
 
   const ax = input.axis();
-  claw.move(ax.x, ax.z, dt);
+  if (revealControlsOn) {
+    revealCtl.tick(dt, { axis: ax, keys: input.keys });   // moveWalk 走 axis；Q/E 走 keys
+  } else {
+    claw.move(ax.x, ax.z, dt);
+    rig.update(dt, t);
+  }
   claw.update(dt, t);
-  rig.update(dt, t);
   tickUpgrades(dt);
   post.render(dt, t);
 }

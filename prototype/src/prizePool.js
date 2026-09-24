@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { GLB_MANIFEST } from './assets.manifest.js';
+import { markItemVisualScale } from './poolDevPersist.js';
 
 // shape: 'box' [w,h,d] | 'cylinder' [r,h] | 'sphere' [r, y压扁系数]
 // gripFactor: 0~1，越小越滑/越重（ junk 普遍偏低 ）
@@ -58,19 +59,47 @@ export const PRIZE_TABLE = [
     collider: { shape: 'box',      size: [0.10, 0.06, 0.10] }, visual: { type: 'primitive', color: 0xa9adb2 } },
 ];
 
-function buildPrimitive(def) {
+export function poolVisualScale() {
+  return CONFIG.pool.visualScale ?? 1;
+}
+
+function slotScale() {
+  return poolVisualScale();
+}
+
+/** 水平占地半径（米），用于贴池壁 clamp */
+export function itemFootprintRadius(def) {
+  const s = poolVisualScale();
   const { shape, size } = def.collider;
+  if (shape === 'box') return Math.max(size[0], size[2]) * 0.5 * s;
+  if (shape === 'cylinder') return size[0] * s;
+  return size[0] * s;
+}
+
+export function clampItemToPoolBounds(item) {
+  if (!item?.mesh || item.state === 'collected' || item.state === 'gripped') return;
+  const [bx0, bx1] = CONFIG.pool.boundsX;
+  const [bz0, bz1] = CONFIG.pool.boundsZ;
+  const r = itemFootprintRadius(item) + (CONFIG.pool.boundsWallMargin ?? 0.06);
+  item.mesh.position.x = THREE.MathUtils.clamp(item.mesh.position.x, bx0 + r, bx1 - r);
+  item.mesh.position.z = THREE.MathUtils.clamp(item.mesh.position.z, bz0 + r, bz1 - r);
+}
+
+function buildPrimitive(def) {
+  const s = slotScale();
+  const { shape, size } = def.collider;
+  const sz = size.map(v => v * s);
   let geo, restY;
   if (shape === 'box') {
-    geo = new THREE.BoxGeometry(...size);
-    restY = size[1] / 2;
+    geo = new THREE.BoxGeometry(...sz);
+    restY = sz[1] / 2;
   } else if (shape === 'cylinder') {
-    geo = new THREE.CylinderGeometry(size[0], size[0], size[1], 18);
-    restY = size[1] / 2;
+    geo = new THREE.CylinderGeometry(sz[0], sz[0], sz[1], 18);
+    restY = sz[1] / 2;
   } else { // sphere（y 压扁 → 袋状）
-    geo = new THREE.SphereGeometry(size[0], 20, 14);
+    geo = new THREE.SphereGeometry(sz[0], 20, 14);
     geo.scale(1, size[1], 1);
-    restY = size[0] * size[1];
+    restY = sz[0] * size[1];
   }
   const mat = new THREE.MeshStandardMaterial({
     color: def.visual.color,
@@ -103,11 +132,14 @@ export function spawnPool(scene) {
     mesh.rotation.y = Math.random() * Math.PI * 2;
     scene.add(mesh);
 
-    items.push({
+    const item = {
       ...def, mesh, restY,
       state: 'idle',   // idle | gripped | falling | delivering | collected
       vy: 0,
-    });
+    };
+    markItemVisualScale(item);
+    clampItemToPoolBounds(item);
+    items.push(item);
   }
   return items;
 }
@@ -214,6 +246,7 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
     enableShadows(g);
     g.position.copy(item.mesh.position);
     g.rotation.copy(item.mesh.rotation);
+    clampItemToPoolBounds({ ...item, mesh: g });
     g.visible = false;
     parent.add(g);
     ready.push({ item, g });
@@ -231,6 +264,7 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
     g.scale.setScalar(0.6);
     _swapAnims.push({ obj: g, t: 0 });
     item.mesh = g;   // 引用替换：爪机/判定读的都是 item.mesh，无感知
+    markItemVisualScale(item);
     await _sleep(90);
   }
 }
@@ -242,11 +276,15 @@ export function normalizeGLB(obj, collider, restY) {
   const size = box.getSize(new THREE.Vector3());
 
   // 2. 等比缩放到 collider 槽位尺寸（以最大边为基准 → 判定与视觉一致）
+  const scaleMul = slotScale();
   const target =
-    collider.shape === 'box'      ? Math.max(...collider.size) :
+    (collider.shape === 'box'      ? Math.max(...collider.size) :
     collider.shape === 'cylinder' ? Math.max(collider.size[0] * 2, collider.size[1]) :
-                                    collider.size[0] * 2;
+                                    collider.size[0] * 2) * scaleMul;
   obj.scale.setScalar(target / Math.max(size.x, size.y, size.z, 1e-6));
+
+  const extraX = CONFIG.pool.glbExtraRotX ?? 0;
+  if (extraX) obj.rotation.x += extraX;
 
   // 3. pivot 归一：底面中心对齐"物品原点"，再按几何体约定下沉 restY
   //    （约定：item.mesh.position.y === restY 时底面贴地，与抓取/落回逻辑一致）

@@ -11,9 +11,39 @@
 // ============================================================
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { nearestItem, capTextures, enableShadows } from './prizePool.js';
+import { nearestItem, capTextures, enableShadows, poolVisualScale, clampItemToPoolBounds } from './prizePool.js';
+import { tameClawMaterials } from './clawMaterials.js';
 
 const C = () => CONFIG.claw;
+
+/** 灰盒爪尖相对 claw 原点的向下伸出（米），与 meshVisualScale 一致 */
+function clawTipReach() {
+  const c = C();
+  const clawS = c.meshVisualScale ?? 1;
+  const tipDepth = c.tipDepthBase ?? 0.53;
+  return tipDepth * clawS;
+}
+
+/**
+ * 落爪高度 / 悬挂 / 判定半径。
+ * grabY、hang 跟「爪模型」走，不跟 pool.visualScale（否则爪视觉 1× 却落到 2.5× 逻辑高度 → 悬空合爪）。
+ * grabRadius 仍跟奖品放大。
+ */
+function clawTune() {
+  const c = C();
+  const prizeS = poolVisualScale();
+  const clawS = c.meshVisualScale ?? 1;
+  const restY = Math.min(c.restYBase ?? c.restY ?? 1.55, 1.88);
+  const reach = clawTipReach();
+  const grabY = c.grabY ?? c.grabYBase ?? Math.max(0.38, reach - 0.03);
+  return {
+    grabY,
+    restY,
+    hang: (c.hangOffsetBase ?? 0.52) * clawS,
+    deliverDrop: c.deliverDropBase ?? 0.75,
+    grabRadius: c.grabRadius ?? (c.grabRadiusBase ?? 0.3) * prizeS,
+  };
+}
 const lerp = THREE.MathUtils.lerp;
 const damp = (a, b, tau, dt) => a + (b - a) * (1 - Math.exp(-dt / Math.max(tau, 1e-4)));
 
@@ -29,6 +59,11 @@ const MESSAGES = {
 };
 
 export class ClawMachine {
+  /** 漫画 / 灯光调试：整副爪机组（含横梁、吊缆） */
+  get rigRoot() {
+    return this.rig;
+  }
+
   constructor(scene, items, hooks = {}) {
     this.items = items;
     this.hooks = hooks;
@@ -36,7 +71,7 @@ export class ClawMachine {
     this.timer = 0;
 
     this.target = new THREE.Vector2(C().home[0], C().home[1]); // 目标点（输入直接驱动它）
-    this.clawY = C().restY;
+    this.clawY = clawTune().restY;
     this.prongT = 0;                 // 0=张开 1=闭合
     this.openAngle = 0.55;           // 爪片张开角（弧度）
     this.closedAngle = -0.14;        // 爪片闭合角
@@ -51,8 +86,9 @@ export class ClawMachine {
   }
 
   #build(scene) {
-    const metal = new THREE.MeshStandardMaterial({ color: 0x9aa0a8, roughness: 0.35, metalness: 0.85 });
-    const dark  = new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.5,  metalness: 0.7 });
+    const c0 = C();
+    const metal = new THREE.MeshLambertMaterial({ color: 0x9aa0a8 });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x3a3d42 });
 
     this.rig = new THREE.Group();
     this.rig.position.set(this.target.x, 0, this.target.y);
@@ -72,16 +108,21 @@ export class ClawMachine {
     this.claw.position.y = this.clawY;
     this.rig.add(this.claw);
 
+    const clawS = c0.meshVisualScale ?? 1;
+    this.clawVisual = new THREE.Group();
+    this.clawVisual.scale.setScalar(clawS);
+    this.claw.add(this.clawVisual);
+
     const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.10, 16), metal);
-    this.claw.add(crown);
+    this.clawVisual.add(crown);
 
     // 三爪片：procedural 建模（灰盒兜底；AI 分件爪由 upgradeClawVisual 热替换）
-    this._procVisuals = [crown];   // 记录 procedural 件，替换时摘除
+    this._procVisuals = [this.clawVisual];   // 记录 procedural 件，替换时摘除
     this.pivots = [];
     for (let i = 0; i < 3; i++) {
       const assembly = new THREE.Group();
       assembly.rotation.y = (i / 3) * Math.PI * 2;
-      this.claw.add(assembly);
+      this.clawVisual.add(assembly);
       this._procVisuals.push(assembly);
 
       const pivot = new THREE.Group();
@@ -100,6 +141,8 @@ export class ClawMachine {
       this.pivots.push(pivot);
     }
     this.#setProngs(0);
+    this._clawMeshVisualScale = clawS;
+    tameClawMaterials(this.rig);
   }
 
   // ============================================================
@@ -110,25 +153,23 @@ export class ClawMachine {
   // ============================================================
   async upgradeClawVisual(renderer, camera) {
     const cfg = CONFIG.clawGLB;
-    if (!cfg?.url) return;
+    if (!cfg?.useTripoGLB || !cfg?.url) return;
     try {
       const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
       const gltf = await new GLTFLoader().loadAsync(cfg.url);
       const root = gltf.scene;
       if (matchMedia('(pointer: coarse)').matches) capTextures(root, CONFIG.mobile.maxTextureSize);
       enableShadows(root);
-      // Tripo 金属件是 metalness=1 全金属：IBL 下会反射整个环境导致过曝发白，
-      // 单独压低环境反射，保留金属质感但不白花
-      root.traverse(o => { if (o.isMesh && o.material?.metalness !== undefined) o.material.envMapIntensity = 0.3; });
+      tameClawMaterials(root);
       const byName = {};
       root.traverse(o => { if (o.name) byName[o.name] = o; });
 
       const newClaw = new THREE.Group();
-      newClaw.scale.setScalar(cfg.scale);
-      newClaw.position.y = cfg.offsetY;
+      const clawS = (C().meshVisualScale ?? 1) * (cfg.scaleWithPrize ?? 1);
+      newClaw.scale.setScalar(cfg.scale * clawS);
+      newClaw.position.y = cfg.offsetY * clawS;
       newClaw.rotation.y = cfg.rotationY ?? 0;   // 转正：让正视角看到开合
       newClaw.add(root);
-      this.claw.add(newClaw);
 
       // 爪臂重挂：每条臂一个 assembly（对齐方位角）+ pivot（关节点）
       const pivots = [];
@@ -149,7 +190,15 @@ export class ClawMachine {
           if (part) pivot.attach(part);               // 保持世界位姿挂到关节下
         }
       }
-      if (!pivots.length) throw new Error('分件里没有可动爪臂');
+      const need = cfg.requireProngCount ?? 3;
+      const partNames = Object.keys(byName).filter(n => n.startsWith('tripo_part')).sort();
+      if (pivots.length !== need) {
+        throw new Error(
+          `Tripo 模型需 ${need} 条可动爪臂，当前 ${pivots.length}；分件: ${partNames.join(', ')}。请在 Hub 预览确认是否为三爪再开 useTripoGLB`,
+        );
+      }
+
+      this.claw.add(newClaw);
 
       // 预编译材质，避免替换瞬间卡帧
       if (renderer && camera) {
@@ -164,9 +213,12 @@ export class ClawMachine {
       this.openAngle = cfg.openAngle;                 // 生成姿态 = 张开
       this.closedAngle = cfg.closeAngle;
       this.#setProngs(this.prongT);
+      tameClawMaterials(newClaw);
       console.log('[claw] AI 分件爪已替换，关节数:', pivots.length);
+      this.hooks.onClawVisualReady?.();
     } catch (err) {
       console.warn('[claw] GLB 爪加载失败，保留 procedural 爪', err);
+      this.hooks.onClawVisualReady?.();
     }
   }
 
@@ -198,15 +250,16 @@ export class ClawMachine {
 
   #judge() {
     const c = C();
+    const t = clawTune();
     const g = c.gripStrength;
-    const cand = nearestItem(this.items, this.rig.position.x, this.rig.position.z, c.grabRadius);
+    const cand = nearestItem(this.items, this.rig.position.x, this.rig.position.z, t.grabRadius);
 
     if (cand && Math.random() < g * cand.gripFactor) {
       this.gripped = cand;
       cand.state = 'gripped';
       // 上升前一次性掷签：是否滑落、在哪个高度滑
       this.slipPlanned = Math.random() < c.baseSlipProb * (1 - g * cand.gripFactor);
-      this.slipAtY = lerp(c.grabY + 0.25, c.restY - 0.20, Math.random());
+      this.slipAtY = lerp(t.grabY + 0.25, t.restY - 0.20, Math.random());
     } else {
       // 没抓住：把碰到的物品碰歪一点（物理存在感的廉价演出）
       if (cand) {
@@ -249,8 +302,9 @@ export class ClawMachine {
           it.vy = -it.vy * 0.3;
         } else {
           it.mesh.position.y = floorY;
-          it.mesh.position.x = THREE.MathUtils.clamp(it.mesh.position.x + THREE.MathUtils.randFloatSpread(0.08), bx0, bx1);
-          it.mesh.position.z = THREE.MathUtils.clamp(it.mesh.position.z + THREE.MathUtils.randFloatSpread(0.08), bz0, bz1);
+          it.mesh.position.x += THREE.MathUtils.randFloatSpread(0.08);
+          it.mesh.position.z += THREE.MathUtils.randFloatSpread(0.08);
+          clampItemToPoolBounds(it);
           it.mesh.rotation.y = Math.random() * Math.PI * 2;
           it.vy = 0;
           it.state = 'idle';
@@ -261,6 +315,7 @@ export class ClawMachine {
 
   update(dt, t) {
     const c = C();
+    const tune = clawTune();
 
     // 爪子 XZ 永远缓动追踪目标点（巡移与回收用不同 tau → 回收更钝）
     const tau = this.state === S.RETURN ? c.returnTau : c.moveTau;
@@ -280,7 +335,7 @@ export class ClawMachine {
       const wobA = c.wobbleAmp * (this.slipPlanned ? 1.7 : 1.0);
       const wx = Math.sin(t * c.wobbleFreq) * wobA;
       const wz = Math.sin(t * c.wobbleFreq * 1.31 + 1.7) * wobA * 0.6;
-      this.gripped.mesh.position.set(this.rig.position.x + wx, this.clawY - 0.52, this.rig.position.z + wz);
+      this.gripped.mesh.position.set(this.rig.position.x + wx, this.clawY - tune.hang, this.rig.position.z + wz);
     }
 
     this.#updateFalling(dt);
@@ -290,7 +345,7 @@ export class ClawMachine {
 
       case S.DROP:
         this.clawY -= c.dropSpeed * dt;
-        if (this.clawY <= c.grabY) { this.clawY = c.grabY; this.timer = c.closeDelay; this.state = S.CLOSE_PAUSE; }
+        if (this.clawY <= tune.grabY) { this.clawY = tune.grabY; this.timer = c.closeDelay; this.state = S.CLOSE_PAUSE; }
         break;
 
       case S.CLOSE_PAUSE:
@@ -315,8 +370,8 @@ export class ClawMachine {
           this.#release(false);
           this.slipPlanned = false;
         }
-        if (this.clawY >= c.restY) {
-          this.clawY = c.restY;
+        if (this.clawY >= tune.restY) {
+          this.clawY = tune.restY;
           this.target.set(c.home[0], c.home[1]);   // 回收：目标点指向洞口
           this.state = S.RETURN;
         }
@@ -330,7 +385,7 @@ export class ClawMachine {
 
       case S.DELIVER:
         this.clawY -= c.dropSpeed * 0.7 * dt;
-        if (this.clawY <= c.restY - 0.75) { this.state = S.OPEN; }
+        if (this.clawY <= tune.restY - tune.deliverDrop) { this.state = S.OPEN; }
         break;
 
       case S.OPEN:
@@ -341,7 +396,7 @@ export class ClawMachine {
 
       case S.RESET:
         this.clawY += c.liftSpeed * 1.4 * dt;
-        if (this.clawY >= c.restY) { this.clawY = c.restY; this.state = S.IDLE; }
+        if (this.clawY >= tune.restY) { this.clawY = tune.restY; this.state = S.IDLE; }
         break;
     }
   }

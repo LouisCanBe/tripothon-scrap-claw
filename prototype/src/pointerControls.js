@@ -10,10 +10,13 @@ const DRAG_THRESHOLD = 60;   // px，超过才算一次"甩视角"
 const WHEEL_SPEED = 0.0012;  // deltaY → 指数缩放系数
 
 export class PointerControls {
-  constructor(el, { onCycle, onZoomFactor }) {
+  constructor(el, { onCycle, onZoomFactor, onLook }) {
     this.el = el;
     this.onCycle = onCycle;
     this.onZoomFactor = onZoomFactor;
+    this.onLook = onLook;
+    this.lookMode = false;
+    this.stagePassthrough = false;   // 终幕：stage 不抢指针，只留 canvas 上 sceneControls
     this.pointers = new Map();   // pointerId → {x, y}（双指捏合用）
     this._drag = null;           // 单指拖拽状态 {startX, startY, cycled}
     this._pinchDist = 0;         // 上一帧双指距离
@@ -28,11 +31,14 @@ export class PointerControls {
     }, { passive: false });
   }
 
+  setStagePassthrough(on) { this.stagePassthrough = !!on; }
+
   _down(e) {
+    if (this.stagePassthrough) return;
     try { this.el.setPointerCapture(e.pointerId); } catch { /* 合成事件/失效指针忽略 */ }
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (this.pointers.size === 1) {
-      this._drag = { startX: e.clientX, startY: e.clientY, cycled: false };
+      this._drag = { startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, cycled: false };
     } else if (this.pointers.size === 2) {
       this._drag = null;   // 进入捏合，取消拖拽判定
       this._pinchDist = this._dist();
@@ -40,6 +46,7 @@ export class PointerControls {
   }
 
   _move(e) {
+    if (this.stagePassthrough) return;
     if (!this.pointers.has(e.pointerId)) return;
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -49,12 +56,22 @@ export class PointerControls {
       this._pinchDist = d;
       return;
     }
-    if (this._drag && !this._drag.cycled) {   // 单指横向甩 → 切视角（一次手势只切一格）
-      const dx = e.clientX - this._drag.startX;
-      const dy = e.clientY - this._drag.startY;
-      if (Math.abs(dx) > DRAG_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        this.onCycle(dx > 0 ? 1 : -1);
-        this._drag.cycled = true;
+    if (this._drag && this.pointers.size === 1) {
+      if (this.lookMode && this.onLook) {
+        const dx = e.clientX - this._drag.lastX;
+        const dy = e.clientY - this._drag.lastY;
+        this._drag.lastX = e.clientX;
+        this._drag.lastY = e.clientY;
+        if (dx || dy) this.onLook(dx, dy);
+        return;
+      }
+      if (!this._drag.cycled) {   // 单指横向甩 → 切视角（一次手势只切一格）
+        const dx = e.clientX - this._drag.startX;
+        const dy = e.clientY - this._drag.startY;
+        if (Math.abs(dx) > DRAG_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          this.onCycle(dx > 0 ? 1 : -1);
+          this._drag.cycled = true;
+        }
       }
     }
   }
@@ -69,4 +86,6 @@ export class PointerControls {
     const [a, b] = [...this.pointers.values()];
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
+
+  setLookMode(on) { this.lookMode = !!on; }
 }

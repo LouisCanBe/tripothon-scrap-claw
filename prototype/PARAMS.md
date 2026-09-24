@@ -102,6 +102,11 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 | `prongGroups` | [1,6] [3] [4] | 同组共享一个关节；part_6 小关节贴前臂同组随动 |
 | `attachY / attachR` | -0.14 / 0.15 | 关节点：臂顶端高度 / 臂根内缘半径（模型单位） |
 | `openAngle / closeAngle` | 0 / -0.50 | 生成姿态即张开；闭合=绕关节内收（负=向内）。臂穿插/合不拢就调它 |
+| `rotationY` | π/2 | 生成模型臂朝侧向时转正，正视角看到「两边向内合」的剪刀感 |
+
+开合实现（灰盒 / Tripo 同一套）：`CLOSE` 阶段 `prongT` 递增 → `#setProngs` 对每个 `pivot` 写 `rotation.z = lerp(openAngle, closeAngle, t)`。Tripo 只是用 `prongGroups`+`attach` 把分件挂到 pivot 上，**转轴仍是 pivot 的 Z**。
+
+落爪：`grabY` / `hang` 只乘 **爪** `meshVisualScale`（与 `tipDepthBase`），**不**乘 `pool.visualScale`；`grabRadius` 才跟奖品放大。
 
 **换新一版爪子模型时**：分件名会变 → 浏览器控制台把 GLB 挂进场景，逐件染不同颜色截图确认归属（本次就是这么标的），再更新 `staticParts` / `prongGroups`。
 
@@ -127,6 +132,20 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 - [ ] F 展开 16:9 时鱼眼同步消退，"梦醒"感成立
 - [ ] 60fps（打开 devtools 确认）
 
+## 奖池尺寸与姿态（`prizePool.js` + `config.pool`）
+
+| 层级 | 位置 | 作用 |
+|------|------|------|
+| **槽位轮廓** | `prizePool.js` → `PRIZE_TABLE[].collider` | 灰盒几何与 Tripo GLB 归一化的目标尺寸（box/cylinder/sphere 米制） |
+| **落地高度** | 同上表 + `buildPrimitive` / `normalizeGLB` 的 `restY` | `mesh.position.y === restY` 时底面贴池底 |
+| **全局放大** | `CONFIG.pool.visualScale` | H 面板可**当场缩放**；数值写入 `localStorage` 键 `tripo.poolDev`，刷新仍保留 |
+| **横躺 GLB** | `CONFIG.pool.glbExtraRotX` | 载入时生效，改后需 **F5**（同样会写入 `tripo.poolDev`） |
+| **漫画** | `CONFIG.pool.comicFx` | 与 Hub 同参；H 面板实时开关，刷新保留 |
+
+Hub 单模型预览还会把模型缩到约 `1.4 / max(包围盒)` 摆到网格上，**游戏内不用这套**，只靠 collider 槽位 + `visualScale`。
+
+---
+
 ## Tripo 接缝（M2 冒烟测试时做）
 
 1. 数据表某项 `visual` 改为 `{ type:'glb', url }`，走 `prizePool.js → normalizeGLB()`（归一化四步已写在注释里）——机制代码零改动；
@@ -139,7 +158,7 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 - 奖池单层平铺，无堆叠物理（正赛如需堆叠再上网格碰撞）
 - 无玻璃反射、无音效、无故障 shader（后处理链已留扩展位）
 - HUD/字幕是最简 HTML，未做漫画分镜样式（二幕美术阶段替换）
-- 终幕实景是占位（冷调地面 + 压扁罐头 + 杂物剪影），正式版换 Marble 生成资产（接入路径见 `tools/MARBLE.md`）
+- 终幕实景：`config.reveal.pano` + 共用 `src/sceneControls.js`（与 Marble 工具台同套）；`yawOffset` 对齐朝向；SPZ 见 `tools/MARBLE.md`
 
 ---
 

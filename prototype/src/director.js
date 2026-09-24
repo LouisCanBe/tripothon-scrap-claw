@@ -185,8 +185,8 @@ export class Director {
     for (let i = 0; i <= 16; i++) {   // ~1.6s 色温渐升
       const t = i / 16;
       key.color.copy(from).lerp(warm, t);
-      key.intensity = 1.1 + 0.6 * t;
-      glow.intensity = 10 + 7 * t;
+      key.intensity = CONFIG.lights.key.intensity + 0.6 * t;
+      glow.intensity = CONFIG.lights.glow.intensity + 7 * t;
       CONFIG.post.grain = grain0 * (1 - 0.55 * t);
       await sleep(100);
     }
@@ -246,7 +246,7 @@ export class Director {
     this.elMsg.style.opacity = '1';
     setTimeout(() => {
       this.elHint.style.opacity = '1';
-      this.elHint.textContent = '（点击画面任意处）';
+      this.elHint.textContent = '（拖拽环视 · 点击继续）';
       const once = () => {
         window.removeEventListener('pointerdown', once);
         this.elHint.style.opacity = '0';

@@ -40,6 +40,12 @@ function hubStatic(req, res, u, dirs) {
   if (p.startsWith('/vendor/')) {
     return sendFile(res, path.join(ROOT, 'prototype', 'vendor'), decodeURIComponent(p.slice(8)));
   }
+  if (p.startsWith('/src/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'src'), decodeURIComponent(p.slice(5)));
+  }
+  if (p.startsWith('/src/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'src'), decodeURIComponent(p.slice(5)));
+  }
   if (p.startsWith('/files/')) {
     return sendFile(res, dirs.tripoGen, decodeURIComponent(p.slice(7)));
   }

@@ -101,6 +101,12 @@ export function handleMarbleStatic(req, res, u) {
   if (u.pathname.startsWith('/vendor/')) {
     return sendFile(res, path.join(ROOT, 'prototype', 'vendor'), decodeURIComponent(u.pathname.slice(8)));
   }
+  if (u.pathname.startsWith('/src/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'src'), decodeURIComponent(u.pathname.slice(5)));
+  }
+  if (u.pathname.startsWith('/src/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'src'), decodeURIComponent(u.pathname.slice(5)));
+  }
   if (u.pathname.startsWith('/worlds/')) {
     return sendFile(res, WORLD_DIR, decodeURIComponent(u.pathname.slice(8)));
   }

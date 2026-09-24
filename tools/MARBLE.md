@@ -104,6 +104,8 @@ viewer.start();
 
 不翻的表现：场景上下颠倒（地面在头顶）。
 
+场景相机控制与游戏终幕共用 **`prototype/src/sceneControls.js`**（`SceneControlPresets` + `features` 开关）。
+
 ## 预览器 world.html（验证接入正确性的工具）
 
 `node tools/marble.mjs serve` → http://localhost:8788/

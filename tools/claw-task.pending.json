@@ -1,0 +1,7 @@
+{
+  "task_id": "67557c2e-da7b-4c47-831f-dde7caab976d",
+  "status": "success",
+  "saved": "prototype/assets/machine/claw_parts.glb",
+  "bytes": 38948644,
+  "note": "生成物非三爪、17 分件无法驱动开合；已弃用。useTripoGLB=false，灰盒三爪。重做见 prompts._claw"
+}

@@ -97,6 +97,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as GSplat from '/vendor/addons/gaussian-splats-3d.js';
+import { SceneControls, SceneControlPresets, attachGlobalKeys } from '/src/sceneControls.js';
+import { SceneControls, SceneControlPresets, attachGlobalKeys } from '/src/sceneControls.js';
 
 const stage = document.getElementById('stage');
 const info = document.getElementById('info');
@@ -104,112 +106,30 @@ const empty = document.getElementById('empty');
 const fileSel = document.getElementById('fileSel');
 let cleanup = null;   // 当前模式的销毁函数
 
-// ---------- 工具：简单轨道拖拽（pano/mesh 共用） ----------
-// 全局按键状态（SELECT/INPUT 聚焦时不劫持，保留下拉框键盘操作）
-const keys = new Set();
-addEventListener('keydown', e => { const t = e.target.tagName; if (t !== 'INPUT' && t !== 'SELECT' && t !== 'TEXTAREA') keys.add(e.key.toLowerCase()); });
-addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
-addEventListener('blur', () => keys.clear());
-
-// 边界（"墙体碰撞"）：target 与相机都被限制在盒内，撞墙即停
-let bounds = null;   // THREE.Box3 | null
-function setBounds(box, margin = 0.3) { bounds = box.clone().expandByScalar(-margin); }
-
-// ---------- 双范式控制器 ----------
-// 第一人称（fps）：相机即身体。拖拽只转视线（位置不动），WASD 移动身体，滚轮 FOV。
-// 第三人称/环视（orbit）：相机绕目标点。拖拽改轨道角，WASD 平移目标点（相机跟随），滚轮距离。
-// 方向约定（两范式手感统一，对齐 OrbitControls / FPS 行业惯例）：
-//   水平：往右拖 = 视线右转（画面内容左移）—— 两范式同公式 yaw -= dx
-//   垂直：往下拖 = 往下看 —— fps: pitch -= dy（低头）；orbit: pitch += dy（相机升高俯视）
-// V 键切换范式（lockPos 的 pano 除外）。切换时状态平滑转换：orbit→fps 身体落在相机处；fps→orbit 目标点放到视线前方。
+// ---------- 共用场景控制（prototype/src/sceneControls.js） ----------
+const globalKeys = attachGlobalKeys();
 let activeCtl = null;
+
+function mountSceneControls(camera, canvas, presetName, extra = {}) {
+  activeCtl?.dispose();
+  const preset = SceneControlPresets[presetName];
+  const ctl = new SceneControls(camera, {
+    canvas,
+    mode: preset.mode,
+    features: { ...preset.features },
+    ...extra,
+  });
+  ctl.setEnabled(true);
+  ctl.apply();
+  activeCtl = ctl;
+  return ctl;
+}
+
 addEventListener('keydown', e => {
   if (e.key.toLowerCase() !== 'v' || e.repeat) return;
   const t = e.target.tagName; if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
-  activeCtl?.toggle();
+  activeCtl?.toggleMode();
 });
-
-function createControls(canvas, cam, { mode = 'orbit', lockPos = false, eye = [0, 1.6, 4], min = 1, max = 20, onMode } = {}) {
-  let yaw = 0, pitch = 0, dist = 6, drag = null;
-  let ctrlMode = mode;
-  const target = new THREE.Vector3(0, 0.8, 0);          // orbit 目标点
-  const pos = new THREE.Vector3(...eye);                // fps 身体位置
-  const baseFov = cam.fov;
-
-  const apply = () => {
-    if (ctrlMode === 'fps') {
-      if (bounds) pos.clamp(bounds.min, bounds.max);
-      cam.position.copy(pos);
-      cam.rotation.set(pitch, yaw, 0, 'YXZ');
-    } else {
-      if (bounds) target.clamp(bounds.min, bounds.max);
-      cam.position.set(
-        target.x + Math.sin(yaw) * Math.cos(pitch) * dist,
-        target.y + Math.sin(pitch) * dist + 0.4,
-        target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
-      if (bounds) cam.position.clamp(bounds.min, bounds.max);   // 相机也不许穿墙
-      cam.lookAt(target);
-    }
-  };
-
-  canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
-  canvas.addEventListener('pointermove', e => {
-    if (!drag) return;
-    yaw -= (e.clientX - drag.x) * 0.005;
-    pitch += (ctrlMode === 'fps' ? -1 : 1) * (e.clientY - drag.y) * 0.005;
-    pitch = Math.max(-1.45, Math.min(1.45, pitch));
-    drag = { x: e.clientX, y: e.clientY }; apply();
-  });
-  canvas.addEventListener('pointerup', () => drag = null);
-  canvas.addEventListener('wheel', e => {
-    e.preventDefault();
-    if (ctrlMode === 'fps') {   // 第一人称滚轮 = FOV 推拉
-      cam.fov = Math.max(30, Math.min(100, cam.fov * Math.exp(e.deltaY * 0.001)));
-      cam.updateProjectionMatrix();
-    } else {                    // 环视滚轮 = 轨道距离
-      dist = Math.max(min, Math.min(max, dist * Math.exp(e.deltaY * 0.001)));
-    }
-    apply();
-  }, { passive: false });
-
-  // WASD/方向键前后左右（沿视线水平朝向），QE 升降；帧率无关
-  const tick = (t, dt) => {
-    if (lockPos) return;   // pano：纯旋转，不移动
-    const speed = 3 * dt;
-    const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-    const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-    const obj = ctrlMode === 'fps' ? pos : target;
-    let moved = false;
-    if (keys.has('w') || keys.has('arrowup'))    { obj.addScaledVector(fwd, speed); moved = true; }
-    if (keys.has('s') || keys.has('arrowdown'))  { obj.addScaledVector(fwd, -speed); moved = true; }
-    if (keys.has('a') || keys.has('arrowleft'))  { obj.addScaledVector(right, -speed); moved = true; }
-    if (keys.has('d') || keys.has('arrowright')) { obj.addScaledVector(right, speed); moved = true; }
-    if (keys.has('q')) { obj.y -= speed; moved = true; }
-    if (keys.has('e')) { obj.y += speed; moved = true; }
-    if (moved) apply();
-  };
-
-  const toggle = () => {
-    if (lockPos) return;
-    if (ctrlMode === 'orbit') {          // 环视 → 第一人称：身体落在相机处，朝向取当前视线
-      pos.copy(cam.position);
-      const dir = target.clone().sub(cam.position).normalize();
-      yaw = Math.atan2(-dir.x, -dir.z);
-      pitch = Math.asin(Math.max(-1, Math.min(1, dir.y)));
-      cam.fov = baseFov; cam.updateProjectionMatrix();
-      ctrlMode = 'fps';
-    } else {                             // 第一人称 → 环视：目标点放到视线前方 dist 处
-      const dir = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
-      target.copy(pos).addScaledVector(dir, dist);
-      ctrlMode = 'orbit';
-    }
-    apply();
-    onMode?.(ctrlMode);
-  };
-
-  apply();
-  return { tick, toggle, get mode() { return ctrlMode; } };
-}
 
 function baseScene() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -240,8 +160,8 @@ function showPano(url) {
     scene.backgroundIntensity = 1;
     info.textContent = '全景图 · 第一人称环视：拖拽转视线 / 滚轮 FOV（接入游戏：scene.background 一行的事）';
   });
-  activeCtl = createControls(renderer.domElement, camera, { mode: 'fps', lockPos: true, eye: [0, 0, 0] });   // 球心纯旋转
-  loop(activeCtl.tick);
+  mountSceneControls(camera, renderer.domElement, 'panoLook', { eye: [0, 0, 0] });
+  loop((t, dt) => activeCtl.tick(dt, globalKeys.keys));
   return dispose;
 }
 
@@ -255,7 +175,7 @@ function showMesh(url) {
   // 默认环视（检视模型），V 切第一人称（走进场景）
   let sizeTxt = '加载中…';
   const setInfo = (m) => info.textContent = `GLB 网格 · ${sizeTxt} · ${m === 'fps' ? '第一人称' : '环视'}：拖拽转视角 / WASD·方向键前后左右 / QE 升降 / 滚轮${m === 'fps' ? ' FOV' : '缩放'} / V 切换范式 · 边界内活动（线框为墙）`;
-  activeCtl = createControls(renderer.domElement, camera, { mode: 'orbit', onMode: setInfo });
+  mountSceneControls(camera, renderer.domElement, 'orbitInspect', { onModeChange: setInfo });
   new GLTFLoader().load(url, (gltf) => {
     gltf.scene.rotation.x = Math.PI;   // Marble GLB 同样是反的
     scene.add(gltf.scene);
@@ -265,12 +185,12 @@ function showMesh(url) {
     const size = box.getSize(new THREE.Vector3());
     // 落地后的精确包围盒 → 边界墙（收缩 0.3m 防贴墙看穿模），线框可视化
     const worldBox = new THREE.Box3().setFromObject(gltf.scene);
-    setBounds(worldBox);
+    activeCtl.setBounds(worldBox);
     scene.add(new THREE.Box3Helper(worldBox, 0x3a4a5a));
     sizeTxt = `${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}m`;
     setInfo(activeCtl.mode);
   });
-  loop(activeCtl.tick);
+  loop((t, dt) => activeCtl.tick(dt, globalKeys.keys));
   return dispose;
 }
 
@@ -280,19 +200,17 @@ async function showSplat(url) {
     rootElement: stage,
     cameraUp: [0, 1, 0],
     sharedMemoryForWorkers: false,
-    useBuiltInControls: false,   // 关掉库自带控制（它的 WASD 是屏幕空间平移、方向键旋转、拖拽轴向反直觉），统一用 createControls
+    useBuiltInControls: false,   // 关掉库自带控制，统一用 sceneControls
   });
   await viewer.addSplatScene(url, { progressiveLoad: false, rotation: [1, 0, 0, 0] });   // Marble SPZ 坐标系与 three 相反：绕 X 翻 180°
   viewer.start();
-  // 边界墙：SPZ 无精确包围盒 API，按 Marble 场景尺度给默认盒（同场景精确边界可由 collider GLB 推导）
-  const spzBounds = new THREE.Box3(new THREE.Vector3(-8, 0.2, -8), new THREE.Vector3(8, 4, 8));
-  setBounds(spzBounds, 0);
-  try { viewer.scene.add(new THREE.Box3Helper(spzBounds, 0x3a5a4a)); } catch {}
-  // 默认第一人称（场景行走），V 切环视（渲染循环由 viewer 自驱动，这里只跑控制 tick）
   const setInfo = (m) => info.textContent = `SPZ 点云 · ${m === 'fps' ? '第一人称' : '环视'}：拖拽转视角 / WASD·方向键前后左右 / QE 升降 / 滚轮${m === 'fps' ? ' FOV' : '缩放'} / V 切换范式 · 边界内活动`;
-  activeCtl = createControls(viewer.renderer.domElement, viewer.camera, { mode: 'fps', max: 20, onMode: setInfo });
+  mountSceneControls(viewer.camera, viewer.renderer.domElement, 'fpsWalk', { orbitMax: 20, onModeChange: setInfo });
+  const spzBounds = new THREE.Box3(new THREE.Vector3(-8, 0.2, -8), new THREE.Vector3(8, 4, 8));
+  activeCtl.setBounds(spzBounds, 0);
+  try { viewer.scene.add(new THREE.Box3Helper(spzBounds, 0x3a5a4a)); } catch {}
   let last, raf;
-  const step = (t) => { const dt = Math.min((t - (last ?? t)) / 1000, 0.1); last = t; activeCtl.tick(t, dt); raf = requestAnimationFrame(step); };
+  const step = (t) => { const dt = Math.min((t - (last ?? t)) / 1000, 0.1); last = t; activeCtl.tick(dt, globalKeys.keys); raf = requestAnimationFrame(step); };
   raf = requestAnimationFrame(step);
   setInfo('fps');
   return () => { cancelAnimationFrame(raf); try { viewer.dispose(); } catch {} };
@@ -301,7 +219,7 @@ async function showSplat(url) {
 // ---------- 调度 ----------
 function open(url) {
   cleanup?.(); cleanup = null;
-  bounds = null; activeCtl = null;   // 清掉上一个模式的边界与控制器
+  activeCtl?.dispose(); activeCtl = null;
   stage.innerHTML = '';   // 清残留：SPZ Viewer 自带的 DOM dispose 不一定移除干净
   empty.hidden = true;
   const ext = url.split('.').pop().toLowerCase();
