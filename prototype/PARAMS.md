@@ -108,6 +108,8 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 
 落爪：`grabY` / `hang` 只乘 **爪** `meshVisualScale`（与 `tipDepthBase`），**不**乘 `pool.visualScale`；`grabRadius` 才跟奖品放大。
 
+**漫画描边**：奖池与 Hub 预览对「整棵 GLB」做 Toon+描边；爪子只对 `comicVisualRoot`（Tripo `newClaw` / 灰盒 `clawVisual`）。描边实现见 `tools/comic-render.mjs`（子 Mesh 零位姿 + 共享 geometry，勿用 `mesh.clone()` 挂自己）。分件爪每片独立转 pivot，描边会跟片走；仍乱时可关 `claw.comicFx.useOutline` 只留 Toon。
+
 **换新一版爪子模型时**：分件名会变 → 浏览器控制台把 GLB 挂进场景，逐件染不同颜色截图确认归属（本次就是这么标的），再更新 `staticParts` / `prongGroups`。
 
 ## 五、后处理

@@ -59,9 +59,18 @@ const MESSAGES = {
 };
 
 export class ClawMachine {
-  /** 漫画 / 灯光调试：整副爪机组（含横梁、吊缆） */
-  get rigRoot() {
-    return this.rig;
+  /** 漫画描边 / 材质：仅悬挂爪体（不含横梁、吊缆） */
+  get comicVisualRoot() {
+    return this._tripoVisual ?? this.clawVisual ?? this.claw;
+  }
+
+  /** 同步 Tripo 爪 GLB 的 scale / offsetY（H 面板调） */
+  syncTripoVisualTransform() {
+    const cfg = CONFIG.clawGLB;
+    if (!this._tripoVisual || !cfg) return;
+    const clawS = (C().meshVisualScale ?? 1) * (cfg.scaleWithPrize ?? 1);
+    this._tripoVisual.scale.setScalar(cfg.scale * clawS);
+    this._tripoVisual.position.y = cfg.offsetY * clawS;
   }
 
   constructor(scene, items, hooks = {}) {
@@ -199,6 +208,7 @@ export class ClawMachine {
       }
 
       this.claw.add(newClaw);
+      this._tripoVisual = newClaw;
 
       // 预编译材质，避免替换瞬间卡帧
       if (renderer && camera) {
@@ -210,8 +220,9 @@ export class ClawMachine {
       for (const o of this._procVisuals) this.claw.remove(o);
       this._procVisuals = [];
       this.pivots = pivots;
-      this.openAngle = cfg.openAngle;                 // 生成姿态 = 张开
+      this.openAngle = cfg.openAngle;
       this.closedAngle = cfg.closeAngle;
+      this.syncTripoVisualTransform();
       this.#setProngs(this.prongT);
       tameClawMaterials(newClaw);
       console.log('[claw] AI 分件爪已替换，关节数:', pivots.length);

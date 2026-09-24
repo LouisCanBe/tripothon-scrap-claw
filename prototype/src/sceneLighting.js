@@ -1,9 +1,13 @@
-// 主场景三点光 + IBL（RoomEnvironment 在 main.js 挂到 scene.environment）
+// 主场景灯光（定版：全局柔照，无机内点光直射）+ IBL
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 
 export function createSceneLights(scene, { shadows = true, shadowMapSize = 2048, coarse = false } = {}) {
   const L = CONFIG.lights;
+
+  const ambient = new THREE.AmbientLight(L.ambient.color, L.ambient.intensity);
+  scene.add(ambient);
+
   const hemi = new THREE.HemisphereLight(L.hemi.sky, L.hemi.ground, L.hemi.intensity);
   scene.add(hemi);
 
@@ -19,29 +23,40 @@ export function createSceneLights(scene, { shadows = true, shadowMapSize = 2048,
   key.shadow.normalBias = L.key.shadowNormalBias;
   scene.add(key);
 
+  const fill = new THREE.DirectionalLight(L.fill.color, L.fill.intensity);
+  fill.position.set(...L.fill.position);
+  fill.castShadow = false;
+  scene.add(fill);
+
   const glow = new THREE.PointLight(L.glow.color, L.glow.intensity, L.glow.distance, L.glow.decay);
   glow.position.set(...L.glow.position);
+  glow.visible = L.glow.intensity > 0.02;
   scene.add(glow);
 
-  return { hemi, key, glow };
+  return { ambient, hemi, key, fill, glow };
 }
 
-/** 娃娃机主玩法默认暖光（终幕 / 四幕合成从此基线插值） */
-export function applyMemoryLighting({ key, glow, hemi }) {
+export function applyMemoryLighting({ key, fill, glow, hemi, ambient }) {
   const L = CONFIG.lights;
+  ambient.intensity = L.ambient.intensity;
+  hemi.intensity = L.hemi.intensity;
   key.color.set(L.key.color);
   key.intensity = L.key.intensity;
-  hemi.intensity = L.hemi.intensity;
-  glow.visible = true;
+  fill.color.set(L.fill.color);
+  fill.intensity = L.fill.intensity;
+  fill.position.set(...L.fill.position);
   glow.intensity = L.glow.intensity;
-  glow.position.set(...L.glow.position);
+  glow.visible = L.glow.intensity > 0.02;
+  if (glow.visible) glow.position.set(...L.glow.position);
 }
 
-export function applyRevealColdLighting({ key, glow, hemi }, scene) {
+export function applyRevealColdLighting({ key, fill, glow, hemi, ambient }, scene) {
   const c = CONFIG.lights.revealCold;
   key.color.set(c.keyColor);
   key.intensity = c.keyIntensity;
+  fill.intensity = (c.fillIntensity ?? 0) * (c.fillMul ?? 0.4);
   hemi.intensity = c.hemiIntensity;
+  ambient.intensity = c.ambientIntensity ?? 0.08;
   glow.visible = false;
   if (scene) scene.environmentIntensity = CONFIG.render.envIntensity * (c.envMul ?? 0.35);
 }

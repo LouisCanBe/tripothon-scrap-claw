@@ -28,7 +28,7 @@ export const CONFIG = {
     grabRadius: 0.75,        // 合爪判定半径；≈ grabRadiusBase × pool.visualScale
     grabRadiusBase: 0.30,
     // 垂直（米）：grabY/hang 只跟爪 meshVisualScale；grabRadius 跟 pool.visualScale
-    grabY: 0.50,             // 落爪停高度（claw 组 y）；灰盒尖深≈tipDepthBase → 尖近池底
+    grabY: 0.80,             // 落爪停高度（claw 组 y）；灰盒尖深≈tipDepthBase → 尖近池底
     grabYBase: 0.50,
     restYBase: 1.55,
     tipDepthBase: 0.53,      // 灰盒爪尖相对 crown 的向下伸出（× meshVisualScale）
@@ -41,7 +41,8 @@ export const CONFIG = {
     metalness: 0.12,
     comicFx: {
       enabled: false,
-      outline: 0.032,
+      useOutline: true,        // false = 仅 Toon 色阶，不描边（分件仍怪时可关）
+      outline: 0.018,          // 分件多，略薄于奖池默认 0.028
       outlineColor: 0x141210,
     },
     wobbleAmp: 0.022,        // 上升途中奖品抖动幅度（滑落预兆演出）
@@ -99,12 +100,13 @@ export const CONFIG = {
     bloomThreshold: 0.8,     // 泛光亮度阈值：只有比它亮的才晕（0.72 时金属爪会晕开）
   },
 
-  // —— 主场景灯光（见 prototype/LIGHTING.md）——
+  // —— 主场景灯光（定版：ambient+半球+主光+补光，无机内点光；见 LIGHTING.md）——
   lights: {
-    hemi: { sky: 0xfff2dd, ground: 0x191a20, intensity: 0.55 },
+    ambient: { color: 0xfff6ee, intensity: 0.38 },
+    hemi: { sky: 0xfff2dd, ground: 0x2a2830, intensity: 0.72 },
     key: {
       color: 0xffe7c4,
-      intensity: 1.1,
+      intensity: 0.72,         // 柔主光，避免白模/金属直射高光
       position: [2.5, 4, 3],
       shadowHalf: 2.6,
       shadowNear: 1,
@@ -112,9 +114,14 @@ export const CONFIG = {
       shadowBias: -0.002,
       shadowNormalBias: 0.02,
     },
+    fill: {
+      color: 0xe8eeff,
+      intensity: 0.48,
+      position: [-2.2, 2.8, -2.0], // 对侧冷补光，抬暗部、不聚光
+    },
     glow: {
       color: 0xffd9a0,
-      intensity: 5.5,       // 原 10：机内点光过强易把爪打闪
+      intensity: 0,              // 默认关；四幕合成可短暂拉高（导演）
       distance: 7,
       decay: 1.8,
       position: [0, 1.85, 0.35],
@@ -123,6 +130,9 @@ export const CONFIG = {
       keyColor: 0xa8b8cc,
       keyIntensity: 0.35,
       hemiIntensity: 0.15,
+      ambientIntensity: 0.08,
+      fillIntensity: 0.48,
+      fillMul: 0.35,
       envMul: 0.35,
     },
   },
@@ -131,8 +141,8 @@ export const CONFIG = {
   render: {
     shadows: true,           // 阴影总开关（关了回到平板光）
     shadowMapSize: 2048,     // 阴影贴图尺寸（移动端自动减半）
-    exposure: 1.12,          // ACES 曝光（开了色调映射后整体会暗一点，这里补）
-    envIntensity: 0.45,      // 环境贴图强度（IBL 给 PBR 材质反射/补光，别盖过主灯氛围）
+    exposure: 1.18,          // 定版全局照：略提曝光补偿无点光
+    envIntensity: 0.58,      // IBL 全局补亮（配合 ambient/半球，少镜面闪）
   },
 
   frame: {

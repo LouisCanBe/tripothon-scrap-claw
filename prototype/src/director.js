@@ -178,15 +178,24 @@ export class Director {
 
   // 四幕：合成演出（DOM 卡片 + 灯光回暖 + 颗粒减弱）
   async #synthesis(act) {
-    const { key, glow } = this.lights;
+    const { key, fill, glow, hemi, ambient } = this.lights;
     const warm = new THREE.Color(0xffc98f);
     const from = key.color.clone();
     const grain0 = CONFIG.post.grain;
-    for (let i = 0; i <= 16; i++) {   // ~1.6s 色温渐升
+    const fill0 = CONFIG.lights.fill.intensity;
+    const hemi0 = CONFIG.lights.hemi.intensity;
+    for (let i = 0; i <= 16; i++) {   // ~1.6s 色温渐升（无点光爆闪，抬补光+半球）
       const t = i / 16;
       key.color.copy(from).lerp(warm, t);
-      key.intensity = CONFIG.lights.key.intensity + 0.6 * t;
-      glow.intensity = CONFIG.lights.glow.intensity + 7 * t;
+      key.intensity = CONFIG.lights.key.intensity + 0.45 * t;
+      if (fill) fill.intensity = fill0 + 0.28 * t;
+      if (hemi) hemi.intensity = hemi0 + 0.18 * t;
+      if (ambient) ambient.intensity = CONFIG.lights.ambient.intensity + 0.12 * t;
+      if (glow) {
+        const g = CONFIG.lights.glow.intensity + 2.5 * t;
+        glow.intensity = g;
+        glow.visible = g > 0.02;
+      }
       CONFIG.post.grain = grain0 * (1 - 0.55 * t);
       await sleep(100);
     }

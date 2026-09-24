@@ -1,25 +1,32 @@
-# 主场景灯光（娃娃机）
+# 主场景灯光 · 定版（2026-03）
 
-## 结构
+## 设计目标
 
-| 来源 | 作用 |
-|------|------|
-| **RoomEnvironment → `scene.environment`** | IBL 反射/补光，强度 `CONFIG.render.envIntensity` |
-| **HemisphereLight** | 天空暖白 + 地面暗部，`CONFIG.lights.hemi` |
-| **DirectionalLight（key）** | 主光、投阴影，右上前，`CONFIG.lights.key` |
-| **PointLight（glow）** | 机内顶灯，在爪/洞口上方，**最容易把金属打成高光** → `CONFIG.lights.glow` |
+- **全局柔和照亮**奖池与机壳，关点光也不黑。
+- **避免机内 PointLight 直射**白模/金属爪（高光、闪）。
+- 漫画 Toon 靠材质；亮度靠 **ambient + 半球 + 双平行光 + IBL**。
 
-终幕：`applyRevealColdLighting`（`main.js` / `sceneLighting.js`）关 glow、降 key/hemi、压环境。
+## 栈（从底到顶）
 
-四幕合成：`director.js` 从当前 key 色插值到暖色，并抬高 key/glow（应读 `CONFIG.lights` 基线）。
+| 层 | 配置 | 作用 |
+|----|------|------|
+| **AmbientLight** | `lights.ambient` | 均匀底光，抬整体暗部 |
+| **HemisphereLight** | `lights.hemi` | 暖天/冷地渐变 |
+| **Directional key** | `lights.key` | 主方向光 + **阴影**（强度偏低） |
+| **Directional fill** | `lights.fill` | 对侧补光，**不投影** |
+| **RoomEnvironment IBL** | `render.envIntensity` | 全局反射/补亮 |
+| **Point glow** | `lights.glow` | **默认 0**；四幕合成可略抬，日常不用 |
 
-## 调参入口
+ACES 曝光：`render.exposure`（定版约 1.18）。
 
-- 代码：`prototype/src/config.js` → `lights`、 `render.envIntensity`
-- 运行时：H 面板「场景灯光」（若已接 GUI）
-- 爪闪：先降 `lights.glow.intensity` / 抬高 `glow.position[1]`；爪材质见 `clawMaterials.js`（Lambert + 关 env）
+## 调参
+
+- H → **场景灯光(定版)**：`环境底光` / `半球` / `主光` / `对侧补光` / `机内点光(慎用)`
+- 爪闪：勿拉高点光；可略增 `环境底光` 或 `envIntensity`
+- 终幕冷光：`applyRevealColdLighting`（压主光/补光/半球）
 
 ## 漫画
 
-- **奖品**：`CONFIG.pool.comicFx`（可改全局曝光/主光）
-- **爪子**：`CONFIG.claw.comicFx`（只 `applyComicStyle(claw.rig)`，不动奖品）
+- 奖池：`pool.comicFx`
+- 爪：`claw.comicFx`（仅 `comicVisualRoot`）
+- 描边：`tools/comic-render.mjs`（共享 geometry 子 Mesh）

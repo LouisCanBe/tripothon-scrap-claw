@@ -57,7 +57,7 @@ scene.background = new THREE.Color(0x0b0b0d);
 
 const camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, innerWidth / innerHeight, 0.1, 60);
 
-const { hemi, key, glow } = createSceneLights(scene, {
+const { ambient, hemi, key, fill, glow } = createSceneLights(scene, {
   shadows: CONFIG.render.shadows,
   shadowMapSize: CONFIG.render.shadowMapSize,
   coarse: COARSE,
@@ -144,7 +144,7 @@ function applyRevealPano(tex) {
 
 function onRevealColdLighting() {
   scene.fog = null;
-  applyRevealColdLighting({ key, glow, hemi }, scene);
+  applyRevealColdLighting({ key, fill, glow, hemi, ambient }, scene);
 }
 
 const revealCtl = new SceneControls(camera, {
@@ -264,7 +264,7 @@ async function revealPreview(mode) {
 // —— 导演（流程编排中枢）——
 director = new Director({
   mask, claw, rig,
-  lights: { key, glow, hemi },
+  lights: { key, fill, glow, hemi, ambient },
   hooks: { onReveal, onLightsCold: onRevealColdLighting },
 });
 
@@ -335,19 +335,41 @@ const gui = new GUI({ title: '爪机手感调参' });
   p.add(CONFIG.post, 'bloom', 0, 1.2, 0.02);
   p.add(CONFIG.post, 'bloomThreshold', 0.3, 1, 0.02);
 
-  const lf = gui.addFolder('场景灯光');
-  lf.add(CONFIG.lights.hemi, 'intensity', 0, 1.2, 0.02).onChange(v => { hemi.intensity = v; });
-  lf.add(CONFIG.lights.key, 'intensity', 0, 2.5, 0.05).onChange(v => {
+  const savePoolDev = () => savePoolDevOverrides();
+
+  const lf = gui.addFolder('场景灯光(定版)');
+  lf.add(CONFIG.lights.ambient, 'intensity', 0, 1, 0.02).name('环境底光').onChange(v => { ambient.intensity = v; });
+  lf.add(CONFIG.lights.hemi, 'intensity', 0, 1.2, 0.02).name('半球光强度').onChange(v => { hemi.intensity = v; });
+  lf.add(CONFIG.lights.key, 'intensity', 0, 2, 0.05).name('主光(投影)').onChange(v => {
     if (!CONFIG.pool.comicFx.enabled) key.intensity = v;
   });
-  lf.add(CONFIG.lights.glow, 'intensity', 0, 14, 0.2).onChange(v => { glow.intensity = v; });
-  lf.add(CONFIG.lights.glow.position, '1', 1.2, 2.4, 0.02).name('glow.y').onChange(v => { glow.position.y = v; });
+  lf.add(CONFIG.lights.fill, 'intensity', 0, 1.2, 0.02).name('对侧补光').onChange(v => { fill.intensity = v; });
+  lf.add(CONFIG.lights.glow, 'intensity', 0, 8, 0.2).name('机内点光(慎用)').onChange(v => {
+    glow.intensity = v;
+    glow.visible = v > 0.02;
+  });
+
+  const ch = gui.addFolder('爪子 / 落点与模型');
+  ch.add(CONFIG.claw, 'grabY', 0.25, 1.2, 0.01).name('落爪停高 grabY');
+  ch.add(CONFIG.claw, 'hangOffsetBase', 0.2, 1.2, 0.01).name('抓物悬挂偏移');
+  ch.add(CONFIG.claw, 'tipDepthBase', 0.3, 0.9, 0.01).name('爪尖深度(灰盒)');
+  ch.add(CONFIG.claw, 'meshVisualScale', 0.5, 2, 0.05).name('灰盒爪缩放').onChange((v) => {
+    if (claw.clawVisual) claw.clawVisual.scale.setScalar(v);
+    claw.syncTripoVisualTransform();
+  });
+  const glb = CONFIG.clawGLB;
+  ch.add(glb, 'offsetY', -0.6, 0.2, 0.01).name('Tripo爪 offsetY').onChange(() => claw.syncTripoVisualTransform());
+  ch.add(glb, 'scale', 0.2, 1.2, 0.01).name('Tripo爪 scale').onChange(() => claw.syncTripoVisualTransform());
+  ch.add(glb, 'scaleWithPrize', 0.8, 2, 0.05).name('Tripo爪 奖池倍率').onChange(() => claw.syncTripoVisualTransform());
+  ch.add(glb, 'openAngle', -1, 1, 0.02).name('张开角').onChange(() => { claw.openAngle = glb.openAngle; });
+  ch.add(glb, 'closeAngle', -1.2, 0.5, 0.02).name('闭合角').onChange(() => { claw.closedAngle = glb.closeAngle; });
 
   const cf = gui.addFolder('爪子 / 漫画');
   const clawComic = CONFIG.claw.comicFx;
   const refreshClawComic = () => refreshClawComicFx(claw);
-  cf.add(clawComic, 'enabled').name('漫画渲染(仅爪)').onChange(() => { refreshClawComic(); savePoolDev(); });
-  cf.add(clawComic, 'outline', 0, 0.08, 0.002).name('描边').onChange(() => {
+  cf.add(clawComic, 'enabled').name('漫画渲染(仅爪体)').onChange(() => { refreshClawComic(); savePoolDev(); });
+  cf.add(clawComic, 'useOutline').name('启用描边').onChange(() => { refreshClawComic(); savePoolDev(); });
+  cf.add(clawComic, 'outline', 0, 0.08, 0.002).name('描边厚度').onChange(() => {
     if (clawComic.enabled) refreshClawComic();
     savePoolDev();
   });
@@ -357,15 +379,14 @@ const gui = new GUI({ title: '爪机手感调参' });
   });
 
   const rf = gui.addFolder('渲染质感');
-  rf.add(CONFIG.render, 'exposure', 0.4, 2, 0.02).onChange(v => {
+  rf.add(CONFIG.render, 'exposure', 0.4, 2, 0.02).name('ACES曝光').onChange(v => {
     if (!CONFIG.pool.comicFx.enabled) renderer.toneMappingExposure = v;
   });
-  rf.add(CONFIG.render, 'envIntensity', 0, 1.5, 0.05).onChange(v => {
+  rf.add(CONFIG.render, 'envIntensity', 0, 1.5, 0.05).name('环境IBL强度').onChange(v => {
     if (!CONFIG.pool.comicFx.enabled) scene.environmentIntensity = v;
   });
 
   const pf = gui.addFolder('奖品 / 漫画（Hub 同参）');
-  const savePoolDev = () => savePoolDevOverrides();
   pf.add(CONFIG.pool, 'visualScale', 0.6, 2.5, 0.05).name('visualScale').onChange((v) => {
     retunePoolVisualScale(items, v);
     savePoolDev();

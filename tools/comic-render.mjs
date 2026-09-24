@@ -36,18 +36,29 @@ function toToonMaterial(mat, gradient) {
   return new THREE.MeshToonMaterial(params);
 }
 
+/**
+ * 背面扩一圈描边。必须用「零位姿子 Mesh + 共享 geometry」；
+ * mesh.clone() 再 add 到自身会复制父级 transform → 分件 GLB 上严重错位（奖池单件往往看不出来）。
+ */
 function addOutline(mesh, { thickness = 0.025, color = 0x141210 } = {}) {
-  const outline = mesh.clone();
-  outline.material = new THREE.MeshBasicMaterial({
-    color,
-    side: THREE.BackSide,
-    transparent: true,
-    opacity: 0.92,
-  });
+  const geo = mesh.geometry;
+  if (!geo) return null;
+  const outline = new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({
+      color,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.92,
+    }),
+  );
   outline.name = (mesh.name || 'mesh') + '__comic_outline';
   outline.userData.comicOutline = true;
   outline.raycast = () => {};
-  outline.scale.multiplyScalar(1 + thickness);
+  const s = 1 + thickness;
+  outline.position.set(0, 0, 0);
+  outline.rotation.set(0, 0, 0);
+  outline.scale.set(s, s, s);
   mesh.add(outline);
   return outline;
 }
@@ -57,6 +68,7 @@ export function applyComicStyle(root, enabled, opts = {}) {
   const gradient = getToonGradient();
   const thickness = opts.outline ?? 0.028;
   const outlineColor = opts.outlineColor ?? 0x141210;
+  const skipOutline = opts.skipOutline === true || thickness <= 0;
 
   root.traverse((o) => {
     if (!o.isMesh || o.userData.comicOutline) return;
@@ -83,7 +95,7 @@ export function applyComicStyle(root, enabled, opts = {}) {
     } else {
       o.material = toToonMaterial(orig, gradient);
     }
-    if (!o.children.some(c => c.userData?.comicOutline)) {
+    if (!skipOutline && !o.children.some(c => c.userData?.comicOutline)) {
       addOutline(o, { thickness, color: outlineColor });
     }
   });

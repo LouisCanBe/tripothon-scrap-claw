@@ -21,7 +21,7 @@ export function syncComicLighting({ renderer, key, scene }, enabled) {
     if ('environmentIntensity' in scene) scene.environmentIntensity = cfg.envIntensity ?? 0.12;
   } else if (!CONFIG.claw.comicFx?.enabled) {
     renderer.toneMappingExposure = CONFIG.render.exposure;
-    key.intensity = CONFIG.lights.key.intensity;
+    key.intensity = CONFIG.lights?.key?.intensity ?? 1.1;
     if ('environmentIntensity' in scene) scene.environmentIntensity = CONFIG.render.envIntensity;
   }
 }
