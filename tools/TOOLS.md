@@ -45,6 +45,7 @@ node tools/pixverse.mjs text --prompt "雨夜小巷" --wait --out prototype/asse
 
 # 游戏开发服务器
 node tools/devServer.mjs 8000
+# 主屏 /  副屏出货展示：http://localhost:8000/display.html（见 prototype/COLLECT-DISPLAY.md）
 ```
 
 美术剪影对照流程见根目录 **`ART-美术设定.md`**，配对表 **`tools/art-pairs.json`**。

@@ -19,43 +19,43 @@ import { markItemVisualScale } from './poolDevPersist.js';
 // gripFactor: 0~1，越小越滑/越重（ junk 普遍偏低 ）
 export const PRIZE_TABLE = [
   // —— 任务三件套（食物）——
-  { id: 'bread',   name: '面包',     category: 'food', quest: true,  gripFactor: 0.95,
+  { id: 'bread',   name: '面包',     category: 'food', quest: true,  gripFactor: 0.95, bounceMaterial: 'soft',
     collider: { shape: 'box',      size: [0.18, 0.10, 0.11] }, visual: { type: 'primitive', color: 0xc8a06a } },
-  { id: 'can',     name: '罐头',     category: 'food', quest: true,  gripFactor: 0.85,
+  { id: 'can',     name: '罐头',     category: 'food', quest: true,  gripFactor: 0.85, bounceMaterial: 'metal',
     collider: { shape: 'cylinder', size: [0.052, 0.13] },      visual: { type: 'primitive', color: 0xb9bec6 } },
-  { id: 'veg',     name: '蔬菜',     category: 'food', quest: true,  gripFactor: 0.90,
+  { id: 'veg',     name: '蔬菜',     category: 'food', quest: true,  gripFactor: 0.90, bounceMaterial: 'soft',
     collider: { shape: 'sphere',   size: [0.075, 0.65] },      visual: { type: 'primitive', color: 0x7f9c5a } },
 
   // —— 与任务物"轮廓相同"的垃圾（核心设计语言）——
-  { id: 'moldy',   name: '发霉面包', category: 'junk', gripFactor: 0.90,
+  { id: 'moldy',   name: '发霉面包', category: 'junk', gripFactor: 0.90, bounceMaterial: 'soft',
     collider: { shape: 'box',      size: [0.18, 0.10, 0.11] }, visual: { type: 'primitive', color: 0x77815f } },
-  { id: 'rustcan', name: '锈罐头盒', category: 'junk', gripFactor: 0.80,
+  { id: 'rustcan', name: '锈罐头盒', category: 'junk', gripFactor: 0.80, bounceMaterial: 'metal',
     collider: { shape: 'cylinder', size: [0.052, 0.13] },      visual: { type: 'primitive', color: 0x8a5f45 } },
-  { id: 'rot',     name: '腐败团',   category: 'junk', gripFactor: 0.85,
+  { id: 'rot',     name: '腐败团',   category: 'junk', gripFactor: 0.85, bounceMaterial: 'soft',
     collider: { shape: 'sphere',   size: [0.075, 0.65] },      visual: { type: 'primitive', color: 0x5c6b4a } },
 
   // —— 填充物：食物 ——
-  { id: 'carton',  name: '纸盒',     category: 'food', gripFactor: 0.95,
+  { id: 'carton',  name: '纸盒',     category: 'food', gripFactor: 0.95, bounceMaterial: 'rubber',
     collider: { shape: 'box',      size: [0.12, 0.15, 0.09] }, visual: { type: 'primitive', color: 0xd6cfc0 } },
-  { id: 'cheese',  name: '干酪块',   category: 'food', gripFactor: 0.90,
+  { id: 'cheese',  name: '干酪块',   category: 'food', gripFactor: 0.90, bounceMaterial: 'soft',
     collider: { shape: 'box',      size: [0.11, 0.08, 0.09] }, visual: { type: 'primitive', color: 0xd9b64f } },
-  { id: 'bottle',  name: '瓶子',     category: 'food', gripFactor: 0.70,
+  { id: 'bottle',  name: '瓶子',     category: 'food', gripFactor: 0.70, bounceMaterial: 'glass',
     collider: { shape: 'cylinder', size: [0.045, 0.17] },      visual: { type: 'primitive', color: 0x7c93a6 } },
-  { id: 'apple',   name: '果子',     category: 'food', gripFactor: 0.75,
+  { id: 'apple',   name: '果子',     category: 'food', gripFactor: 0.75, bounceMaterial: 'soft',
     collider: { shape: 'sphere',   size: [0.06, 0.95] },       visual: { type: 'primitive', color: 0xa8574a } },
-  { id: 'jar',     name: '玻璃罐',   category: 'food', gripFactor: 0.65,
+  { id: 'jar',     name: '玻璃罐',   category: 'food', gripFactor: 0.65, bounceMaterial: 'glass',
     collider: { shape: 'cylinder', size: [0.06, 0.14] },       visual: { type: 'primitive', color: 0x9fb4ac } },
 
   // —— 填充物：垃圾（更滑 / 更重 → 天然难度）——
-  { id: 'brick',   name: '碎砖',     category: 'junk', gripFactor: 0.35,
+  { id: 'brick',   name: '碎砖',     category: 'junk', gripFactor: 0.35, bounceMaterial: 'ceramic',
     collider: { shape: 'box',      size: [0.16, 0.09, 0.10] }, visual: { type: 'primitive', color: 0x6e5a50 } },
-  { id: 'bone',    name: '骨头',     category: 'junk', gripFactor: 0.55,
+  { id: 'bone',    name: '骨头',     category: 'junk', gripFactor: 0.55, bounceMaterial: 'stone',
     collider: { shape: 'cylinder', size: [0.03, 0.19] },       visual: { type: 'primitive', color: 0xcfc8b8 } },
-  { id: 'cloth',   name: '破布团',   category: 'junk', gripFactor: 0.80,
+  { id: 'cloth',   name: '破布团',   category: 'junk', gripFactor: 0.80, bounceMaterial: 'cloth',
     collider: { shape: 'sphere',   size: [0.08, 0.55] },       visual: { type: 'primitive', color: 0x5a5f6b } },
-  { id: 'stone',   name: '石块',     category: 'junk', gripFactor: 0.45,
+  { id: 'stone',   name: '石块',     category: 'junk', gripFactor: 0.45, bounceMaterial: 'stone',
     collider: { shape: 'sphere',   size: [0.065, 0.85] },      visual: { type: 'primitive', color: 0x71706a } },
-  { id: 'foil',    name: '锡箔团',   category: 'junk', gripFactor: 0.60,
+  { id: 'foil',    name: '锡箔团',   category: 'junk', gripFactor: 0.60, bounceMaterial: 'metal',
     collider: { shape: 'box',      size: [0.10, 0.06, 0.10] }, visual: { type: 'primitive', color: 0xa9adb2 } },
 ];
 

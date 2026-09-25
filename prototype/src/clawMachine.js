@@ -289,6 +289,7 @@ export class ClawMachine {
     this.gripped = null;
     if (intoHole) {
       this.hooks.onCollect?.(it);
+      this.hooks.onHoleDrop?.(it);
       this.#say(it.category === 'food' ? 'food' : 'junk');
     } else {
       this.#say('slip');
@@ -303,11 +304,13 @@ export class ClawMachine {
       if (it.state !== 'falling' && it.state !== 'delivering') continue;
       it.vy -= 6.0 * dt;
       it.mesh.position.y += it.vy * dt;
-      const floorY = it.state === 'delivering' ? -0.30 : it.restY;
+      const holeY = CONFIG.collectDisplay?.holeFloorY ?? -0.30;
+      const floorY = it.state === 'delivering' ? holeY : it.restY;
       if (it.mesh.position.y <= floorY) {
         if (it.state === 'delivering') {
           it.mesh.visible = false;
           it.state = 'collected';
+          this.hooks.onVended?.(it);
         } else if (it.vy < -1.0) {
           it.mesh.position.y = floorY;   // 一次小反弹
           it.vy = -it.vy * 0.3;

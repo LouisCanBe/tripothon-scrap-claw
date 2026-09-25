@@ -202,6 +202,68 @@ export const CONFIG = {
     },
   },
 
+  // —— 出货独立展示屏（display.html）——
+  collectDisplay: {
+    enabled: true,
+    channel: 'tripo.collect-display.v1',
+    displayPath: '/display.html',
+    outletKind: 'hole',        // 语义：出货口类型；副屏可读 payload.outlet
+    holeFloorY: -0.30,         // delivering 落至此以下视为离屏（与 clawMachine 同步）
+    // 副屏入场动效（displayMain + collectDisplayEntrance.js，指数阻尼无额外依赖）
+    entrance: {
+      preset: 'dropFromAbove', // 'none' | 'dropFromAbove' | 'fadeScale'
+      dropHeight: 2.35,
+      gravity: 16,
+      fallVariation: 0.07,     // 每次出货：重力/高度 ±7%（可关：0）
+      initialVySpread: 0.15,   // 初速度上下轻微随机（米/秒量级）
+      bounceCount: 2,
+      // bounceCountRandom: [1, 3],
+      bounceRestitution1: 0.44,
+      bounceRestitution2: 0.2,
+      bounceRestitutionFurther: 0.12,
+      impactVyMin: 0.28,
+      coastTauY: 0.09,
+      coastTauVy: 0.11,
+      tumbleDuringDrop: true,
+      tumbleTau: 0.38,
+      floorAnchorTau: 0.07,    // 近地时底面对齐展台（消倾斜压平时的视觉跳）
+      floorAnchorBand: 0.22,
+      idleSpin: 0.85,
+      spinDuringEntrance: 0.22,
+      spinBlendTau: 0.4,       // 入场结束 → idle 自转速度平滑过渡
+      comicFx: true,
+      outline: 0.022,
+    },
+    // 材质弹力预设：与 entrance 合并；见 collectBouncePresets.js、PRIZE_TABLE.bounceMaterial
+    defaultBounceMaterial: 'plastic',
+    // itemBounceMaterial: { bread: 'soft' },  // 可选，覆盖表内未标材质时按 id 指定
+    // categoryBounceMaterial: { junk: 'metal' },
+    bouncePresets: {
+      plastic: {},
+      soft: {
+        bounceRestitution1: 0.52, bounceRestitution2: 0.28, gravity: 14.5,
+      },
+      rubber: {
+        bounceRestitution1: 0.5, bounceRestitution2: 0.25, gravity: 15,
+      },
+      metal: {
+        bounceRestitution1: 0.3, bounceRestitution2: 0.1, bounceCount: 1, gravity: 18,
+      },
+      glass: {
+        bounceRestitution1: 0.36, bounceRestitution2: 0.12, gravity: 17,
+      },
+      ceramic: {
+        bounceRestitution1: 0.34, bounceRestitution2: 0.1, bounceCount: 1, gravity: 18,
+      },
+      cloth: {
+        bounceRestitution1: 0.48, bounceRestitution2: 0.24, gravity: 13,
+      },
+      stone: {
+        bounceRestitution1: 0.26, bounceRestitution2: 0.07, bounceCount: 1, gravity: 19,
+      },
+    },
+  },
+
   // —— 触屏/低性能设备防护（iPad/手机防崩）——
   mobile: {
     maxPixelRatio: 1.5,      // 触屏设备渲染分辨率上限（Retina ×2 全分辨率 + 后处理极易爆显存）

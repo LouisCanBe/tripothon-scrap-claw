@@ -27,6 +27,7 @@ import { mountMarbleImmersive } from './revealMarble.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
 import { refreshClawComicFx } from './clawComicFx.js';
 import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
+import { publishHoleDrop, publishVended, openCollectDisplayWindow } from './collectDisplayBus.js';
 import { createSceneLights, applyRevealColdLighting } from './sceneLighting.js';
 
 loadPoolDevOverrides();
@@ -102,6 +103,8 @@ const claw = new ClawMachine(world, items, {
     toast(`+1 ${item.name}`);
     director?.notify('collect', item);
   },
+  onHoleDrop: (item) => publishHoleDrop(item),
+  onVended: (item) => publishVended(item),
 });
 const clawReady = claw.upgradeClawVisual(renderer, camera)
   .then(() => {
@@ -441,6 +444,7 @@ input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
 window.__debug = {
   claw, rig, director, mask, items, CONFIG, toast,
   revealCtl, enableRevealControls, revealPreview, onReveal,
+  openCollectDisplay: openCollectDisplayWindow,
 };
 
 // 取景绑定：投影平移把机器中心钉在画幅中心（移轴式偏移，无放大、无畸变、与窗口宽度无关），

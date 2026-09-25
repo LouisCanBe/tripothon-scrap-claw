@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>出货展示 · 拾荒娃娃机</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    html {
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: #0a0a0e;
+      color: #f0ece0;
+      font-family: system-ui, sans-serif;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+    header, footer {
+      flex-shrink: 0;
+      padding: 1rem 1.25rem;
+      z-index: 2;
+    }
+    header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.12em; opacity: 0.75; }
+    #prizeName { font-size: clamp(1.5rem, 4vw, 2.4rem); margin-top: 0.35rem; }
+    #prizeMeta { font-size: 0.9rem; opacity: 0.65; margin-top: 0.25rem; }
+    #stage {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #stage canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    #status { font-size: 0.85rem; opacity: 0.7; }
+    #cta {
+      margin-top: 0.75rem;
+      padding: 0.65rem 1rem;
+      border: 1px solid rgba(240,236,224,.25);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      opacity: 0.85;
+    }
+    #cta[hidden] { display: none; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.js",
+      "three/addons/": "./vendor/addons/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>COLLECT DISPLAY</h1>
+    <div id="prizeName">等待出货…</div>
+    <div id="prizeMeta"></div>
+  </header>
+  <div id="stage"></div>
+  <footer>
+    <div id="status">与主游戏同域打开；抓取落洞后将自动更新</div>
+    <div id="cta" hidden data-slot="promo">营销位预留 · 可按 prizeId 接文案/链接/视频</div>
+  </footer>
+  <script type="module" src="./src/displayMain.js"></script>
+</body>
+</html>
