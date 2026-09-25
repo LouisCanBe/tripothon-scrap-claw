@@ -6,6 +6,8 @@
 export class Input {
   constructor() {
     this.keys = new Set();
+    this._analog = { x: 0, z: 0 };
+    this._analogOn = false;
     this._cb = {};
 
     window.addEventListener('keydown', (e) => {
@@ -39,8 +41,22 @@ export class Input {
   press(code)   { this.keys.add(code); }
   release(code) { this.keys.delete(code); }
 
-  // 移动轴：x 左右，z 前后（上 = 向机器深处 -z）
+  /** 屏幕摇杆：-1~1，与键盘轴同语义 */
+  setAnalogMove(x, z) {
+    this._analog.x = x;
+    this._analog.z = z;
+    this._analogOn = Math.hypot(x, z) > 0.08;
+  }
+
+  clearAnalog() {
+    this._analog.x = 0;
+    this._analog.z = 0;
+    this._analogOn = false;
+  }
+
+  // 移动轴：x 左右，z 前后（上 = 向机器深处 -z）；摇杆优先，键盘/屏幕方向键备用
   axis() {
+    if (this._analogOn) return { x: this._analog.x, z: this._analog.z };
     const k = this.keys;
     let x = 0, z = 0;
     if (k.has('ArrowLeft')  || k.has('KeyA')) x -= 1;

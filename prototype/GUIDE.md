@@ -66,7 +66,7 @@
 
 **鼠标/触屏**（同一事件通道，权限闸照常生效）：
 - `src/pointerControls.js`：横向拖拽 = 循环视角；滚轮/双指捏合 = 用户缩放（`rig.userZoom`，与幕级 `zoom`、近远 `modeZoom` 三相乘、互不覆盖；范围在 `config.camera.userZoomMin/Max`）
-- `src/onscreenButtons.js`：屏幕方向键（按住=移动，走 `input.press/release` 虚拟按键）+「抓」「视角」；样式在 `index.html` 的 `#touchUI`；触屏设备自动显示，桌面端 H 面板「屏幕按钮」开关
+- `src/onscreenButtons.js`：左下**虚拟摇杆**（`Input.setAnalogMove`，连续移爪）+「键位」切回屏幕方向键备用 + 右下「抓」「视角」；H 面板「屏幕按钮(摇杆)」/「摇杆/键位切换」
 
 ### 5. 画面观感（鱼眼/颗粒/暗角）
 

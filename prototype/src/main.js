@@ -429,7 +429,11 @@ const gui = new GUI({ title: '爪机手感调参' });
   const act = {
     '跳过当前幕(N)': () => director.skip(),
     '凑近/站远(V)': () => mask.toggleViewMode(),
-    '屏幕按钮': () => buttons.toggle(),
+    '屏幕按钮(摇杆)': () => buttons.toggle(),
+    '摇杆/键位切换': () => {
+      const m = buttons.toggleMoveMode();
+      toast(m === 'joystick' ? '移动：摇杆' : '移动：方向键');
+    },
     '设计稿叠加(G)': () => design.toggle(),
     '右布局(一幕)': () => mask.setLayout('right'),
     '居中(二~四幕)': () => mask.setLayout('center'),
