@@ -45,6 +45,7 @@ node tools/pixverse.mjs text --prompt "雨夜小巷" --wait --out prototype/asse
 
 # 游戏开发服务器
 node tools/devServer.mjs 8000
+node tools/devServer.mjs 8000 --lan   # 内网可访问（终端会打印局域网 IP）
 # 主屏 /  副屏出货展示：http://localhost:8000/display.html（见 prototype/COLLECT-DISPLAY.md）
 ```
 

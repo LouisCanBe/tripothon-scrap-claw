@@ -4,16 +4,42 @@
 // 解决 python http.server 的启发式缓存咬住 ES module 的问题
 // —— 改任何 .js 后普通刷新即生效，不用 Ctrl+F5。
 //
-// 用法：node tools/devServer.mjs [端口=8000]
+// 用法：
+//   node tools/devServer.mjs [端口=8000]           仅本机 127.0.0.1
+//   node tools/devServer.mjs 8000 --lan          0.0.0.0，内网其它设备可访问
+//   node tools/devServer.mjs --host=0.0.0.0
 // ============================================================
 import http from 'node:http';
+import os from 'node:os';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const TOOLS = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const ROOT = path.resolve(TOOLS, '../prototype');
-const PORT = +(process.argv[2] || 8000);
+
+function parseArgs(argv) {
+  let port = 8000;
+  let host = '127.0.0.1';
+  for (const a of argv) {
+    if (a === '--lan' || a === '--bind-all') host = '0.0.0.0';
+    else if (a.startsWith('--host=')) host = a.slice('--host='.length) || host;
+    else if (/^\d+$/.test(a)) port = +a;
+  }
+  return { port, host };
+}
+
+const { port: PORT, host: HOST } = parseArgs(process.argv.slice(2));
+
+function ipv4Lan() {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const i of list ?? []) {
+      if (i.family === 'IPv4' && !i.internal) out.push(i.address);
+    }
+  }
+  return out;
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -53,4 +79,12 @@ http.createServer((req, res) => {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(String(e?.message ?? e));
   }
-}).listen(PORT, '127.0.0.1', () => console.log(`[dev] http://127.0.0.1:${PORT}  (no-store, 根目录 prototype/)`));
+}).listen(PORT, HOST, () => {
+  console.log(`[dev] http://127.0.0.1:${PORT}/  (no-store, prototype/)`);
+  if (HOST === '0.0.0.0') {
+    for (const ip of ipv4Lan()) console.log(`[dev] http://${ip}:${PORT}/  (LAN)`);
+    console.log('[dev] 若连不上：检查 Windows 防火墙是否放行 Node 专用网络');
+  } else {
+    console.log('[dev] 内网访问：加参数 --lan');
+  }
+});

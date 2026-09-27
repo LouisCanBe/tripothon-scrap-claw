@@ -57,7 +57,60 @@
 - 动效库：沿用项目内 **指数阻尼**（与爪机一致）；未引 GSAP。备用 `preset: 'fadeScale'`
 - 动销位：`#cta[data-prize-id]` 预留，后续接文案/跳转/视频不改总线
 
+## 展台多设备（笔记本 + 平板 + 安卓触控盒）— 方案对齐
+
+### 设备分工
+
+| 设备 | 角色 | 典型页面 |
+|------|------|----------|
+| **笔记本** | 现场 **Web 主机**：`devServer --lan` +（规划）出货 **SSE/WS 中转**；可 H 调参 | 本机调试 / 不必必玩 |
+| **平板** | **主游戏**：触控 + 虚拟摇杆，抓娃娃 | `/` |
+| **安卓盒子（触控屏）** | **出货副屏**：全屏 `display.html`；后续可点按、滑动等 **出货界面交互** | `/display.html` |
+
+三台浏览器访问 **同一 origin**（笔记本局域网 IP 或日后 HTTPS 域名），GLB 与 API 同源，避免跨域。
+
+### 网络
+
+- 室外 / 展馆：**笔记本开热点或共 WiFi**，平板与盒子连同一网段；`node tools/devServer.mjs 8000 --lan`。
+- **不依赖公网**即可 demo；日后部署到云时，平板与盒子改为同一 `https://域名`，协议与 payload **不变**。
+
+### 同步原理（规划，未实现）
+
+```text
+平板（publish） ──POST──► 笔记本 /api/collect/publish { room, msg }
+安卓副屏（subscribe） ◄──SSE── 同一 room 的 stream + last 快照
+```
+
+- 消息体与现网 `collectDisplayBus` envelope 一致（`collect.hole_drop` / `collect.vended`、`prize`…）。
+- 同机调试仍走 BroadcastChannel；跨设备时 **双写** Local + Remote（实现时再抽 `Transport`）。
+
+### 展示日 vs 配对（预留）
+
+| 模式 | 用途 | 做法 |
+|------|------|------|
+| **固定房间（展示日推荐）** | 免配对、最快联调 | 盒子 Kiosk 书签 + 平板 URL 共用 `?room=展台1` 与同一笔记本 IP；可完全 **不做扫码** |
+| **配对（预留设置）** | 多展台防串台、临时布场 | 配置项开启后走配对流；**展示日可关闭** |
+
+配对设计要点（仅平板有摄像头，盒子 **不扫**）：
+
+1. 副屏先打开 `display.html`，生成房间 `R`，**在盒子触控屏上显示二维码/短码**。
+2. 平板游戏内「连接副屏」→ **扫盒子上的码** → 主端开始往 `R` 发布事件。
+3. 盒子页已订阅 `R`（出码时即连 SSE），扫完只完成「平板认领房间」。
+
+配置预留（实现时写入 `config.collectDisplay`，当前可无 UI）：
+
+- `transport: 'local' | 'lan'`（及日后 `cloud`）
+- `roomId`：固定房间；空则走配对
+- `pairingEnabled: false` — **展示日默认关**；将来展馆多机再开
+- `hubUrl`：笔记本或云上的 API 根（如 `http://192.168.x.x:8000`）
+
+### 安卓副屏后续交互
+
+- 触控屏可丰富 **出货层 UI**（动效、文案、按钮），逻辑仍建议：**只改 display 页 DOM/Three**，经 **上行消息**（规划 `collect.display_action`）回 hub，主游戏是否响应另议。
+- 预留 DOM：`#cta[data-prize-id]`；总线 schema 版本号 `schema: 1` 便于加字段而不破副屏。
+
 ## 扩展（未实现）
 
-- 局域网第二设备：可加 devServer SSE/WebSocket，总线 payload 不变
+- 局域网 / 云：**devServer（或部署）挂 SSE**，`collectDisplayBus` 增 Remote 通道；payload 不变
+- **配对 UI**：副屏出码、平板扫（`pairingEnabled`）
 - 非圆孔：只改主场景 `machineShell` 与 `holeFloorY`，事件层不变

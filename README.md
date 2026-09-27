@@ -10,6 +10,7 @@ Web3D 抓娃娃机叙事 Demo：四幕方框画幅（记忆）+ 终幕 16:9 故�
 
 ```powershell
 node tools/devServer.mjs 8000    # 推荐：no-store 禁缓存，改代码普通刷新即生效
+node tools/devServer.mjs 8000 --lan   # 监听 0.0.0.0，手机/副屏用 http://<本机局域网IP>:8000/
 # 或传统方式：cd prototype; python -m http.server 8021（改 JS 后需 Ctrl+F5 强刷）
 ```
 
