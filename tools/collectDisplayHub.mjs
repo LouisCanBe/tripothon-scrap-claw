@@ -1,70 +1,89 @@
 // 出货展示跨设备 SSE（devServer 内嵌；日后可抽到部署服务）
-// POST /api/collect/publish  { room, msg }
-// POST /api/collect/ping     { room }  主游戏心跳
-// GET  /api/collect/status?room=
-// GET  /api/collect/stream?room=  (text/event-stream)
+// POST /api/collect/publish  { pair, msg }
+// POST /api/collect/ping     { pair }  主游戏心跳
+// GET  /api/collect/status?pair=
+// GET  /api/collect/stream?pair=  (text/event-stream)
 
-const rooms = new Map();
+import { DEFAULT_COLLECT_PAIR } from '../prototype/src/collectPairDefault.js';
+
+const pairs = new Map();
 const HEARTBEAT_MS = 25_000;
 const STATUS_PUSH_MS = 8_000;
-const GAME_ACTIVE_MS = 22_000;
+/** 超过此时间无主游戏 ping / 出货 publish → gameActive=false（副屏提示回退） */
+export const GAME_ACTIVE_MS = 22_000;
 
-function roomState(roomId) {
-  const id = roomId || 'default';
-  if (!rooms.has(id)) {
-    rooms.set(id, { last: null, clients: new Set(), lastPublishAt: 0, gamePingAt: 0 });
-  }
-  return rooms.get(id);
+const pingLogThrottle = new Map();
+
+function hubLog(pair, text) {
+  console.log(`[collect][pair=${pair}] ${text}`);
 }
 
-function hubStatusPayload(roomId) {
-  const id = roomId || 'default';
-  const st = roomState(id);
+function pairState(pairId) {
+  const id = pairId || DEFAULT_COLLECT_PAIR;
+  if (!pairs.has(id)) {
+    pairs.set(id, { last: null, clients: new Set(), lastPublishAt: 0, gamePingAt: 0 });
+  }
+  return pairs.get(id);
+}
+
+function hubStatusPayload(pairId) {
+  const id = pairId || DEFAULT_COLLECT_PAIR;
+  const st = pairState(id);
   const now = Date.now();
   const lastGame = Math.max(st.gamePingAt, st.lastPublishAt);
   return {
     schema: 1,
     type: 'collect.hub_status',
     ts: now,
-    room: id,
+    pair: id,
     displaySubscribers: st.clients.size,
     gameActive: lastGame > 0 && (now - lastGame) < GAME_ACTIVE_MS,
     lastEventType: st.last?.type ?? null,
   };
 }
 
-function broadcastStatus(roomId) {
-  const st = roomState(roomId);
-  const line = `data: ${JSON.stringify(hubStatusPayload(roomId))}\n\n`;
+function broadcastStatus(pairId) {
+  const st = pairState(pairId);
+  const line = `data: ${JSON.stringify(hubStatusPayload(pairId))}\n\n`;
   for (const res of st.clients) {
     try { res.write(line); } catch { st.clients.delete(res); }
   }
 }
 
-export function hubPublish(roomId, msg) {
-  const st = roomState(roomId);
+export function hubPublish(pairId, msg) {
+  const id = pairId || DEFAULT_COLLECT_PAIR;
+  const st = pairState(id);
   st.last = msg;
   st.lastPublishAt = Date.now();
+  const prize = msg.prize?.name ?? msg.prize?.id ?? '—';
+  hubLog(id, `publish ${msg.type} · ${prize} → ${st.clients.size} 路副屏`);
   const line = `data: ${JSON.stringify(msg)}\n\n`;
   for (const res of st.clients) {
     try { res.write(line); } catch { st.clients.delete(res); }
   }
-  broadcastStatus(roomId);
+  broadcastStatus(id);
 }
 
-export function hubGamePing(roomId) {
-  const st = roomState(roomId);
+export function hubGamePing(pairId) {
+  const id = pairId || DEFAULT_COLLECT_PAIR;
+  const st = pairState(id);
   st.gamePingAt = Date.now();
-  broadcastStatus(roomId);
+  const now = Date.now();
+  const lastLog = pingLogThrottle.get(id) ?? 0;
+  if (now - lastLog > 60_000) {
+    pingLogThrottle.set(id, now);
+    hubLog(id, `主游戏心跳 · 副屏 ${st.clients.size} 路在线`);
+  }
+  broadcastStatus(id);
 }
 
-export function hubGetStatus(roomId) {
-  const id = roomId || 'default';
-  const st = roomState(id);
+export function hubGetStatus(pairId) {
+  const id = pairId || DEFAULT_COLLECT_PAIR;
+  const st = pairState(id);
   const now = Date.now();
   const lastGame = Math.max(st.gamePingAt, st.lastPublishAt);
   return {
-    room: id,
+    pair: id,
     displaySubscribers: st.clients.size,
     gameActive: lastGame > 0 && (now - lastGame) < GAME_ACTIVE_MS,
     lastPublishAt: st.lastPublishAt,
@@ -72,9 +91,9 @@ export function hubGetStatus(roomId) {
   };
 }
 
-export function hubStream(roomId, res) {
-  const id = roomId || 'default';
-  const st = roomState(id);
+export function hubStream(pairId, res) {
+  const id = pairId || DEFAULT_COLLECT_PAIR;
+  const st = pairState(id);
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -83,6 +102,7 @@ export function hubStream(roomId, res) {
   });
   res.write(': connected\n\n');
   st.clients.add(res);
+  hubLog(id, `副屏 SSE 接入（共 ${st.clients.size} 路）`);
   if (st.last) res.write(`data: ${JSON.stringify(st.last)}\n\n`);
   res.write(`data: ${JSON.stringify(hubStatusPayload(id))}\n\n`);
 
@@ -99,6 +119,7 @@ export function hubStream(roomId, res) {
     clearInterval(ping);
     clearInterval(statusIv);
     st.clients.delete(res);
+    hubLog(id, `副屏 SSE 断开（剩余 ${st.clients.size} 路）`);
     broadcastStatus(id);
   });
 }
@@ -120,20 +141,20 @@ function readJsonBody(req) {
 export async function handleCollectApi(req, res, url) {
   const path = url.pathname;
   if (path === '/api/collect/stream' && req.method === 'GET') {
-    const room = url.searchParams.get('room') || 'default';
-    hubStream(room, res);
+    const pair = url.searchParams.get('pair') || DEFAULT_COLLECT_PAIR;
+    hubStream(pair, res);
     return true;
   }
   if (path === '/api/collect/status' && req.method === 'GET') {
-    const room = url.searchParams.get('room') || 'default';
+    const pair = url.searchParams.get('pair') || DEFAULT_COLLECT_PAIR;
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify(hubGetStatus(room)));
+    res.end(JSON.stringify(hubGetStatus(pair)));
     return true;
   }
   if (path === '/api/collect/ping' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);
-      hubGamePing(body.room || 'default');
+      hubGamePing(body.pair || DEFAULT_COLLECT_PAIR);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ ok: true }));
     } catch (e) {
@@ -145,14 +166,14 @@ export async function handleCollectApi(req, res, url) {
   if (path === '/api/collect/publish' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);
-      const room = body.room || 'default';
+      const pair = body.pair || DEFAULT_COLLECT_PAIR;
       const msg = body.msg;
       if (!msg || msg.schema !== 1) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: 'invalid msg' }));
         return true;
       }
-      hubPublish(room, msg);
+      hubPublish(pair, msg);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ ok: true }));
     } catch (e) {

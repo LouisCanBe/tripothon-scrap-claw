@@ -77,43 +77,57 @@
 ### 同步（已实现 · devServer SSE）
 
 ```text
-平板（publish） ──POST──► /api/collect/publish { room, msg }
-安卓副屏（subscribe） ◄──SSE── /api/collect/stream?room=  (+ 25s 心跳，断线自动重连)
+平板（publish） ──POST──► /api/collect/publish { pair, msg }
+安卓副屏（subscribe） ◄──SSE── /api/collect/stream?pair=  (+ 25s 心跳，断线自动重连)
 ```
 
 - 实现：`tools/collectDisplayHub.mjs`，由 `devServer.mjs` 挂载。
 - `config.collectDisplay.transport`：`auto`（默认）主屏 HTTP 下会 POST；`display.html` 订阅 SSE。`local` 仅 BroadcastChannel。
-- 房间：`config.roomId` 或 URL **`?room=展台1`**（主屏与副屏须一致）。
+- `pair`：默认 **`config.collectDisplay.pairId`**（口令样式，见 `collectPairDefault.js`）；多展台时 URL **`?pair=XXXX-XXXX`** 覆盖。主副屏须同一 pair。
 - 同机第二标签：仍可用 BC；副屏在 `auto` 下 **只订 SSE**（避免双份事件）。
 
 **展台联调**
 
 ```text
 node tools/devServer.mjs 8000 --lan
-平板：  http://<笔记本IP>:8000/?room=展台1
-副屏：  http://<笔记本IP>:8000/display.html?room=展台1
+平板：  http://<笔记本IP>:8000/
+副屏：  http://<笔记本IP>:8000/display.html
 ```
 
+（默认口令写在 `prototype/src/collectPairDefault.js`，改配置即可换展台，书签无需带 `?pair=`。）
+
 副屏页脚显示连接与引导（先开副屏会提示「请先打开主游戏」；主游戏 HUD 显示副屏是否已连接）。  
-主游戏每 8s `POST /api/collect/ping`；副屏经 SSE 收 `collect.hub_status`。
+主游戏每 8s `POST /api/collect/ping`（标签页在后台时不 ping）；副屏经 SSE 收 `collect.hub_status`（约 8s 一次）。
+
+### 联动提示判定（验证逻辑）
+
+| 信号 | 周期 / 阈值 | 作用 |
+|------|-------------|------|
+| 主游戏 `ping` | 每 **8s**（前台） | 刷新 `gamePingAt` |
+| `gameActive` | **22s** 内有过 ping 或 `publish` | 副屏：「主游戏在线」vs「请先打开主游戏」 |
+| 主游戏查副屏 | 每 **4.5s** `GET /status` | HUD：副屏路数，关副屏后最多约 4.5s 显示未连接 |
+| 副屏 SSE | 长连接 + 25s 注释心跳 | 断网显示「重连中…」，关页即断开 |
+
+关主游戏标签或切后台：**约 22s** 后副屏 `gameActive=false`，文案回到 **「请先打开主游戏」**（并清除「已联动」状态）。  
+出货 `publish` 也会刷新在线窗口（22s 内算在线）。
 
 ### 展示日 vs 配对（预留）
 
 | 模式 | 用途 | 做法 |
 |------|------|------|
-| **固定房间（展示日推荐）** | 免配对、最快联调 | 盒子 Kiosk 书签 + 平板 URL 共用 `?room=展台1` 与同一笔记本 IP；可完全 **不做扫码** |
+| **固定配对口令（展示日推荐）** | 免扫码、最快联调 | 改 `collectPairDefault.js` / `pairId`，盒子与平板只收藏无参数的 URL；可完全 **不做扫码** |
 | **配对（预留设置）** | 多展台防串台、临时布场 | 配置项开启后走配对流；**展示日可关闭** |
 
 配对设计要点（仅平板有摄像头，盒子 **不扫**）：
 
-1. 副屏先打开 `display.html`，生成房间 `R`，**在盒子触控屏上显示二维码/短码**。
-2. 平板游戏内「连接副屏」→ **扫盒子上的码** → 主端开始往 `R` 发布事件。
-3. 盒子页已订阅 `R`（出码时即连 SSE），扫完只完成「平板认领房间」。
+1. 副屏先打开 `display.html`，生成配对口令 `P`，**在盒子触控屏上显示二维码/短码**。
+2. 平板游戏内「连接副屏」→ **扫盒子上的码** → 主端开始往 `P` 发布事件。
+3. 盒子页已订阅 `P`（出码时即连 SSE），扫完只完成「平板认领 pair」。
 
 配置预留（实现时写入 `config.collectDisplay`，当前可无 UI）：
 
 - `transport: 'local' | 'lan'`（及日后 `cloud`）
-- `roomId`：固定房间；空则走配对
+- `pairId`：固定配对口令；空则走动态配对
 - `pairingEnabled: false` — **展示日默认关**；将来展馆多机再开
 - `hubUrl`：笔记本或云上的 API 根（如 `http://192.168.x.x:8000`）
 

@@ -1,14 +1,16 @@
 // 主游戏侧：副屏是否在线、主游戏心跳（配合 hub /api/collect/status、ping）
 import { CONFIG } from './config.js';
-import { resolveCollectRoom, shouldUseRemotePublish } from './collectDisplayBus.js';
+import {
+  resolveCollectPair, shouldUseRemotePublish, collectDisplayPathWithPair,
+} from './collectDisplayBus.js';
 
 const PING_MS = 8_000;
 const STATUS_MS = 4_500;
 
 function statusUrl() {
   const base = CONFIG.collectDisplay?.statusPath ?? '/api/collect/status';
-  const room = encodeURIComponent(resolveCollectRoom());
-  return `${base}?room=${room}`;
+  const pair = encodeURIComponent(resolveCollectPair());
+  return `${base}?pair=${pair}`;
 }
 
 function pingUrl() {
@@ -21,14 +23,17 @@ export function startCollectDisplayLinkMonitor(el) {
     return () => {};
   }
   el.hidden = false;
-  const room = resolveCollectRoom();
+  const pair = resolveCollectPair();
+  const displayHint = collectDisplayPathWithPair(
+    CONFIG.collectDisplay?.displayPath ?? '/display.html',
+  );
 
   const doPing = () => {
     if (document.hidden) return;
     fetch(pingUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ room: resolveCollectRoom() }),
+      body: JSON.stringify({ pair: resolveCollectPair() }),
       keepalive: true,
     }).catch(() => {});
   };
@@ -41,10 +46,10 @@ export function startCollectDisplayLinkMonitor(el) {
       if (!r.ok) throw new Error(String(r.status));
       const s = await r.json();
       if (s.displaySubscribers > 0) {
-        el.textContent = `出货副屏：已连接（${s.displaySubscribers}）· 房间 ${room}`;
+        el.textContent = `出货副屏：已连接（${s.displaySubscribers}）· pair=${pair}`;
         el.dataset.state = 'ok';
       } else {
-        el.textContent = `出货副屏：未连接 · 请打开 display.html?room=${room}`;
+        el.textContent = `出货副屏：未连接 · 请打开 ${displayHint}`;
         el.dataset.state = 'wait';
       }
     } catch {

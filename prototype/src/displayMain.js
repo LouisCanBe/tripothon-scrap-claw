@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG } from './config.js';
 import {
-  subscribeCollectDisplay, readLastCollectEvent, resolveCollectRoom, shouldUseRemoteSubscribe,
+  subscribeCollectDisplay, readLastCollectEvent, resolveCollectPair, shouldUseRemoteSubscribe,
 } from './collectDisplayBus.js';
 import { applyComicStyle } from '/comic-render.mjs';
 import { createCollectEntrance, getEntranceConfig } from './collectDisplayEntrance.js';
@@ -20,7 +20,7 @@ let hubGameActive = false;
 let sawGameEvent = false;
 
 function refreshLinkLine() {
-  const room = resolveCollectRoom();
+  const pair = resolveCollectPair();
   if (!shouldUseRemoteSubscribe()) {
     elLink.textContent = '同步：本地（同机 BroadcastChannel）';
     return;
@@ -30,15 +30,17 @@ function refreshLinkLine() {
   if (sseState === 'open') {
     if (sawGameEvent) hint = ' · 已与主游戏联动';
     else if (hubGameActive) hint = ' · 主游戏在线，等待出货';
-    else hint = ' · 请先打开主游戏（同 WiFi、同 room）';
+    else hint = ' · 请先打开主游戏（同 WiFi、同 pair）';
   }
-  elLink.textContent = `${conn} · 房间 ${room}${hint}`;
+  elLink.textContent = `${conn} · pair=${pair}${hint}`;
 }
 refreshLinkLine();
 
 function onHubStatus(msg) {
   if (msg?.type !== 'collect.hub_status') return;
   hubGameActive = !!msg.gameActive;
+  // 主游戏超过 GAME_ACTIVE_MS 无 ping/出货 → 副屏文案回「请先打开主游戏」
+  if (!hubGameActive) sawGameEvent = false;
   refreshLinkLine();
 }
 

@@ -14,7 +14,7 @@ node tools/devServer.mjs 8000 --lan   # 监听 0.0.0.0，手机/副屏用 http:/
 # 或传统方式：cd prototype; python -m http.server 8021（改 JS 后需 Ctrl+F5 强刷）
 ```
 
-浏览器打开 **http://localhost:8000/** 即玩。跨设备出货副屏见 `prototype/COLLECT-DISPLAY.md`（`--lan` + `?room=`）。
+浏览器打开 **http://localhost:8000/** 即玩。跨设备出货副屏见 `prototype/COLLECT-DISPLAY.md`（`--lan`，默认配对口令在 `collectPairDefault.js`）。
 
 ### 键位
 

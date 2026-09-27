@@ -15,6 +15,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleCollectApi } from './collectDisplayHub.mjs';
+import { DEFAULT_COLLECT_PAIR } from '../prototype/src/collectPairDefault.js';
 
 const TOOLS = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const ROOT = path.resolve(TOOLS, '../prototype');
@@ -84,6 +85,7 @@ http.createServer(async (req, res) => {
     res.end(String(e?.message ?? e));
   }
 }).listen(PORT, HOST, () => {
+  const pair = DEFAULT_COLLECT_PAIR;
   console.log(`[dev] http://127.0.0.1:${PORT}/  (no-store, prototype/)`);
   if (HOST === '0.0.0.0') {
     for (const ip of ipv4Lan()) console.log(`[dev] http://${ip}:${PORT}/  (LAN)`);
@@ -91,4 +93,19 @@ http.createServer(async (req, res) => {
   } else {
     console.log('[dev] 内网访问：加参数 --lan');
   }
+  const q = encodeURIComponent(pair);
+  console.log(`[collect] 默认配对口令 pair=${pair}（config.collectDisplay.pairId；书签可无参，多展台改 ?pair=）`);
+  console.log(`  主游戏  http://127.0.0.1:${PORT}/`);
+  console.log(`  副屏    http://127.0.0.1:${PORT}/display.html`);
+  console.log(`  含参示例 http://127.0.0.1:${PORT}/?pair=${q}`);
+  console.log(`          http://127.0.0.1:${PORT}/display.html?pair=${q}`);
+  if (HOST === '0.0.0.0') {
+    for (const ip of ipv4Lan()) {
+      console.log(`  主游戏  http://${ip}:${PORT}/`);
+      console.log(`  副屏    http://${ip}:${PORT}/display.html`);
+      console.log(`  含参示例 http://${ip}:${PORT}/?pair=${q}`);
+      console.log(`          http://${ip}:${PORT}/display.html?pair=${q}`);
+    }
+  }
+  console.log(`[collect] 日志：[collect][pair=${pair}] …`);
 });

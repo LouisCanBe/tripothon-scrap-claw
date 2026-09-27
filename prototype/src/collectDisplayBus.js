@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 import { GLB_MANIFEST } from './assets.manifest.js';
 import { poolVisualScale } from './prizePool.js';
 import { resolveBounceMaterial } from './collectBouncePresets.js';
+import { DEFAULT_COLLECT_PAIR } from './collectPairDefault.js';
 
 const SCHEMA = 1;
 const LS_KEY = 'tripo.collectDisplay.last';
@@ -22,13 +23,25 @@ function getChannel({ listen = false } = {}) {
   }
 }
 
-/** URL ?room= 优先，其次 config.roomId */
-export function resolveCollectRoom() {
+/** URL ?pair= 优先，其次 config.pairId */
+export function resolveCollectPair() {
   try {
-    const q = new URLSearchParams(location.search).get('room');
+    const q = new URLSearchParams(location.search).get('pair');
     if (q) return q;
   } catch { /* ignore */ }
-  return CONFIG.collectDisplay?.roomId ?? 'default';
+  return CONFIG.collectDisplay?.pairId ?? DEFAULT_COLLECT_PAIR;
+}
+
+/** 默认口令时书签可不带 query */
+export function collectDisplayPathWithPair(path) {
+  const pair = resolveCollectPair();
+  try {
+    if (!new URLSearchParams(location.search).get('pair') && pair === DEFAULT_COLLECT_PAIR) {
+      return path;
+    }
+  } catch { /* ignore */ }
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}pair=${encodeURIComponent(pair)}`;
 }
 
 function transport() {
@@ -71,7 +84,7 @@ function envelope(type, prize, extra = {}) {
     schema: SCHEMA,
     type,
     ts: Date.now(),
-    room: resolveCollectRoom(),
+    pair: resolveCollectPair(),
     prize,
     outlet: { kind: CONFIG.collectDisplay?.outletKind ?? 'hole', version: 1 },
     ...extra,
@@ -87,11 +100,11 @@ function persist(msg) {
 function publishRemote(msg) {
   if (!shouldUseRemotePublish()) return;
   const path = CONFIG.collectDisplay?.publishPath ?? '/api/collect/publish';
-  const room = msg.room ?? resolveCollectRoom();
+  const pair = msg.pair ?? resolveCollectPair();
   fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ room, msg }),
+    body: JSON.stringify({ pair, msg }),
     keepalive: true,
   }).catch((e) => console.warn('[collectDisplay] publish', e));
 }
@@ -141,9 +154,9 @@ function subscribeCollectLocal(handler) {
  * @param {(state: 'connecting'|'open'|'error') => void} [onLink]
  */
 function subscribeCollectRemote(handler, onLink) {
-  const room = resolveCollectRoom();
+  const pair = resolveCollectPair();
   const path = CONFIG.collectDisplay?.ssePath ?? '/api/collect/stream';
-  const url = `${path}?room=${encodeURIComponent(room)}`;
+  const url = `${path}?pair=${encodeURIComponent(pair)}`;
   onLink?.('connecting');
   const es = new EventSource(url);
   es.onopen = () => onLink?.('open');
@@ -172,7 +185,6 @@ export function subscribeCollectDisplay(handler, opts = {}) {
 
 export function openCollectDisplayWindow() {
   const base = CONFIG.collectDisplay?.displayPath ?? '/display.html';
-  const room = resolveCollectRoom();
-  const url = `${base}${base.includes('?') ? '&' : '?'}room=${encodeURIComponent(room)}`;
+  const url = collectDisplayPathWithPair(base);
   return window.open(url, 'tripo-collect-display', 'noopener');
 }

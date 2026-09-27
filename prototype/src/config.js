@@ -1,3 +1,5 @@
+import { DEFAULT_COLLECT_PAIR } from './collectPairDefault.js';
+
 // ============================================================
 // 《拾荒娃娃机》灰盒原型 · 全局参数中枢
 // 所有手感 / 镜头 / 后处理参数集中在此。
@@ -209,7 +211,7 @@ export const CONFIG = {
     displayPath: '/display.html',
     // 跨设备：devServer SSE（见 tools/collectDisplayHub.mjs）
     transport: 'auto',         // 'local' 仅同机 | 'lan' 副屏必走 SSE | 'auto' 主屏 publish + display 订阅
-    roomId: 'default',         // 展台固定房间；URL ?room= 覆盖
+    pairId: DEFAULT_COLLECT_PAIR, // 固定配对口令；URL ?pair= 可覆盖
     ssePath: '/api/collect/stream',
     publishPath: '/api/collect/publish',
     statusPath: '/api/collect/status',
