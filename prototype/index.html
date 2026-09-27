@@ -51,6 +51,10 @@
   #hud .hud-count { margin-top: 8px; padding-top: 7px; border-top: 1px dashed rgba(216,212,200,.16);
                     font-size: 11px; letter-spacing: 2px; color: var(--color-ink-dim); }
   #hud .hud-count span { color: var(--color-ink); font-size: 15px; }
+  #hud .hud-collect-link { font-size: 10px; letter-spacing: 1px; line-height: 1.5; margin-top: 6px;
+                           opacity: 0.82; max-width: 220px; }
+  #hud .hud-collect-link[data-state="wait"] { color: var(--color-accent); }
+  #hud .hud-collect-link[data-state="err"] { color: #c9a06a; }
 
   /* —— 字幕条：底条背板（打字机逻辑在 director.msg）—— */
   #msg { position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 10;
@@ -183,6 +187,7 @@
     <div class="quest" id="q-can">罐头 ×1</div>
     <div class="quest" id="q-veg">蔬菜 ×1</div>
     <div class="hud-count">已收集 <span id="collected">0</span></div>
+    <div class="hud-count hud-collect-link" id="collectLink" hidden></div>
   </div>
   <div id="toasts"></div>
   <div id="viewDots"><i data-v="left"></i><i data-v="front" class="on"></i><i data-v="right"></i></div>

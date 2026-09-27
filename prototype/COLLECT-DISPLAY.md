@@ -74,15 +74,28 @@
 - 室外 / 展馆：**笔记本开热点或共 WiFi**，平板与盒子连同一网段；`node tools/devServer.mjs 8000 --lan`。
 - **不依赖公网**即可 demo；日后部署到云时，平板与盒子改为同一 `https://域名`，协议与 payload **不变**。
 
-### 同步原理（规划，未实现）
+### 同步（已实现 · devServer SSE）
 
 ```text
-平板（publish） ──POST──► 笔记本 /api/collect/publish { room, msg }
-安卓副屏（subscribe） ◄──SSE── 同一 room 的 stream + last 快照
+平板（publish） ──POST──► /api/collect/publish { room, msg }
+安卓副屏（subscribe） ◄──SSE── /api/collect/stream?room=  (+ 25s 心跳，断线自动重连)
 ```
 
-- 消息体与现网 `collectDisplayBus` envelope 一致（`collect.hole_drop` / `collect.vended`、`prize`…）。
-- 同机调试仍走 BroadcastChannel；跨设备时 **双写** Local + Remote（实现时再抽 `Transport`）。
+- 实现：`tools/collectDisplayHub.mjs`，由 `devServer.mjs` 挂载。
+- `config.collectDisplay.transport`：`auto`（默认）主屏 HTTP 下会 POST；`display.html` 订阅 SSE。`local` 仅 BroadcastChannel。
+- 房间：`config.roomId` 或 URL **`?room=展台1`**（主屏与副屏须一致）。
+- 同机第二标签：仍可用 BC；副屏在 `auto` 下 **只订 SSE**（避免双份事件）。
+
+**展台联调**
+
+```text
+node tools/devServer.mjs 8000 --lan
+平板：  http://<笔记本IP>:8000/?room=展台1
+副屏：  http://<笔记本IP>:8000/display.html?room=展台1
+```
+
+副屏页脚显示连接与引导（先开副屏会提示「请先打开主游戏」；主游戏 HUD 显示副屏是否已连接）。  
+主游戏每 8s `POST /api/collect/ping`；副屏经 SSE 收 `collect.hub_status`。
 
 ### 展示日 vs 配对（预留）
 
@@ -111,6 +124,6 @@
 
 ## 扩展（未实现）
 
-- 局域网 / 云：**devServer（或部署）挂 SSE**，`collectDisplayBus` 增 Remote 通道；payload 不变
 - **配对 UI**：副屏出码、平板扫（`pairingEnabled`）
+- **双向**：独立 WebSocket `/api/collect/ws`，payload 与 SSE 相同；上行 `collect.display_action`
 - 非圆孔：只改主场景 `machineShell` 与 `holeFloorY`，事件层不变

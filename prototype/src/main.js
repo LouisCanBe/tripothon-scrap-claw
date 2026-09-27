@@ -28,6 +28,7 @@ import { refreshPrizeComicFx } from './prizeComicFx.js';
 import { refreshClawComicFx } from './clawComicFx.js';
 import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
 import { publishHoleDrop, publishVended, openCollectDisplayWindow } from './collectDisplayBus.js';
+import { startCollectDisplayLinkMonitor } from './collectDisplayLink.js';
 import { createSceneLights, applyRevealColdLighting } from './sceneLighting.js';
 
 loadPoolDevOverrides();
@@ -119,6 +120,7 @@ const mask = new FrameMask();
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
 const input = new Input();
+startCollectDisplayLinkMonitor(document.getElementById('collectLink'));
 const buttons = new OnscreenButtons(input);   // 屏幕按钮（触屏自动显示，H 面板可开）
 const design = new DesignOverlay();           // 设计稿叠加层（G 切换，调试对齐用）
 

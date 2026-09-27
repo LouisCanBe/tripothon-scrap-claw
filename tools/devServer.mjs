@@ -14,6 +14,7 @@ import os from 'node:os';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { handleCollectApi } from './collectDisplayHub.mjs';
 
 const TOOLS = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const ROOT = path.resolve(TOOLS, '../prototype');
@@ -54,9 +55,12 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
-http.createServer((req, res) => {
+http.createServer(async (req, res) => {
   try {
-    let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    const url = new URL(req.url, 'http://localhost');
+    if (await handleCollectApi(req, res, url)) return;
+
+    let p = decodeURIComponent(url.pathname);
     if (p === '/') p = '/index.html';
     if (p === '/comic-render.mjs') {
       const comic = path.join(TOOLS, 'comic-render.mjs');

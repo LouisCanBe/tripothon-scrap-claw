@@ -1,5 +1,4 @@
-// 出货展示屏联动：主游戏 ↔ 独立 display.html（同机多屏 / 多标签）
-// 传输：BroadcastChannel + localStorage 快照（副屏晚开也能看到上一件）
+// 出货展示屏联动：同机 BC + 跨设备 SSE（devServer /api/collect/*）
 import { CONFIG } from './config.js';
 import { GLB_MANIFEST } from './assets.manifest.js';
 import { poolVisualScale } from './prizePool.js';
@@ -23,6 +22,36 @@ function getChannel({ listen = false } = {}) {
   }
 }
 
+/** URL ?room= 优先，其次 config.roomId */
+export function resolveCollectRoom() {
+  try {
+    const q = new URLSearchParams(location.search).get('room');
+    if (q) return q;
+  } catch { /* ignore */ }
+  return CONFIG.collectDisplay?.roomId ?? 'default';
+}
+
+function transport() {
+  return CONFIG.collectDisplay?.transport ?? 'auto';
+}
+
+export function shouldUseRemotePublish() {
+  if (!CONFIG.collectDisplay?.enabled) return false;
+  const t = transport();
+  if (t === 'local') return false;
+  if (typeof location === 'undefined' || location.protocol === 'file:') return false;
+  return true;
+}
+
+export function shouldUseRemoteSubscribe() {
+  if (!CONFIG.collectDisplay?.enabled) return false;
+  const t = transport();
+  if (t === 'local') return false;
+  if (typeof location === 'undefined' || location.protocol === 'file:') return false;
+  if (t === 'lan') return true;
+  return /display\.html/i.test(location.pathname || '');
+}
+
 /** @param {object} item prizePool 条目 */
 export function itemToPrizePayload(item) {
   const id = item.id;
@@ -42,6 +71,7 @@ function envelope(type, prize, extra = {}) {
     schema: SCHEMA,
     type,
     ts: Date.now(),
+    room: resolveCollectRoom(),
     prize,
     outlet: { kind: CONFIG.collectDisplay?.outletKind ?? 'hole', version: 1 },
     ...extra,
@@ -54,20 +84,31 @@ function persist(msg) {
   } catch { /* ignore */ }
 }
 
+function publishRemote(msg) {
+  if (!shouldUseRemotePublish()) return;
+  const path = CONFIG.collectDisplay?.publishPath ?? '/api/collect/publish';
+  const room = msg.room ?? resolveCollectRoom();
+  fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room, msg }),
+    keepalive: true,
+  }).catch((e) => console.warn('[collectDisplay] publish', e));
+}
+
 export function publishCollectEvent(type, item, extra) {
   if (!CONFIG.collectDisplay?.enabled || !item) return;
   const msg = envelope(type, itemToPrizePayload(item), extra);
   persist(msg);
   getChannel({ listen: false })?.postMessage(msg);
+  publishRemote(msg);
   return msg;
 }
 
-/** 爪在洞口松手、奖品开始坠入出货道（尚未离屏） */
 export function publishHoleDrop(item) {
   return publishCollectEvent('collect.hole_drop', item);
 }
 
-/** 奖品落至出货平面以下、主画面隐藏 —— 副屏「单独展示」的主触发点 */
 export function publishVended(item) {
   return publishCollectEvent('collect.vended', item);
 }
@@ -81,7 +122,7 @@ export function readLastCollectEvent() {
   }
 }
 
-export function subscribeCollectDisplay(handler) {
+function subscribeCollectLocal(handler) {
   const ch = getChannel({ listen: true });
   const onMsg = (e) => { if (e.data?.schema === SCHEMA) handler(e.data); };
   ch?.addEventListener('message', onMsg);
@@ -96,7 +137,42 @@ export function subscribeCollectDisplay(handler) {
   };
 }
 
+/**
+ * @param {(state: 'connecting'|'open'|'error') => void} [onLink]
+ */
+function subscribeCollectRemote(handler, onLink) {
+  const room = resolveCollectRoom();
+  const path = CONFIG.collectDisplay?.ssePath ?? '/api/collect/stream';
+  const url = `${path}?room=${encodeURIComponent(room)}`;
+  onLink?.('connecting');
+  const es = new EventSource(url);
+  es.onopen = () => onLink?.('open');
+  es.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg?.schema === SCHEMA) handler(msg);
+    } catch { /* ignore */ }
+  };
+  es.onerror = () => onLink?.('error');
+  return () => {
+    es.close();
+  };
+}
+
+/**
+ * @param {(msg: object) => void} handler
+ * @param {{ onLink?: (s: string) => void }} [opts]
+ */
+export function subscribeCollectDisplay(handler, opts = {}) {
+  if (shouldUseRemoteSubscribe()) {
+    return subscribeCollectRemote(handler, opts.onLink);
+  }
+  return subscribeCollectLocal(handler);
+}
+
 export function openCollectDisplayWindow() {
-  const url = CONFIG.collectDisplay?.displayPath ?? '/display.html';
+  const base = CONFIG.collectDisplay?.displayPath ?? '/display.html';
+  const room = resolveCollectRoom();
+  const url = `${base}${base.includes('?') ? '&' : '?'}room=${encodeURIComponent(room)}`;
   return window.open(url, 'tripo-collect-display', 'noopener');
 }

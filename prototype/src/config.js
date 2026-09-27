@@ -207,6 +207,14 @@ export const CONFIG = {
     enabled: true,
     channel: 'tripo.collect-display.v1',
     displayPath: '/display.html',
+    // 跨设备：devServer SSE（见 tools/collectDisplayHub.mjs）
+    transport: 'auto',         // 'local' 仅同机 | 'lan' 副屏必走 SSE | 'auto' 主屏 publish + display 订阅
+    roomId: 'default',         // 展台固定房间；URL ?room= 覆盖
+    ssePath: '/api/collect/stream',
+    publishPath: '/api/collect/publish',
+    statusPath: '/api/collect/status',
+    pingPath: '/api/collect/ping',
+    pairingEnabled: false,     // 预留：副屏出码、平板扫
     outletKind: 'hole',        // 语义：出货口类型；副屏可读 payload.outlet
     holeFloorY: -0.30,         // delivering 落至此以下视为离屏（与 clawMachine 同步）
     // 副屏入场动效（displayMain + collectDisplayEntrance.js，指数阻尼无额外依赖）

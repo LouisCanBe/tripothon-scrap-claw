@@ -2,7 +2,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG } from './config.js';
-import { subscribeCollectDisplay, readLastCollectEvent } from './collectDisplayBus.js';
+import {
+  subscribeCollectDisplay, readLastCollectEvent, resolveCollectRoom, shouldUseRemoteSubscribe,
+} from './collectDisplayBus.js';
 import { applyComicStyle } from '/comic-render.mjs';
 import { createCollectEntrance, getEntranceConfig } from './collectDisplayEntrance.js';
 
@@ -10,7 +12,35 @@ const stage = document.getElementById('stage');
 const elName = document.getElementById('prizeName');
 const elMeta = document.getElementById('prizeMeta');
 const elStatus = document.getElementById('status');
+const elLink = document.getElementById('link');
 const elCta = document.getElementById('cta');
+
+let sseState = shouldUseRemoteSubscribe() ? 'connecting' : 'open';
+let hubGameActive = false;
+let sawGameEvent = false;
+
+function refreshLinkLine() {
+  const room = resolveCollectRoom();
+  if (!shouldUseRemoteSubscribe()) {
+    elLink.textContent = '同步：本地（同机 BroadcastChannel）';
+    return;
+  }
+  const conn = { connecting: '连接服务器…', open: '已连服务器', error: '重连中…' }[sseState] ?? sseState;
+  let hint = '';
+  if (sseState === 'open') {
+    if (sawGameEvent) hint = ' · 已与主游戏联动';
+    else if (hubGameActive) hint = ' · 主游戏在线，等待出货';
+    else hint = ' · 请先打开主游戏（同 WiFi、同 room）';
+  }
+  elLink.textContent = `${conn} · 房间 ${room}${hint}`;
+}
+refreshLinkLine();
+
+function onHubStatus(msg) {
+  if (msg?.type !== 'collect.hub_status') return;
+  hubGameActive = !!msg.gameActive;
+  refreshLinkLine();
+}
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -167,7 +197,13 @@ async function showPrize(prize, { fromDropHint = false } = {}) {
 }
 
 function onEvent(msg) {
+  if (msg?.type === 'collect.hub_status') {
+    onHubStatus(msg);
+    return;
+  }
   if (!msg?.prize) return;
+  sawGameEvent = true;
+  refreshLinkLine();
   const prize = msg.prize;
   if (msg.type === 'collect.hole_drop') {
     pendingPrizeId = prize.id;
@@ -182,10 +218,17 @@ function onEvent(msg) {
   }
 }
 
-subscribeCollectDisplay(onEvent);
-const last = readLastCollectEvent();
-if (last?.type === 'collect.vended') showPrize(last.prize);
-else if (last?.type === 'collect.hole_drop') onEvent(last);
+subscribeCollectDisplay(onEvent, {
+  onLink: (s) => {
+    sseState = s;
+    refreshLinkLine();
+  },
+});
+if (!shouldUseRemoteSubscribe()) {
+  const last = readLastCollectEvent();
+  if (last?.type === 'collect.vended') showPrize(last.prize);
+  else if (last?.type === 'collect.hole_drop') onEvent(last);
+}
 
 addEventListener('resize', layoutStage);
 
