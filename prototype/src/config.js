@@ -217,6 +217,7 @@ export const CONFIG = {
     statusPath: '/api/collect/status',
     pingPath: '/api/collect/ping',
     pairingEnabled: false,     // 预留：副屏出码、平板扫
+    pairQrFromActId: 3,        // 主屏从第几幕起显示可折叠配对码（与第三幕 HUD 同期）
     outletKind: 'hole',        // 语义：出货口类型；副屏可读 payload.outlet
     holeFloorY: -0.30,         // delivering 落至此以下视为离屏（与 clawMachine 同步）
     // 副屏入场动效（displayMain + collectDisplayEntrance.js，指数阻尼无额外依赖）

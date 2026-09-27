@@ -33,6 +33,15 @@ export function resolveCollectPair() {
 }
 
 /** 默认口令时书签可不带 query */
+/** 副屏完整 URL（扫码用，始终带 ?pair=） */
+export function collectDisplayShareUrl() {
+  const pair = resolveCollectPair();
+  const path = CONFIG.collectDisplay?.displayPath ?? '/display.html';
+  const base = `${location.origin}${path}`;
+  const sep = path.includes('?') ? '&' : '?';
+  return `${base}${sep}pair=${encodeURIComponent(pair)}`;
+}
+
 export function collectDisplayPathWithPair(path) {
   const pair = resolveCollectPair();
   try {

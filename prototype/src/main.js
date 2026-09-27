@@ -29,6 +29,7 @@ import { refreshClawComicFx } from './clawComicFx.js';
 import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
 import { publishHoleDrop, publishVended, openCollectDisplayWindow } from './collectDisplayBus.js';
 import { startCollectDisplayLinkMonitor } from './collectDisplayLink.js';
+import { startCollectDisplayPairPanel } from './collectDisplayPairPanel.js';
 import { createSceneLights, applyRevealColdLighting } from './sceneLighting.js';
 
 loadPoolDevOverrides();
@@ -272,6 +273,7 @@ director = new Director({
   lights: { key, fill, glow, hemi, ambient },
   hooks: { onReveal, onLightsCold: onRevealColdLighting },
 });
+startCollectDisplayPairPanel(director);
 
 // —— 输入接线（带幕间权限闸）——
 input.on('drop', () => { if (director.allow('drop')) claw.startDrop(); });

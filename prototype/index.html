@@ -56,6 +56,31 @@
   #hud .hud-collect-link[data-state="wait"] { color: var(--color-accent); }
   #hud .hud-collect-link[data-state="err"] { color: #c9a06a; }
 
+  /* 副屏配对：默认折叠小条，第三幕起显示 */
+  #collectPairPanel { position: fixed; top: 18px; right: 18px; z-index: 11;
+                      max-width: min(200px, 42vw); pointer-events: auto; }
+  #collectPairPanel[hidden] { display: none !important; }
+  #collectPairPanel .collect-pair-toggle {
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    padding: 6px 10px; font-size: 10px; letter-spacing: 1.5px;
+    color: var(--color-ink-dim); background: rgba(9,9,12,.72);
+    border: 1px solid rgba(216,212,200,.22); border-radius: 8px;
+    cursor: pointer; font-family: inherit; text-align: left;
+  }
+  #collectPairPanel .collect-pair-toggle .chev { margin-left: auto; opacity: .7; transition: transform .2s; }
+  #collectPairPanel.open .collect-pair-toggle .chev { transform: rotate(90deg); }
+  #collectPairPanel .collect-pair-body {
+    margin-top: 6px; padding: 8px 10px 10px;
+    background: rgba(9,9,12,.78); border: 1px solid rgba(216,212,200,.18);
+    border-radius: 8px; text-align: center;
+  }
+  #collectPairPanel .collect-pair-body[hidden] { display: none; }
+  #collectPairPanel canvas { display: block; margin: 0 auto 6px; border-radius: 4px;
+                             image-rendering: pixelated; }
+  #collectPairPanel .pair-code { font-size: 11px; letter-spacing: 2px; color: var(--color-ink); }
+  #collectPairPanel .pair-hint { margin-top: 4px; font-size: 9px; line-height: 1.45;
+                                letter-spacing: .5px; color: var(--color-ink-dim); }
+
   /* —— 字幕条：底条背板（打字机逻辑在 director.msg）—— */
   #msg { position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 10;
          max-width: 82%; padding: 9px 24px; text-align: center;
@@ -181,6 +206,17 @@
   <div id="frameBorder"></div>
   <div id="flash"></div>
 
+  <div id="collectPairPanel" hidden>
+    <button type="button" class="collect-pair-toggle" aria-expanded="false">
+      <span>副屏配对</span><span class="chev" aria-hidden="true">▸</span>
+    </button>
+    <div class="collect-pair-body" hidden>
+      <canvas width="84" height="84" aria-label="出货副屏链接二维码"></canvas>
+      <div class="pair-code"></div>
+      <div class="pair-hint">扫描在安卓盒打开 display</div>
+    </div>
+  </div>
+
   <div id="hud">
     <div class="hud-title">今日采集配额</div>
     <div class="quest" id="q-bread">面包 ×1</div>
@@ -204,6 +240,7 @@
   <div id="hint"></div>
   <div id="loading"><div class="title">拾荒娃娃机</div><div class="t">上货中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div></div>
 
+  <script src="./vendor/qrcode-generator.js"></script>
   <script type="importmap">
   {
     "imports": {

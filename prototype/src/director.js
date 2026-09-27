@@ -97,6 +97,8 @@ export class Director {
       Object.assign(CONFIG.claw, params);   // 幕间难度曲线
     }
 
+    this.hooks.onActEnter?.(act, i);
+
     // HUD：仅任务幕显示
     this.elHud.style.display = act.quest ? 'block' : 'none';
     if (act.quest) for (const id of act.quest) document.getElementById('q-' + id)?.classList.remove('done');

@@ -97,6 +97,7 @@ node tools/devServer.mjs 8000 --lan
 （默认口令写在 `prototype/src/collectPairDefault.js`，改配置即可换展台，书签无需带 `?pair=`。）
 
 副屏页脚显示连接与引导（先开副屏会提示「请先打开主游戏」；主游戏 HUD 显示副屏是否已连接）。  
+主游戏 **第三幕起** 右上角 **「副屏配对」** 可折叠条：展开为 `display.html?pair=…` 二维码 + 口令（仅 `transport` 走 LAN/SSE 时出现）。  
 主游戏每 8s `POST /api/collect/ping`（标签页在后台时不 ping）；副屏经 SSE 收 `collect.hub_status`（约 8s 一次）。
 
 ### 联动提示判定（验证逻辑）
