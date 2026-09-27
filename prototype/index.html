@@ -51,35 +51,46 @@
   #hud .hud-count { margin-top: 8px; padding-top: 7px; border-top: 1px dashed rgba(216,212,200,.16);
                     font-size: 11px; letter-spacing: 2px; color: var(--color-ink-dim); }
   #hud .hud-count span { color: var(--color-ink); font-size: 15px; }
-  #hud .hud-collect-link { font-size: 10px; letter-spacing: 1px; line-height: 1.5; margin-top: 6px;
-                           opacity: 0.82; max-width: 220px; }
-  #hud .hud-collect-link[data-state="wait"] { color: var(--color-accent); }
-  #hud .hud-collect-link[data-state="err"] { color: #c9a06a; }
-
-  /* 副屏配对：默认折叠小条，第三幕起显示 */
+  /* 副屏：右上角单卡折叠 / 展开（第三幕起） */
   #collectPairPanel { position: fixed; top: 18px; right: 18px; z-index: 11;
-                      max-width: min(200px, 42vw); pointer-events: auto; }
+                      max-width: min(280px, 56vw); pointer-events: auto;
+                      background: rgba(9,9,12,.78); border: 1px solid rgba(216,212,200,.22);
+                      border-radius: 8px; overflow: hidden; }
   #collectPairPanel[hidden] { display: none !important; }
-  #collectPairPanel .collect-pair-toggle {
+  #collectPairPanel[data-state="wait"] { border-color: rgba(216,180,120,.35); }
+  #collectPairPanel[data-state="ok"] { border-color: rgba(140,180,140,.35); }
+  #collectPairPanel[data-state="err"] { border-color: rgba(201,160,106,.4); }
+  #collectPairPanel .collect-pair-head {
     display: flex; align-items: center; gap: 6px; width: 100%;
-    padding: 6px 10px; font-size: 10px; letter-spacing: 1.5px;
-    color: var(--color-ink-dim); background: rgba(9,9,12,.72);
-    border: 1px solid rgba(216,212,200,.22); border-radius: 8px;
+    padding: 7px 10px; font-size: 10px; letter-spacing: 1px;
+    color: var(--color-ink-dim); background: transparent; border: none;
     cursor: pointer; font-family: inherit; text-align: left;
   }
-  #collectPairPanel .collect-pair-toggle .chev { margin-left: auto; opacity: .7; transition: transform .2s; }
-  #collectPairPanel.open .collect-pair-toggle .chev { transform: rotate(90deg); }
-  #collectPairPanel .collect-pair-body {
-    margin-top: 6px; padding: 8px 10px 10px;
-    background: rgba(9,9,12,.78); border: 1px solid rgba(216,212,200,.18);
-    border-radius: 8px; text-align: center;
-  }
-  #collectPairPanel .collect-pair-body[hidden] { display: none; }
-  #collectPairPanel canvas { display: block; margin: 0 auto 6px; border-radius: 4px;
+  #collectPairPanel .status-title { flex: 1; color: var(--color-ink); letter-spacing: 1.5px; }
+  #collectPairPanel .collect-pair-head .chev { opacity: .7; transition: transform .2s; }
+  #collectPairPanel.open .collect-pair-head .chev { transform: rotate(90deg); }
+  #collectPairPanel .collect-pair-expand { padding: 0 10px 10px; text-align: center;
+                                           border-top: 1px dashed rgba(216,212,200,.14); }
+  #collectPairPanel .collect-pair-expand[hidden] { display: none; }
+  #collectPairPanel .pair-wait[hidden] { display: none; }
+  #collectPairPanel canvas { display: block; margin: 8px auto 6px; border-radius: 4px;
                              image-rendering: pixelated; }
-  #collectPairPanel .pair-code { font-size: 11px; letter-spacing: 2px; color: var(--color-ink); }
-  #collectPairPanel .pair-hint { margin-top: 4px; font-size: 9px; line-height: 1.45;
-                                letter-spacing: .5px; color: var(--color-ink-dim); }
+  #collectPairPanel .pair-url-row { display: flex; gap: 6px; align-items: stretch; }
+  #collectPairPanel .pair-url {
+    flex: 1; min-width: 0; font-size: 9px; line-height: 1.35; padding: 5px 6px;
+    color: var(--color-ink); background: rgba(0,0,0,.35); border: 1px solid rgba(216,212,200,.16);
+    border-radius: 4px; font-family: inherit; user-select: all; -webkit-user-select: all;
+  }
+  #collectPairPanel .pair-copy {
+    flex: 0 0 auto; padding: 0 8px; font-size: 9px; letter-spacing: 1px;
+    color: var(--color-ink); background: rgba(216,212,200,.12);
+    border: 1px solid rgba(216,212,200,.22); border-radius: 4px; cursor: pointer;
+    font-family: inherit;
+  }
+  #collectPairPanel .pair-hint { margin-top: 6px; font-size: 9px; line-height: 1.45;
+                                letter-spacing: .5px; color: var(--color-ink-dim); text-align: left; }
+  #collectPairPanel .pair-err-text { font-size: 9px; line-height: 1.45; color: var(--color-ink-dim);
+                                     text-align: left; padding-top: 8px; }
 
   /* —— 字幕条：底条背板（打字机逻辑在 director.msg）—— */
   #msg { position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 10;
@@ -206,14 +217,21 @@
   <div id="frameBorder"></div>
   <div id="flash"></div>
 
-  <div id="collectPairPanel" hidden>
-    <button type="button" class="collect-pair-toggle" aria-expanded="false">
-      <span>副屏配对</span><span class="chev" aria-hidden="true">▸</span>
+  <div id="collectPairPanel" hidden data-state="wait">
+    <button type="button" class="collect-pair-head" aria-expanded="false">
+      <span class="status-title">出货副屏</span>
+      <span class="chev" aria-hidden="true">▸</span>
     </button>
-    <div class="collect-pair-body" hidden>
-      <canvas width="84" height="84" aria-label="出货副屏链接二维码"></canvas>
-      <div class="pair-code"></div>
-      <div class="pair-hint">扫描在安卓盒打开 display</div>
+    <div class="collect-pair-expand" hidden>
+      <div class="pair-wait">
+        <canvas width="84" height="84" aria-label="出货副屏链接二维码"></canvas>
+        <div class="pair-url-row">
+          <input type="text" class="pair-url" readonly spellcheck="false" aria-label="副屏地址" />
+          <button type="button" class="pair-copy">复制</button>
+        </div>
+        <div class="pair-hint"></div>
+      </div>
+      <div class="pair-err-text" hidden></div>
     </div>
   </div>
 
@@ -223,7 +241,6 @@
     <div class="quest" id="q-can">罐头 ×1</div>
     <div class="quest" id="q-veg">蔬菜 ×1</div>
     <div class="hud-count">已收集 <span id="collected">0</span></div>
-    <div class="hud-count hud-collect-link" id="collectLink" hidden></div>
   </div>
   <div id="toasts"></div>
   <div id="viewDots"><i data-v="left"></i><i data-v="front" class="on"></i><i data-v="right"></i></div>
