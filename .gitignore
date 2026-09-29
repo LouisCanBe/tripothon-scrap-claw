@@ -9,3 +9,6 @@ prototype/assets/generated/
 
 # 相框原厂 SDK 压缩包与解压目录。开发副本在 prototype/vendor/jupiter
 JupiterSR/**/Jupiter-Interlace-SDK-*
+
+# 相框原厂套件留在本机，不进仓库。开发副本在 prototype/vendor/jupiter
+/JupiterSR/
