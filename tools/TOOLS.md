@@ -2,6 +2,16 @@
 
 本项目用到的外部服务统一按 **tripo.mjs 三段式** 封装：CLI 直接用 / import 进脚本 / serve 给浏览器 UI。
 
+## 仓库边界（游戏 vs 工具 Hub）
+
+| 范围 | 路径 | 运行方式 |
+|------|------|----------|
+| **游戏** | `prototype/` | `node tools/devServer.mjs 8000` — **不需要** `npm install` |
+| **工具 Hub** | `tools/` + 根目录 `package.json` | `npm install` → `node tools/hub.serve.mjs`（Tripo / Marble / PixVerse） |
+| **本机 Agent** | `.agents/`、`.cursor/` | `npm run skills:pixverse` 安装 PixVerse Skill；**不入库**，每人本机一份 |
+
+Marble / PixVerse 在 Hub 里下载的自动命名文件（如 `world-<id>-pano.png`）视为缓冲区；确认进游戏后改名为 `reveal-draft-*` 或写入 `config.js` 再提交。
+
 ## 服务现状
 
 | 服务 | 用途 | 工具 | 状态 |

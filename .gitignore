@@ -7,8 +7,21 @@ node_modules/
 # Tripo 生成缓冲区（确认好用后改名进 prizes/ 才入库）
 prototype/assets/generated/
 
-# 鐩告鍘熷巶 SDK 鍘嬬缉鍖呬笌瑙ｅ帇鐩綍銆傚紑鍙戝壇鏈湪 prototype/vendor/jupiter
+# 鐩告?嗗師鍘? SDK 鍘嬬缉鍖呬笌瑙ｅ帇鐩?褰曘�傚紑鍙戝壇鏈?鍦? prototype/vendor/jupiter
 JupiterSR/**/Jupiter-Interlace-SDK-*
 
-# 鐩告鍘熷巶濂椾欢鐣欏湪鏈満锛屼笉杩涗粨搴撱�傚紑鍙戝壇鏈湪 prototype/vendor/jupiter
+# 鐩告?嗗師鍘傚?椾欢鐣欏湪鏈?鏈猴紝涓嶈繘浠撳簱銆傚紑鍙戝壇鏈?鍦? prototype/vendor/jupiter
 /JupiterSR/
+
+# Cursor Agent Skill (npm run skills:pixverse); not game runtime
+.agents/
+.cursor/
+skills-lock.json
+
+# Hub download noise / temp
+prototype/design/concepts/.pixverse-download*/
+prototype/design/concepts/PixVerse_Image_Effect_*.png
+prototype/assets/worlds/.tmp*
+prototype/assets/worlds/world-*-pano.png
+prototype/assets/worlds/world-*-collider.glb
+prototype/assets/worlds/world-*-100k.spz
