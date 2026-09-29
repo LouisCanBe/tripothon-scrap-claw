@@ -18,6 +18,8 @@
 
 export const DEFAULT_HINT = '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环 · H 参数面板';
 
+// 试玩：http://127.0.0.1:8000/?act=3（devServer 根即 prototype，无需 /prototype）；终幕 Y 再玩一次
+
 export const ACTS = [
   {
     id: 1, label: '第一幕 · 引子', layout: 'right',
@@ -52,6 +54,11 @@ export const ACTS = [
     control: { move: true, drop: true, view: true },
     tuning: { gripStrength: 0.78, baseSlipProb: 0.45, decayPerGrab: 0.06 },  // 爪力开始不稳
     quest: ['bread', 'can', 'veg'],
+    questCopy: {
+      right: { bread: '面包，入账。', can: '罐头。', veg: '青菜。' },
+      wrong: '……这不是今天的配额。',
+      wrongJunk: '垃圾也进洞了。不算数。',
+    },
     hint: DEFAULT_HINT,
     script: [
       { type: 'panel', side: 'left', text: '配额写在墙上了。\n今天也是三样。' },
@@ -80,6 +87,7 @@ export const ACTS = [
     hint: null,
     script: [
       { type: 'glitch' },
+      { type: 'revealBeat', dur: 4.2, line: '他今天吃了什么？\n手心里只有一罐。' },
       { type: 'reveal' },
       { type: 'stinger', text: 'Demo 结束。他今天吃了什么？' },
     ],

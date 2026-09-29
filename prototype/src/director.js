@@ -1,33 +1,31 @@
 // ============================================================
 // 幕导演：四幕 + 终幕的流程编排（分幕数据在 acts.js）
-//
-// 编排层只调稳定接口，不碰实现：
-//   爪机  claw.controlEnabled / CONFIG.claw 参数 / collect 事件
-//   画幅  FrameMask.setLayout / pulse
-//   灯光  lights（四幕回暖、终幕转冷）
-//   实景  hooks.onReveal（main 注入，内部怎么改都行）
-// → 机器本体/爪子换 AI 生成资产时，本文件零改动。
 // ============================================================
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { ACTS, DEFAULT_HINT } from './acts.js';
+import { playGlitchTick, playRevealDrone, playMusicBoxStinger, unlockAudio } from './gameAudio.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (a, b) => a + Math.random() * (b - a);
 
 export class Director {
-  constructor({ mask, claw, rig, lights, hooks = {} }) {
+  constructor({ mask, claw, rig, lights, hooks = {}, clawDefaults = null }) {
     this.mask = mask;
     this.claw = claw;
     this.rig = rig;
     this.lights = lights;
     this.hooks = hooks;
+    this._clawDefaults = clawDefaults;
 
     this.idx = -1;
-    this.happened = new Set();   // 已到事件（防止 wait 注册前事件先到）
+    this._runGen = 0;
+    this.happened = new Set();
     this._waiter = null;
     this._skip = false;
     this._questDone = new Set();
+    this._startActIndex = 0;
+    this._ended = false;
 
     this.elMsg = document.getElementById('msg');
     this.elHint = document.getElementById('hint');
@@ -36,30 +34,55 @@ export class Director {
     this.elStage = document.getElementById('stage');
     this.elFlash = document.getElementById('flash');
     this.elPanel = { left: document.getElementById('panelLeft'), right: document.getElementById('panelRight') };
+    this.elQuestProg = document.getElementById('questProgress');
+    this.elRevealBeat = document.getElementById('revealBeat');
+    this.elGlobalGrabStat = document.getElementById('globalGrabStat');
   }
 
   get act() { return ACTS[this.idx]; }
   allow(what) { return this.act?.control?.[what] !== false; }
 
-  // 外部事件入口（main 转发：collect / view）
+  setStartActIndex(i) {
+    this._startActIndex = Math.max(0, Math.min(i, ACTS.length - 1));
+  }
+
   notify(event, payload) {
     this.happened.add(event);
     if (this._waiter?.event === event) { this._waiter.resolve(); this._waiter = null; }
 
     if (event === 'collect' && payload) {
-      // 二幕首抓
       if (this.act?.id === 2 && !this.happened.has('firstCollect')) this.notify('firstCollect');
-      // 三幕任务勾选 + 集齐白闪
+
       const q = this.act?.quest;
-      if (q?.includes(payload.id) && !this._questDone.has(payload.id)) {
+      const copy = this.act?.questCopy;
+      if (this.act?.id === 3 && q) {
+        if (q.includes(payload.id) && !this._questDone.has(payload.id)) {
+          this._questDone.add(payload.id);
+          document.getElementById('q-' + payload.id)?.classList.add('done');
+          this.#syncQuestHud();
+          const line = copy?.right?.[payload.id];
+          if (line) this.msg(line);
+          if (q.every(id => this._questDone.has(id))) {
+            this.mask.pulse('#fff', 160);
+            setTimeout(() => this.notify('questComplete'), 700);
+          }
+        } else if (!this._questDone.has(payload.id)) {
+          const line = payload.category === 'junk'
+            ? (copy?.wrongJunk ?? copy?.wrong)
+            : (copy?.wrong ?? '……配额不认这个。');
+          this.msg(line);
+          this.#panel('right', line);
+          setTimeout(() => this.#panel('right', ''), 2200);
+        }
+      } else if (q?.includes(payload.id) && !this._questDone.has(payload.id)) {
         this._questDone.add(payload.id);
         document.getElementById('q-' + payload.id)?.classList.add('done');
         if (q.every(id => this._questDone.has(id))) {
-          this.mask.pulse('#fff', 160);          // 过曝白闪：记忆在美化现实
+          this.mask.pulse('#fff', 160);
           setTimeout(() => this.notify('questComplete'), 700);
         }
       }
-      // 三幕爪力衰减
+
       if (this.act?.tuning?.decayPerGrab)
         CONFIG.claw.gripStrength = Math.max(0.55, CONFIG.claw.gripStrength - this.act.tuning.decayPerGrab);
     }
@@ -70,16 +93,39 @@ export class Director {
     }
   }
 
-  skip() {   // 调试：跳幕（N 键 / 面板按钮）
+  shouldSkipCollectLine() {
+    return this.act?.id === 3;
+  }
+
+  skip() {
     this._skip = true;
     if (this._waiter) { this._waiter.resolve(); this._waiter = null; }
   }
 
-  start() { this.#enter(0); }
+  start() {
+    this.#enter(this._startActIndex);
+  }
+
+  async restart() {
+    unlockAudio();
+    this._runGen += 1;
+    this._skip = true;
+    if (this._waiter) { this._waiter.resolve(); this._waiter = null; }
+    await this.hooks.onRestart?.();
+    this._ended = false;
+    this.#enter(this._startActIndex);
+  }
 
   // ---------------- 内部 ----------------
 
+  #syncQuestHud() {
+    if (!this.elQuestProg) return;
+    const q = this.act?.quest;
+    this.elQuestProg.textContent = q ? String(this._questDone.size) : '0';
+  }
+
   async #enter(i) {
+    const gen = ++this._runGen;
     this.idx = i;
     const act = this.act;
     if (!act) return;
@@ -87,44 +133,47 @@ export class Director {
     this.happened = new Set();
     this._questDone = new Set();
     this._viewsSeen = null;
+    this.#syncQuestHud();
 
     this.mask.setLayout(act.layout, i > 0);
-    if (act.framing) this.mask.setViewMode(act.framing);   // 缺省不写 = 沿用上一幕（保留玩家 V 键选择）
+    if (act.framing) this.mask.setViewMode(act.framing);
     this.rig?.setZoom(act.zoom ?? 1);
     this.claw.controlEnabled = !!(act.control.move || act.control.drop);
     if (act.tuning) {
       const { decayPerGrab, ...params } = act.tuning;
-      Object.assign(CONFIG.claw, params);   // 幕间难度曲线
+      Object.assign(CONFIG.claw, params);
+    } else if (this._clawDefaults) {
+      Object.assign(CONFIG.claw, this._clawDefaults);
     }
 
     this.hooks.onActEnter?.(act, i);
 
-    // HUD：仅任务幕显示
     this.elHud.style.display = act.quest ? 'block' : 'none';
+    if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = (act.id ?? 0) < 3;
     if (act.quest) for (const id of act.quest) document.getElementById('q-' + id)?.classList.remove('done');
 
-    // 提示条
     this.elHint.style.opacity = act.hint === null ? '0' : '1';
     if (act.hint) this.elHint.textContent = act.hint;
 
-    // 幕标题卡
     if (act.label) {
       this.elLabel.textContent = act.label;
       this.elLabel.classList.add('show');
       setTimeout(() => this.elLabel.classList.remove('show'), 2600);
     }
 
-    // 面板清空（上一幕残留）
     this.#panel('left', ''); this.#panel('right', '');
 
     await sleep(400);
-    await this.#run(act);
+    if (gen !== this._runGen) return;
+    await this.#run(act, gen);
+    if (gen !== this._runGen) return;
     if (ACTS[this.idx + 1]) this.#enter(this.idx + 1);
+    else this._ended = true;
   }
 
-  async #run(act) {
+  async #run(act, gen) {
     for (const step of act.script) {
-      if (this._skip) return;
+      if (this._skip || gen !== this._runGen) return;
       switch (step.type) {
         case 'sub':   await this.#sub(step); break;
         case 'panel': this.#panel(step.side, step.text); if (step.dur) await sleep(step.dur * 1000); break;
@@ -132,6 +181,7 @@ export class Director {
         case 'wait':  await this.#waitFor(step.event); break;
         case 'synthesis': await this.#synthesis(act); break;
         case 'glitch': await this.#glitch(); break;
+        case 'revealBeat': await this.#revealBeat(step); break;
         case 'reveal': this.hooks.onReveal?.(); break;
         case 'stinger': this.#stinger(step.text); break;
       }
@@ -143,12 +193,11 @@ export class Director {
     return new Promise(resolve => (this._waiter = { event, resolve }));
   }
 
-  msg(text) {   // 爪机台词也走这里
+  msg(text) {
     this.elMsg.classList.remove('stinger');
     clearTimeout(this._msgTimer);
     clearInterval(this._typeTimer);
     this.elMsg.style.opacity = '1';
-    // 打字机：>6 字的句子逐字出现（短提示瞬显，不拖节奏）
     const chars = [...text];
     if (chars.length > 6) {
       let i = 0;
@@ -178,7 +227,6 @@ export class Director {
     el.classList.add('show');
   }
 
-  // 四幕：合成演出（DOM 卡片 + 灯光回暖 + 颗粒减弱）
   async #synthesis(act) {
     const { key, fill, glow, hemi, ambient } = this.lights;
     const warm = new THREE.Color(0xffc98f);
@@ -186,7 +234,7 @@ export class Director {
     const grain0 = CONFIG.post.grain;
     const fill0 = CONFIG.lights.fill.intensity;
     const hemi0 = CONFIG.lights.hemi.intensity;
-    for (let i = 0; i <= 16; i++) {   // ~1.6s 色温渐升（无点光爆闪，抬补光+半球）
+    for (let i = 0; i <= 16; i++) {
       const t = i / 16;
       key.color.copy(from).lerp(warm, t);
       key.intensity = CONFIG.lights.key.intensity + 0.45 * t;
@@ -219,14 +267,14 @@ export class Director {
     menu.classList.remove('show');
   }
 
-  // 终幕：故障前兆 → 爆发 → 黑中切 16:9（灰盒版；正式版换 glitch shader）
   async #glitch() {
     const grain0 = CONFIG.post.grain;
-    CONFIG.post.grain = 0.13;                    // 前兆：颗粒骤粗
+    CONFIG.post.grain = 0.13;
     await sleep(1400);
 
-    const t0 = Date.now();                       // 爆发 ~2s：错位 + 频闪
+    const t0 = Date.now();
     while (Date.now() - t0 < 2000) {
+      playGlitchTick();
       this.elStage.style.transform = `translate(${rand(-16, 16)}px, ${rand(-9, 9)}px)`;
       this.elStage.style.filter = `hue-rotate(${rand(-40, 40)}deg) contrast(${rand(1, 1.7)})`;
       this.elFlash.style.transition = 'none';
@@ -236,28 +284,41 @@ export class Director {
     }
     this.elStage.style.transform = '';
     this.elStage.style.filter = '';
-    CONFIG.post.grain = grain0 * 0.4;            // 现实：颗粒退去大半
+    CONFIG.post.grain = grain0 * 0.4;
 
-    this.elFlash.style.background = '#000';      // 黑中无动画展开 16:9 + 冷调
+    this.elFlash.style.background = '#000';
     this.elFlash.style.opacity = '1';
     await sleep(280);
     this.mask.setLayout('wide', false);
     this.hooks.onLightsCold?.();
     await sleep(700);
-    this.elFlash.style.transition = 'opacity 1.4s';   // 缓慢亮起 = 梦醒
+    this.elFlash.style.transition = 'opacity 1.4s';
     this.elFlash.style.opacity = '0';
     await sleep(1400);
     this.elFlash.style.transition = '';
   }
 
-  // 终幕手写体 + 八音盒彩蛋钩子
+  async #revealBeat({ line, dur = 4 }) {
+    playRevealDrone();
+    const el = this.elRevealBeat;
+    if (!el) { await sleep(dur * 1000); return; }
+    const txt = el.querySelector('.reveal-beat-text');
+    if (txt) txt.textContent = line ?? '';
+    el.hidden = false;
+    el.classList.add('show');
+    await sleep(dur * 1000);
+    el.classList.remove('show');
+    el.hidden = true;
+  }
+
   #stinger(text) {
+    playMusicBoxStinger();
     this.elMsg.classList.add('stinger');
     this.elMsg.textContent = text;
     this.elMsg.style.opacity = '1';
     setTimeout(() => {
       this.elHint.style.opacity = '1';
-      this.elHint.textContent = '（拖拽环视 · 点击继续）';
+      this.elHint.textContent = '（环视 · 点击继续 · Y 再玩一次）';
       const once = () => {
         window.removeEventListener('pointerdown', once);
         this.elHint.style.opacity = '0';

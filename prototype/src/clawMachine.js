@@ -73,6 +73,20 @@ export class ClawMachine {
     this._tripoVisual.position.y = cfg.offsetY * clawS;
   }
 
+  reset() {
+    this.state = S.IDLE;
+    this.timer = 0;
+    this.gripped = null;
+    this.slipPlanned = false;
+    this.prongT = 0;
+    const t = clawTune();
+    this.clawY = t.restY;
+    this.target.set(C().home[0], C().home[1]);
+    this.rig.position.set(this.target.x, 0, this.target.y);
+    this.claw.position.y = this.clawY;
+    this.controlEnabled = true;
+  }
+
   constructor(scene, items, hooks = {}) {
     this.items = items;
     this.hooks = hooks;
@@ -290,7 +304,8 @@ export class ClawMachine {
     if (intoHole) {
       this.hooks.onCollect?.(it);
       this.hooks.onHoleDrop?.(it);
-      this.#say(it.category === 'food' ? 'food' : 'junk');
+      const skip = this.hooks.shouldSkipCollectLine?.(it);
+      if (!skip) this.#say(it.category === 'food' ? 'food' : 'junk');
     } else {
       this.#say('slip');
     }

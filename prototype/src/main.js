@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CONFIG } from './config.js';
-import { spawnPool, upgradeVisuals, tickUpgrades, enableShadows } from './prizePool.js';
+import { spawnPool, upgradeVisuals, tickUpgrades, enableShadows, resetAllPoolItems } from './prizePool.js';
 import { ClawMachine } from './clawMachine.js';
 import { CameraRig } from './cameraRig.js';
 import { FrameMask } from './frameMask.js';
@@ -21,7 +21,8 @@ import { OnscreenButtons } from './onscreenButtons.js';
 import { DesignOverlay } from './designOverlay.js';
 import { buildMachineShell } from './machineShell.js';
 import { Director } from './director.js';
-import { DEFAULT_HINT } from './acts.js';
+import { ACTS, DEFAULT_HINT } from './acts.js';
+import { unlockAudio } from './gameAudio.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
 import { mountMarbleImmersive } from './revealMarble.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
@@ -29,9 +30,27 @@ import { refreshClawComicFx } from './clawComicFx.js';
 import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
 import { publishHoleDrop, publishVended, openCollectDisplayWindow } from './collectDisplayBus.js';
 import { startCollectDisplayPairPanel } from './collectDisplayPairPanel.js';
-import { createSceneLights, applyRevealColdLighting } from './sceneLighting.js';
+import { createSceneLights, applyRevealColdLighting, applyMemoryLighting } from './sceneLighting.js';
 
 loadPoolDevOverrides();
+
+const CLAW_DEFAULTS = {
+  gripStrength: CONFIG.claw.gripStrength,
+  baseSlipProb: CONFIG.claw.baseSlipProb,
+};
+const POST_GRAIN_DEFAULT = CONFIG.post.grain;
+
+function parseStartActIndex() {
+  const p = new URLSearchParams(location.search);
+  const raw = p.get('act') ?? p.get('from');
+  if (!raw) return 0;
+  const n = parseInt(raw, 10);
+  if (Number.isNaN(n)) return 0;
+  const byId = ACTS.findIndex(a => a.id === n);
+  if (byId >= 0) return byId;
+  if (n >= 1 && n <= ACTS.length) return n - 1;
+  return 0;
+}
 
 // —— 渲染器 ——
 // 触屏设备（iPad/手机）降渲染分辨率上限：Retina ×2 全幅 + 后处理极易爆显存崩标签页
@@ -93,17 +112,26 @@ function toast(text) {
   setTimeout(() => el.remove(), 1900);
 }
 
+// —— 本局入洞总次数（全幕累计；UI 第三幕起由 director 显示）——
+let globalGrabCount = 0;
+const elGlobalGrabCount = () => document.getElementById('globalGrabCount');
+function bumpGlobalGrabCount() {
+  globalGrabCount += 1;
+  const el = elGlobalGrabCount();
+  if (el) el.textContent = String(globalGrabCount);
+}
+
 // —— 爪机 ——
 let director;   // 前向声明：claw 的 hooks 里闭包引用
 const claw = new ClawMachine(world, items, {
   onClawVisualReady: () => refreshClawComicFx(claw),
   onMessage: (t) => director?.msg(t),
   onCollect: (item) => {
-    const el = document.getElementById('collected');
-    el.textContent = +el.textContent + 1;
-    toast(`+1 ${item.name}`);
+    bumpGlobalGrabCount();
+    if (director?.act?.id !== 3) toast(`+1 ${item.name}`);
     director?.notify('collect', item);
   },
+  shouldSkipCollectLine: () => director?.shouldSkipCollectLine?.() ?? false,
   onHoleDrop: (item) => publishHoleDrop(item),
   onVended: (item) => publishVended(item),
 });
@@ -209,6 +237,36 @@ async function teardownRevealAssets() {
   revealCtl.setBounds(null);
 }
 
+function disableRevealControls() {
+  revealCtl.setEnabled(false);
+  revealControlsOn = false;
+  pointerCtl.setLookMode(true);
+  pointerCtl.setStagePassthrough(false);
+  if (elViewDots) elViewDots.style.opacity = '';
+  scene.background = new THREE.Color(0x0b0b0d);
+  scene.backgroundIntensity = CONFIG.render.envIntensity ?? 1;
+  scene.fog = null;
+  applyMemoryLighting({ key, fill, glow, hemi, ambient });
+  world.visible = true;
+  CONFIG.post.grain = POST_GRAIN_DEFAULT;
+}
+
+async function onGameplayRestart() {
+  disableRevealControls();
+  await teardownRevealAssets();
+  globalGrabCount = 0;
+  const gc = elGlobalGrabCount();
+  if (gc) gc.textContent = '0';
+  resetAllPoolItems(items);
+  claw.reset();
+  rig.setView('front');
+  rig.setZoom(1);
+  mask.setLayout('right', false);
+  document.getElementById('revealBeat')?.classList.remove('show');
+  const rb = document.getElementById('revealBeat');
+  if (rb) rb.hidden = true;
+}
+
 async function onReveal() {
   world.visible = false;
   onRevealColdLighting();
@@ -269,7 +327,12 @@ async function revealPreview(mode) {
 director = new Director({
   mask, claw, rig,
   lights: { key, fill, glow, hemi, ambient },
-  hooks: { onReveal, onLightsCold: onRevealColdLighting },
+  clawDefaults: CLAW_DEFAULTS,
+  hooks: {
+    onReveal,
+    onLightsCold: onRevealColdLighting,
+    onRestart: onGameplayRestart,
+  },
 });
 startCollectDisplayPairPanel(director);
 
@@ -278,6 +341,8 @@ input.on('drop', () => { if (director.allow('drop')) claw.startDrop(); });
 input.on('view', (v) => { if (director.allow('view')) { rig.setView(v); director.notify('view', v); } });
 input.on('cycle', (d) => { if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); } });
 input.on('next', () => director.skip());
+input.on('replay', () => { director.restart(); toast('重新开始'); });
+window.addEventListener('pointerdown', () => unlockAudio(), { once: true });
 // 近/远取景切换：仅居中画幅幕开放（一幕右布局用 far 会穿帮）
 input.on('frameMode', () => {
   if (revealControlsOn && revealCtl.features.modeToggle) {
@@ -482,9 +547,17 @@ let booted = false;
 function boot() {
   if (booted) return;
   booted = true;
+  const startIdx = parseStartActIndex();
+  director.setStartActIndex(startIdx);
+  if (startIdx > 0) {
+    const act = ACTS[startIdx];
+    const t = loadingEl.querySelector('.t');
+    if (t) t.textContent = `试玩：从第 ${act?.id ?? startIdx + 1} 幕开始…`;
+  }
   loadingEl.classList.add('done');
   setTimeout(() => loadingEl.remove(), 800);
   director.start();
+  if (startIdx > 0) toast(`从「${ACTS[startIdx]?.label ?? '第三幕'}」试玩`);
 }
 Promise.allSettled([prizesReady, clawReady]).then(boot);
 setTimeout(boot, 30000);   // 兜底：30 秒无论如何开演（个别资产失败不应卡死）

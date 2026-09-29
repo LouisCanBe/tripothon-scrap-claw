@@ -23,6 +23,7 @@ export class Input {
         case 'KeyF':   this.emit(e.shiftKey ? 'hardCut' : 'toggleFrame'); break;
         case 'KeyH':   this.emit('gui'); break;
         case 'KeyN':   this.emit('next'); break;   // 调试：跳过当前幕
+        case 'KeyY':   this.emit('replay'); break; // 通关后再玩一次
         case 'KeyV':   this.emit('frameMode'); break;   // 取景 近/远 切换
         case 'KeyG':   this.emit('design'); break;      // 设计稿叠加层
         case 'KeyL':   this.emit('designLock'); break;  // 设计稿锁定/穿透

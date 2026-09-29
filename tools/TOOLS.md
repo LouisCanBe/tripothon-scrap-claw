@@ -51,7 +51,7 @@ node tools/devServer.mjs 8000 --lan   # 内网可访问（终端会打印局域�
 
 美术剪影对照流程见根目录 **`ART-美术设定.md`**，配对表 **`tools/art-pairs.json`**。
 
-### 2D 概念图审阅（Hub 需本仓库 `hub.serve.mjs` 未提交前的路由补丁；已合入后重启 Hub）
+### 2D 概念图审阅（改路由后请重启 `node tools/hub.serve.mjs`）
 
 | 风格 | Hub（8780） | 试玩 devServer（8000） |
 |------|-------------|-------------------------|

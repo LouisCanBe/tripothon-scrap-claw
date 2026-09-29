@@ -1,0 +1,14 @@
+{
+  "name": "tripothon-scrap-claw",
+  "private": true,
+  "description": "TripoThon 拾荒娃娃机 — dev tooling only (game runs without npm install)",
+  "devDependencies": {
+    "pixverse": "^1.4.6"
+  },
+  "scripts": {
+    "pixverse": "pixverse",
+    "pixverse:login": "pixverse auth login",
+    "pixverse:status": "pixverse auth status",
+    "skills:pixverse": "npx skills add https://github.com/pixverseai/skills --skill pixverse-ai-image-and-video-generator --project -y"
+  }
+}

@@ -134,6 +134,7 @@ export function spawnPool(scene) {
 
     const item = {
       ...def, mesh, restY,
+      spawn: { x, z, rotY: mesh.rotation.y },
       state: 'idle',   // idle | gripped | falling | delivering | collected
       vy: 0,
     };
@@ -296,4 +297,17 @@ export function normalizeGLB(obj, collider, restY) {
   const wrapper = new THREE.Group();
   wrapper.add(obj);
   return wrapper;
+}
+
+/** 通关重开：已入洞物品回到初始位 */
+export function resetAllPoolItems(items) {
+  for (const it of items) {
+    if (!it.mesh || !it.spawn) continue;
+    it.state = 'idle';
+    it.vy = 0;
+    it.mesh.visible = true;
+    it.mesh.position.set(it.spawn.x, it.restY, it.spawn.z);
+    it.mesh.rotation.set(0, it.spawn.rotY, 0);
+    clampItemToPoolBounds(it);
+  }
 }

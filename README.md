@@ -14,7 +14,9 @@ node tools/devServer.mjs 8000 --lan   # 监听 0.0.0.0，手机/副屏用 http:/
 # 或传统方式：cd prototype; python -m http.server 8021（改 JS 后需 Ctrl+F5 强刷）
 ```
 
-浏览器打开 **http://localhost:8000/** 即玩。跨设备出货副屏见 `prototype/COLLECT-DISPLAY.md`（`--lan`，默认配对口令在 `collectPairDefault.js`）。
+浏览器打开 **http://localhost:8000/** 即玩（根目录就是 `prototype/`，不要加 `/prototype` 路径）。  
+试玩第三幕任务：**http://127.0.0.1:8000/?act=3**；终幕后 **Y** 再玩一次。  
+跨设备出货副屏见 `prototype/COLLECT-DISPLAY.md`（`--lan`，默认配对口令在 `collectPairDefault.js`）。
 
 ### 键位
 
@@ -26,6 +28,7 @@ node tools/devServer.mjs 8000 --lan   # 监听 0.0.0.0，手机/副屏用 http:/
 | V | 取景 凑近 / 站远 切换（二~四幕） |
 | G | 设计稿叠加层（调试对齐 UI，叠加内 `[` `]` 切图 / `R` 复位 / `L` 锁定穿透） |
 | N | 跳过当前幕（调试用） |
+| Y | 再玩一次（重置本局，保留 ?act= 试玩入口） |
 | H | 调参面板显隐 |
 | F / Shift+F | 画幅切换 / 硬切（调试） |
 
@@ -66,6 +69,8 @@ GLB 落到 `prototype/assets/prizes/`，manifest 自动重建，刷新页面即�
 ```bash
 node tools/hub.serve.mjs    # http://localhost:8780/  黄强调色统一控制台
 ```
+
+PixVerse（网页会员）：仓库根 `npm install` → `npm run pixverse:login`（项目级 CLI，勿全局 `-g`）；智能体 Skill 在 `.agents/skills/pixverse-ai-image-and-video-generator/`。OpenAPI 批处理仍用 `tools/pixverse.mjs`，见 `tools/PIXVERSE.md`。
 
 剪影记忆/现实对照：`ART-美术设定.md`、`tools/art-pairs.json`。
 
