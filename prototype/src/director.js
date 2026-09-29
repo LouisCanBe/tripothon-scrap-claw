@@ -16,6 +16,7 @@ export class Director {
     this.rig = rig;
     this.lights = lights;
     this.hooks = hooks;
+    this.narrativeBg = hooks.narrativeBg ?? null;
     this._clawDefaults = clawDefaults;
 
     this.idx = -1;
@@ -63,7 +64,7 @@ export class Director {
           const line = copy?.right?.[payload.id];
           if (line) this.msg(line);
           if (q.every(id => this._questDone.has(id))) {
-            this.mask.pulse('#fff', 160);
+            this.mask.pulse(undefined, 160);
             setTimeout(() => this.notify('questComplete'), 700);
           }
         } else if (!this._questDone.has(payload.id)) {
@@ -78,7 +79,7 @@ export class Director {
         this._questDone.add(payload.id);
         document.getElementById('q-' + payload.id)?.classList.add('done');
         if (q.every(id => this._questDone.has(id))) {
-          this.mask.pulse('#fff', 160);
+          this.mask.pulse(undefined, 160);
           setTimeout(() => this.notify('questComplete'), 700);
         }
       }
@@ -147,6 +148,7 @@ export class Director {
     }
 
     this.hooks.onActEnter?.(act, i);
+    this.narrativeBg?.applyAct(act);
 
     this.elHud.style.display = act.quest ? 'block' : 'none';
     if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = (act.id ?? 0) < 3;
@@ -180,7 +182,10 @@ export class Director {
         case 'hint':  this.elHint.textContent = step.text; break;
         case 'wait':  await this.#waitFor(step.event); break;
         case 'synthesis': await this.#synthesis(act); break;
-        case 'glitch': await this.#glitch(); break;
+        case 'interstitial':
+          await this.narrativeBg?.showInterstitial(step.image, step.dur ?? 2.5);
+          break;
+        case 'glitch': await this.#glitch(step); break;
         case 'revealBeat': await this.#revealBeat(step); break;
         case 'reveal': this.hooks.onReveal?.(); break;
         case 'stinger': this.#stinger(step.text); break;
@@ -267,7 +272,8 @@ export class Director {
     menu.classList.remove('show');
   }
 
-  async #glitch() {
+  async #glitch(step = {}) {
+    const glitchOverlay = this.narrativeBg?.pulseGlitchOverlay(step.image ?? 'glitch', 2400);
     const grain0 = CONFIG.post.grain;
     CONFIG.post.grain = 0.13;
     await sleep(1400);
@@ -278,8 +284,9 @@ export class Director {
       this.elStage.style.transform = `translate(${rand(-16, 16)}px, ${rand(-9, 9)}px)`;
       this.elStage.style.filter = `hue-rotate(${rand(-40, 40)}deg) contrast(${rand(1, 1.7)})`;
       this.elFlash.style.transition = 'none';
-      this.elFlash.style.background = Math.random() < 0.5 ? '#000' : '#fff';
-      this.elFlash.style.opacity = Math.random() < 0.3 ? '0.9' : '0';
+      this.elFlash.style.background = '#0a0a0c';
+      const gMax = CONFIG.frame.glitchFlashMax ?? 0.42;
+      this.elFlash.style.opacity = Math.random() < 0.22 ? String(gMax * (0.55 + Math.random() * 0.45)) : '0';
       await sleep(80);
     }
     this.elStage.style.transform = '';
@@ -296,9 +303,11 @@ export class Director {
     this.elFlash.style.opacity = '0';
     await sleep(1400);
     this.elFlash.style.transition = '';
+    await glitchOverlay;
   }
 
-  async #revealBeat({ line, dur = 4 }) {
+  async #revealBeat({ line, dur = 4, image }) {
+    if (image) this.narrativeBg?.setRevealBeatImage(image);
     playRevealDrone();
     const el = this.elRevealBeat;
     if (!el) { await sleep(dur * 1000); return; }

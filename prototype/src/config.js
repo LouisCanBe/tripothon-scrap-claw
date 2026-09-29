@@ -153,6 +153,12 @@ export const CONFIG = {
     transitionSec: 1.15,     // 画幅展开时长（需与 index.html 的 CSS transition 一致）
     fisheyeFadeOnWide: true, // 展开 16:9 时鱼眼同步消退（"梦醒了"的镜头语言）
     nearZoom: 0.7,           // near 取景的变焦倍率（有效变焦 = 幕zoom × 此值；far=1）
+    photoBorder: true,       // 操作视口描边（与 clip-path 同矩形，见 frameMask.js）
+    borderWidth: 6,          // 操作视口外描边粗细（px）
+    borderColor: 'rgba(236,232,220,0.94)', // 旧照片式白框
+    viewportCoverPad: 2,     // 描边/内遮罩相对 clip 外扩 px（压住边缘抗锯齿漏缝）
+    questPulseColor: 'rgba(220,216,200,0.32)', // 配额完成等：勿用全屏 #fff
+    glitchFlashMax: 0.42,    // 终幕 glitch #flash 最高不透明度（只黑闪，不白屏）
   },
 
   pool: {
@@ -178,7 +184,7 @@ export const CONFIG = {
   // 终幕 Marble：mode 'pano' = 仅全景（与工具台 PNG 一致）；'immersive' = SPZ + collider 边界 + WASD
   reveal: {
     mode: 'pano',
-    pano: 'assets/worlds/reveal-draft-pano.png',
+    pano: 'design/concepts/reveal-ruins-wide-scrapyard-seedream50pro-16x9.png',
     colliderGlb: 'assets/worlds/reveal-draft-collider.glb',
     spz: 'assets/worlds/reveal-draft-100k.spz',
     boundsMargin: 0.45,        // AABB 内缩（越大越不容易贴到盒边）

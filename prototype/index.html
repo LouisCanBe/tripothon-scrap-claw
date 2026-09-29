@@ -18,16 +18,40 @@
 
   /* 舞台：canvas 始终全窗口渲染，用 clip-path 控制可见画幅（见 frameMask.js）
      —— 这是 outline 定的方案：不渲染进 RT，遮罩切视口，16:9 展开零成本 */
-  #stage { position: fixed; inset: 0; transition: clip-path 1.15s cubic-bezier(.65,0,.25,1);
+  /* Seedream 概念图：画幅外 / 幕间氛围（见 narrativeBg.js） */
+  #narrativeBg { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
+                  transition: opacity 1.05s ease; overflow: hidden; }
+  #narrativeBg.on { opacity: 1; }
+  #narrativeBg img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  #narrativeBg .veil { position: absolute; inset: 0;
+    background: linear-gradient(165deg, rgba(6,6,10,.62) 0%, rgba(8,8,12,.38) 45%, rgba(6,6,10,.68) 100%); }
+  /* 与 #frameBorder 同矩形（frameMask 统一定位）：视口内挡住概念底图，上面再叠 3D */
+  #narrativeViewportShade { position: fixed; z-index: 1; pointer-events: none;
+    background: rgba(7,7,11,.96); box-sizing: border-box;
+    transition: left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
+                width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1); }
+  #narrativeViewportShade.no-anim { transition: none !important; }
+  html.game-booting #stage,
+  html.game-booting #frameBorder,
+  html.game-booting #narrativeViewportShade { transition: none !important; }
+  #narrativeInterstitial { position: fixed; inset: 0; z-index: 18; pointer-events: none;
+    display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); }
+  #narrativeInterstitial[hidden] { display: none !important; opacity: 0 !important; }
+  #narrativeInterstitial img { max-width: 100%; max-height: 100%; object-fit: contain;
+    box-shadow: 0 16px 48px rgba(0,0,0,.65); }
+  #hud.hud-ration-decor { background-image: linear-gradient(rgba(9,9,12,.82), rgba(9,9,12,.82)),
+    var(--hud-decor-url, none); background-size: cover; background-position: center top; }
+
+  #stage { position: fixed; inset: 0; z-index: 2; transition: clip-path 1.15s cubic-bezier(.65,0,.25,1);
            touch-action: none;   /* 触控手势交给 pointerControls，禁止浏览器滚动/缩放接管 */ }
   #stage.no-anim { transition: none; }
   #stage canvas { display: block; width: 100%; height: 100%; }
 
-  /* 旧照片式白框（与 clip 区域同步，由 JS 定位） */
+  /* 操作视口描边（与 clip 同矩形；颜色/粗细见 config.frame + frameMask.js） */
   #frameBorder { position: fixed; pointer-events: none; z-index: 5;
-                 border: 5px solid rgba(240,236,224,.88); border-radius: 2px;
-                 box-shadow: 0 0 80px rgba(0,0,0,.85);
-                 transition: all 1.15s cubic-bezier(.65,0,.25,1); }
+                 border-radius: 2px; box-sizing: border-box; background: transparent;
+                 transition: left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
+                             width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1); }
   #frameBorder.no-anim { transition: none; }
 
   /* 黑屏闪（终幕"硬切"降级方案用） */
@@ -228,6 +252,14 @@
 </style>
 </head>
 <body>
+  <div id="narrativeBg" aria-hidden="true">
+    <img id="narrativeBgImg" alt="" width="1920" height="1080" decoding="async" />
+    <div class="veil"></div>
+  </div>
+  <div id="narrativeViewportShade" hidden aria-hidden="true"></div>
+  <div id="narrativeInterstitial" hidden>
+    <img id="narrativeInterstitialImg" alt="" width="1280" height="720" decoding="async" />
+  </div>
   <div id="stage"></div>
   <div id="frameBorder"></div>
   <div id="flash"></div>
@@ -272,7 +304,7 @@
   <div id="revealBeat" hidden>
     <div class="reveal-beat-inner">
       <div class="reveal-beat-visual">
-        <img src="assets/images/reveal-truth-hand-can-arcane-flare-16x9.png" alt="" width="1280" height="720" />
+        <img src="design/concepts/reveal-truth-hand-can-seedream50pro-16x9.png" alt="" width="1280" height="720" />
       </div>
       <p class="reveal-beat-text"></p>
     </div>

@@ -11,9 +11,13 @@
 //     { hint }                改底部提示
 //     { wait: 事件名 }         等待事件：allViews / firstCollect / questComplete
 //     { synthesis }           四幕合成演出
-//     { glitch }              终幕故障转场
+//     { glitch, image? }      终幕故障转场（可选概念撕裂图）
+//     { interstitial, image, dur? }  全屏概念图闪回
+//     { revealBeat, line, image?, dur? }
 //     { reveal }              露出实景（调 main 注入的 onReveal）
 //     { stinger }             终幕手写体收尾 + 八音盒彩蛋钩子
+//   backdrop  幕背景（narrativeAssets 键名）
+//   hudDecor  第三幕配额 HUD 装饰（如 rationWall）
 // ============================================================
 
 export const DEFAULT_HINT = '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环 · H 参数面板';
@@ -22,7 +26,7 @@ export const DEFAULT_HINT = '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/
 
 export const ACTS = [
   {
-    id: 1, label: '第一幕 · 引子', layout: 'right',
+    id: 1, label: '第一幕 · 引子', layout: 'right', backdrop: 'act1',
     control: { move: false, drop: false, view: true },
     zoom: 0.95,   // 幕级变焦；near 模式再 ×0.7 → 有效 0.67，贴近玻璃柜的近景
     framing: 'near',   // 右布局必须 near（投影绑定画幅中心；far 不绑定会只露个边）
@@ -36,7 +40,7 @@ export const ACTS = [
     ],
   },
   {
-    id: 2, label: '第二幕 · 学会抓取', layout: 'center',
+    id: 2, label: '第二幕 · 学会抓取', layout: 'center', backdrop: 'act2',
     control: { move: true, drop: true, view: true },
     framing: 'far',   // 中远景站远抓（首版构图）；V 键可切 near 凑近看
     tuning: { gripStrength: 1.0, baseSlipProb: 0 },   // 教学：首抓必成
@@ -46,11 +50,12 @@ export const ACTS = [
       { type: 'panel', side: 'right', text: '按下空格。\n落爪。' },
       { type: 'wait', event: 'firstCollect' },
       { type: 'panel', side: 'right', text: '' },
+      { type: 'interstitial', image: 'flashback', dur: 2.6 },
       { type: 'panel', side: 'left', text: '成功了。\n他和妹妹分着吃。', dur: 4 },
     ],
   },
   {
-    id: 3, label: '第三幕 · 采集任务', layout: 'center',
+    id: 3, label: '第三幕 · 采集任务', layout: 'center', backdrop: 'act3', hudDecor: 'rationWall',
     control: { move: true, drop: true, view: true },
     tuning: { gripStrength: 0.78, baseSlipProb: 0.45, decayPerGrab: 0.06 },  // 爪力开始不稳
     quest: ['bread', 'can', 'veg'],
@@ -68,7 +73,7 @@ export const ACTS = [
     ],
   },
   {
-    id: 4, label: '第四幕 · 拼凑一顿饭', layout: 'center',
+    id: 4, label: '第四幕 · 拼凑一顿饭', layout: 'center', backdrop: 'synthesis',
     control: { move: false, drop: false, view: false },
     hint: null,
     menu: { cards: ['面包', '罐头', '蔬菜'], line: '今日菜单\n面包汤 · 罐头 · 烫青菜' },
@@ -81,14 +86,15 @@ export const ACTS = [
     ],
   },
   {
-    id: 5, label: '', layout: 'wide',
+    id: 5, label: '', layout: 'wide', backdrop: 'ambient',
     control: { move: false, drop: false, view: false },
     framing: 'far',
     hint: null,
     script: [
-      { type: 'glitch' },
-      { type: 'revealBeat', dur: 4.2, line: '他今天吃了什么？\n手心里只有一罐。' },
+      { type: 'glitch', image: 'glitch' },
+      { type: 'revealBeat', dur: 4.2, image: 'revealBeat', line: '他今天吃了什么？\n手心里只有一罐。' },
       { type: 'reveal' },
+      { type: 'interstitial', image: 'truthTable', dur: 3.2 },
       { type: 'stinger', text: 'Demo 结束。他今天吃了什么？' },
     ],
   },

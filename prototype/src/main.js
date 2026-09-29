@@ -31,8 +31,13 @@ import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } fro
 import { publishHoleDrop, publishVended, openCollectDisplayWindow } from './collectDisplayBus.js';
 import { startCollectDisplayPairPanel } from './collectDisplayPairPanel.js';
 import { createSceneLights, applyRevealColdLighting, applyMemoryLighting } from './sceneLighting.js';
+import { NarrativeBg } from './narrativeBg.js';
+import { preloadNarrativeImages } from './narrativeAssets.js';
 
 loadPoolDevOverrides();
+preloadNarrativeImages();
+const narrativeBg = new NarrativeBg();
+narrativeBg.showAmbient();
 
 const CLAW_DEFAULTS = {
   gripStrength: CONFIG.claw.gripStrength,
@@ -144,7 +149,9 @@ const clawReady = claw.upgradeClawVisual(renderer, camera)
 
 // —— 镜头 / 画幅 / 后处理 / 输入 ——
 const rig = new CameraRig(camera);
+document.documentElement.classList.add('game-booting');
 const mask = new FrameMask();
+mask.bootstrapLayout(ACTS[parseStartActIndex()]?.layout ?? 'right');
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
 const input = new Input();
@@ -265,6 +272,8 @@ async function onGameplayRestart() {
   document.getElementById('revealBeat')?.classList.remove('show');
   const rb = document.getElementById('revealBeat');
   if (rb) rb.hidden = true;
+  narrativeBg.showAmbient();
+  narrativeBg.hideInterstitial();
 }
 
 async function onReveal() {
@@ -329,6 +338,7 @@ director = new Director({
   lights: { key, fill, glow, hemi, ambient },
   clawDefaults: CLAW_DEFAULTS,
   hooks: {
+    narrativeBg,
     onReveal,
     onLightsCold: onRevealColdLighting,
     onRestart: onGameplayRestart,
@@ -556,6 +566,7 @@ function boot() {
   }
   loadingEl.classList.add('done');
   setTimeout(() => loadingEl.remove(), 800);
+  document.documentElement.classList.remove('game-booting');
   director.start();
   if (startIdx > 0) toast(`从「${ACTS[startIdx]?.label ?? '第三幕'}」试玩`);
 }
