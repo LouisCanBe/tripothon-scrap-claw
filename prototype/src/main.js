@@ -32,9 +32,10 @@ import { publishHoleDrop, publishVended, openCollectDisplayWindow } from './coll
 import { startCollectDisplayPairPanel } from './collectDisplayPairPanel.js';
 import { createSceneLights, applyRevealColdLighting, applyMemoryLighting } from './sceneLighting.js';
 import { NarrativeBg } from './narrativeBg.js';
-import { preloadNarrativeImages } from './narrativeAssets.js';
+import { applyNarrativeToConfig, preloadNarrativeImages } from './narrativeAssets.js';
 
 loadPoolDevOverrides();
+applyNarrativeToConfig();
 preloadNarrativeImages();
 const narrativeBg = new NarrativeBg();
 narrativeBg.showAmbient();

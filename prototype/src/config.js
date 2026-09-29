@@ -8,6 +8,9 @@ import { DEFAULT_COLLECT_PAIR } from './collectPairDefault.js';
 // ============================================================
 
 export const CONFIG = {
+  // 叙事概念图组：'cursor' 写实摄影 | 'seedream' 厚涂；URL ?art=cursor 可临时覆盖
+  narrativeSet: 'cursor',
+
   claw: {
     // —— 水平移动（惯性手感核心）——
     moveSpeed: 1.7,          // 目标点移动速度（单位/秒）
@@ -184,7 +187,7 @@ export const CONFIG = {
   // 终幕 Marble：mode 'pano' = 仅全景（与工具台 PNG 一致）；'immersive' = SPZ + collider 边界 + WASD
   reveal: {
     mode: 'pano',
-    pano: 'design/concepts/reveal-ruins-wide-scrapyard-seedream50pro-16x9.png',
+    pano: 'design/concepts/reveal-ruins-wide-scrapyard-cursor-photo-16x9.png',
     colliderGlb: 'assets/worlds/reveal-draft-collider.glb',
     spz: 'assets/worlds/reveal-draft-100k.spz',
     boundsMargin: 0.45,        // AABB 内缩（越大越不容易贴到盒边）

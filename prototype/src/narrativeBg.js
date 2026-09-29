@@ -1,4 +1,4 @@
-import { narrativeSrc, NARRATIVE } from './narrativeAssets.js';
+import { getNarrative, narrativeSrc } from './narrativeAssets.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -123,4 +123,4 @@ export class NarrativeBg {
   }
 }
 
-export { NARRATIVE };
+export { getNarrative };
