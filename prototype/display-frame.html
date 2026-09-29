@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-display="frame">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>出货展示 · 相框</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a0e;
+      color: #f0ece0;
+      font-family: system-ui, sans-serif;
+    }
+    #stage {
+      position: fixed;
+      inset: 0;
+    }
+    #stage canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #hud {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      visibility: hidden;
+    }
+    header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.12em; opacity: 0.75; }
+    #prizeName { font-size: clamp(1.5rem, 4vw, 2.4rem); margin-top: 0.35rem; }
+    #prizeMeta { font-size: 0.9rem; opacity: 0.65; margin-top: 0.25rem; }
+    #link { font-size: 0.8rem; opacity: 0.55; margin-bottom: 0.35rem; }
+    #status { font-size: 0.85rem; opacity: 0.7; }
+    #cta {
+      margin-top: 0.75rem;
+      padding: 0.65rem 1rem;
+      border: 1px solid rgba(240,236,224,.25);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      opacity: 0.85;
+    }
+    #cta[hidden] { display: none; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three180/three.module.js",
+      "three/addons/": "./vendor/three180/addons/",
+      "jupiter-interlace-sdk": "./vendor/jupiter/index.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="hud">
+    <header>
+      <h1>COLLECT DISPLAY</h1>
+      <div id="prizeName">等待出货…</div>
+      <div id="prizeMeta"></div>
+    </header>
+    <footer>
+      <div id="link">同步：—</div>
+      <div id="status">先开主游戏或先开本页均可；配对一致即可联动出货</div>
+      <div id="cta" hidden data-slot="promo">营销位预留 · 可按 prizeId 接文案/链接/视频</div>
+    </footer>
+  </div>
+  <script type="module" src="./src/displayMain.js"></script>
+</body>
+</html>

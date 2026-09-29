@@ -209,6 +209,25 @@ export const CONFIG = {
     enabled: true,
     channel: 'tripo.collect-display.v1',
     displayPath: '/display.html',
+    // 相框固定打开 frame.path。介绍词只改 copy，两个副屏一起变。
+    copy: {
+      kicker: 'COLLECT DISPLAY',
+      waiting: '等待出货…',
+      statusIdle: '先开主游戏或先开本页均可；配对一致即可联动出货',
+      cta: '营销位预留 · 可按 prizeId 接文案/链接/视频',
+    },
+    frame: {
+      path: '/display-frame.html',
+      // 示例校准。上这台相框前改成机背标签的 Pitch / Offset，Tan 保持 10。
+      // 地址可临时覆盖：?pitch= &offset= &tan= ；笔记本检查用 ?mode=2d
+      pitch: 0.27777,
+      tan: 10,
+      offset: 2,
+      views: 9,
+      viewWidth: 1200,
+      viewSpacing: 0.04,
+      focusDistance: 2.5,
+    },
     // 跨设备：devServer SSE（见 tools/collectDisplayHub.mjs）
     transport: 'auto',         // 'local' 仅同机 | 'lan' 副屏必走 SSE | 'auto' 主屏 publish + display 订阅
     pairId: DEFAULT_COLLECT_PAIR, // 固定配对口令；URL ?pair= 可覆盖
