@@ -1,0 +1,81 @@
+{
+  "title": "《拾荒娃娃机》美术资产总表",
+  "updated": "2026-09-29",
+  "pixverse_image": { "model": "seedream-5.0-pro", "quality": "1080p", "credits_each": 15, "note": "CLI 返回 cost_credits；1440p/I2I 可能更高" },
+  "status": {
+    "done": "已有文件或已接入游戏",
+    "partial": "线框/灰盒/占位路径，待替换",
+    "todo": "策划需要，尚未产出",
+    "optional": "可增强，非阻塞"
+  },
+  "related": {
+    "策划": "策划脚本.md",
+    "美术说明": "ART-美术设定.md",
+    "剪影配对": "tools/art-pairs.json",
+    "2d生成脚本": "tools/gen-seedream-concepts.mjs",
+    "概念审阅顺序": "prototype/design/concepts/review-order.json",
+    "概念审阅写实组": "prototype/design/concepts/review-order-cursor.json",
+    "UI线框索引": "prototype/design/manifest.json"
+  },
+  "items": [
+    { "id": "2d-env", "name": "拾荒废墟大场景（风格锚点）", "kind": "2d概念", "act": "氛围", "status": "done", "path": "prototype/design/concepts/scrapyard-thickpaint-seedream50pro-16x9.png" },
+    { "id": "2d-A1", "name": "干净回忆柜 · 鱼眼近景", "kind": "2d概念", "act": 1, "status": "done", "path": "prototype/design/concepts/cabinet-clean-memory-fisheye-seedream50pro-16x9.png", "note": "策划：干净的娃娃食物" },
+    { "id": "2d-A2", "name": "锈蚀教学柜 · 鱼眼", "kind": "2d概念", "act": 2, "status": "done", "path": "prototype/design/concepts/cabinet-rust-teaching-fisheye-seedream50pro-16x9.png", "note": "策划：娃娃和食物" },
+    { "id": "2d-A3", "name": "温馨闪回柜 · 拍立得", "kind": "2d概念", "act": 2, "status": "done", "path": "prototype/design/concepts/cabinet-warm-flashback-polaroid-seedream50pro-16x9.png", "note": "红按钮、蛋糕罐头、玻璃拍立得" },
+    { "id": "2d-A4", "name": "拾荒配额柜 · 鱼眼", "kind": "2d概念", "act": 3, "status": "done", "path": "prototype/design/concepts/cabinet-scrap-quota-fisheye-seedream50pro-16x9.png", "note": "策划：拾荒机" },
+    { "id": "2d-B1", "name": "记忆套道具横排", "kind": "2d概念", "act": "Tripo", "status": "done", "path": "prototype/design/concepts/props-memory-food-lineup-seedream50pro-16x9.png" },
+    { "id": "2d-B2", "name": "现实套道具横排", "kind": "2d概念", "act": "Tripo", "status": "done", "path": "prototype/design/concepts/props-reality-junk-lineup-seedream50pro-16x9.png" },
+    { "id": "2d-B3", "name": "剪影对照板（面包/罐/菜）", "kind": "2d概念", "act": "Tripo", "status": "done", "path": "prototype/design/concepts/silhouette-pairs-bread-can-veg-seedream50pro-16x9.png", "note": "对齐 tools/art-pairs.json" },
+    { "id": "2d-C1", "name": "终幕废墟全景", "kind": "2d概念", "act": 5, "status": "done", "path": "prototype/design/concepts/reveal-ruins-wide-scrapyard-seedream50pro-16x9.png", "note": "策划：真实废墟；1080p T2I" },
+    { "id": "2d-C2", "name": "真相定帧 · 手心里一罐", "kind": "2d概念", "act": 5, "status": "done", "path": "prototype/design/concepts/reveal-truth-hand-can-seedream50pro-16x9.png", "note": "Seedream 系列；游戏内暂用 prototype/assets/images/reveal-truth-hand-can-arcane-flare-16x9.png" },
+    { "id": "2d-C3", "name": "记忆餐桌（面包汤/罐/青菜）", "kind": "2d概念", "act": 4, "status": "done", "path": "prototype/design/concepts/last-meal-memory-table-seedream50pro-16x9.png", "note": "策划菜单与第四幕；终幕「最后餐桌」发霉版待分张" },
+    { "id": "2d-C3-truth", "name": "最后餐桌 · 现实（发霉/蜡烛/小床）", "kind": "2d概念", "act": 5, "status": "done", "path": "prototype/design/concepts/last-meal-truth-table-seedream50pro-16x9.png", "note": "策划终幕 16–22s" },
+    { "id": "2d-glitch", "name": "方框撕裂故障静帧", "kind": "2d概念", "act": 5, "status": "done", "path": "prototype/design/concepts/glitch-frame-tear-seedream50pro-16x9.png", "note": "PixVerse 转场参考" },
+    { "id": "2d-key", "name": "主视觉海报", "kind": "2d概念", "act": "宣传", "status": "done", "path": "prototype/design/concepts/key-visual-scrapyard-claw-seedream50pro-16x9.png" },
+
+    { "id": "ui-act1", "name": "第一幕右布局线框", "kind": "ui线框", "act": 1, "status": "partial", "path": "prototype/design/act1-引子-右布局.png" },
+    { "id": "ui-act2", "name": "第二幕双旁白线框", "kind": "ui线框", "act": 2, "status": "partial", "path": "prototype/design/act2-教学-双旁白.png" },
+    { "id": "ui-act3", "name": "第三幕配额卡线框", "kind": "ui线框", "act": 3, "status": "partial", "path": "prototype/design/act3-任务-配额卡.png" },
+    { "id": "ui-act4", "name": "第四幕菜单卡线框", "kind": "ui线框", "act": 4, "status": "partial", "path": "prototype/design/act4-合成-菜单卡.png" },
+    { "id": "ui-act5", "name": "终幕手写体线框", "kind": "ui线框", "act": 5, "status": "partial", "path": "prototype/design/act5-终幕-手写体.png" },
+    { "id": "ui-ration", "name": "墙上手写配给单（厚涂）", "kind": "ui美术", "act": 3, "status": "done", "path": "prototype/design/ui-ration-wall-scrap.png", "optional": true },
+
+    { "id": "3d-cabinet-clean", "name": "机柜材质 · 干净态", "kind": "3d机柜", "act": "1,4", "status": "partial", "path": "prototype/src/acts.js + machineShell 灰盒", "note": "同一机位换皮" },
+    { "id": "3d-cabinet-rust", "name": "机柜材质 · 锈蚀态", "kind": "3d机柜", "act": "2,3", "status": "partial", "note": "贴纸 WAR RELOADED 等待贴图" },
+    { "id": "3d-cabinet-scrap", "name": "机柜材质 · 拾荒态", "kind": "3d机柜", "act": 3, "status": "partial" },
+    { "id": "3d-claw", "name": "爪体分件 GLB", "kind": "3d机台", "act": "全局", "status": "partial", "path": "prototype/assets/machine/claw_parts.glb", "note": "config.clawGLB" },
+
+    { "id": "3d-bread", "name": "面包（记忆）", "kind": "3d奖品", "act": "2,3,4", "status": "partial", "path": "prototype/assets/prizes/bread.glb", "pair": "art-pairs.bread" },
+    { "id": "3d-moldy", "name": "发霉块（现实·面包轮廓）", "kind": "3d奖品", "act": 3, "status": "partial", "path": "prototype/assets/prizes/moldy.glb", "pair": "art-pairs.bread" },
+    { "id": "3d-can", "name": "豆子罐头（记忆）", "kind": "3d奖品", "act": "2,3,4", "status": "partial", "path": "prototype/assets/prizes/can.glb", "pair": "art-pairs.can" },
+    { "id": "3d-rustcan", "name": "锈罐头（现实）", "kind": "3d奖品", "act": 3, "status": "partial", "path": "prototype/assets/prizes/rustcan.glb", "pair": "art-pairs.can" },
+    { "id": "3d-veg", "name": "蔬菜（记忆·任务）", "kind": "3d奖品", "act": 3, "status": "partial", "path": "prototype/assets/prizes/veg.glb" },
+    { "id": "3d-rot", "name": "腐败团（现实·菜轮廓）", "kind": "3d奖品", "act": 3, "status": "partial", "path": "prototype/assets/prizes/rot.glb" },
+    { "id": "3d-apple-mem", "name": "青/红苹果（记忆）", "kind": "3d奖品", "act": "1,4", "status": "todo", "path": "prototype/assets/prizes/apple-memory.glb", "pair": "art-pairs.apple", "note": "现仅有 apple.glb 作现实瘪果" },
+    { "id": "3d-apple", "name": "瘪苹果/现实果", "kind": "3d奖品", "act": 3, "status": "partial", "path": "prototype/assets/prizes/apple.glb", "pair": "art-pairs.apple" },
+    { "id": "3d-carton", "name": "牛奶盒（记忆）", "kind": "3d奖品", "act": 1, "status": "partial", "path": "prototype/assets/prizes/carton.glb", "pair": "art-pairs.carton" },
+    { "id": "3d-ration-bag", "name": "应急口粮袋/空盒（现实）", "kind": "3d奖品", "act": 3, "status": "todo", "path": "prototype/assets/prizes/ration-bag.glb", "pair": "art-pairs.carton" },
+    { "id": "3d-wire", "name": "电线团", "kind": "3d奖品", "act": 3, "status": "todo", "path": "prototype/assets/prizes/wire.glb" },
+    { "id": "3d-bear", "name": "棕熊玩偶（装饰）", "kind": "3d奖品", "act": "1,4", "status": "todo", "path": "prototype/assets/prizes/plush-bear.glb", "note": "非食物剪影库" },
+    { "id": "3d-rabbit", "name": "白兔玩偶（装饰）", "kind": "3d奖品", "act": "1,4", "status": "todo", "path": "prototype/assets/prizes/plush-rabbit.glb" },
+    { "id": "3d-cheese", "name": "干酪块", "kind": "3d奖品", "act": "填充", "status": "partial", "path": "prototype/assets/prizes/cheese.glb" },
+    { "id": "3d-bottle", "name": "瓶子", "kind": "3d奖品", "act": "填充", "status": "partial", "path": "prototype/assets/prizes/bottle.glb" },
+    { "id": "3d-jar", "name": "玻璃罐", "kind": "3d奖品", "act": "填充", "status": "partial", "path": "prototype/assets/prizes/jar.glb" },
+    { "id": "3d-brick", "name": "碎砖", "kind": "3d奖品", "act": "填充", "status": "partial", "path": "prototype/assets/prizes/brick.glb" },
+    { "id": "3d-bone", "name": "骨头", "kind": "3d奖品", "act": "填充", "status": "partial", "path": "prototype/assets/prizes/bone.glb" },
+    { "id": "3d-cloth", "name": "破布团", "kind": "3d奖品", "act": "填充", "status": "partial", "path": "prototype/assets/prizes/cloth.glb" },
+    { "id": "3d-stone", "name": "石块", "kind": "3d奖品", "act": "填充", "status": "partial", "path": "prototype/assets/prizes/stone.glb" },
+    { "id": "3d-foil", "name": "锡箔团", "kind": "3d奖品", "act": "填充", "status": "partial", "path": "prototype/assets/prizes/foil.glb" },
+
+    { "id": "world-pano", "name": "终幕全景图", "kind": "marble/全景", "act": 5, "status": "partial", "path": "prototype/assets/worlds/reveal-draft-pano.png" },
+    { "id": "world-spz", "name": "终幕沉浸式点云", "kind": "marble", "act": 5, "status": "partial", "path": "prototype/assets/worlds/reveal-draft-100k.spz", "optional": true },
+    { "id": "world-collider", "name": "终幕行走碰撞体", "kind": "marble", "act": 5, "status": "partial", "path": "prototype/assets/worlds/reveal-draft-collider.glb", "optional": true },
+
+    { "id": "vx-glitch", "name": "幕5方框撕裂短视频", "kind": "pixverse", "act": 5, "status": "todo", "path": "prototype/assets/videos/act5-glitch.mp4" },
+    { "id": "vx-flashback", "name": "温馨柜闪回 2–3s", "kind": "pixverse", "act": 2, "status": "todo", "path": "prototype/assets/videos/act2-warm-flashback.mp4" },
+    { "id": "vx-intro", "name": "片头/路演娃娃机 demo", "kind": "pixverse", "act": "宣传", "status": "optional", "path": "prototype/assets/videos/" },
+
+    { "id": "audio-stinger", "name": "八音盒彩蛋", "kind": "音频", "act": 5, "status": "partial", "note": "gameAudio.js 合成，无外部素材" },
+    { "id": "audio-vo", "name": "旁白/台词 TTS", "kind": "音频", "act": "序,各幕", "status": "todo", "note": "PixVerse voice 或外部 TTS" }
+  ]
+}

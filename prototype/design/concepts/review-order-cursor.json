@@ -1,0 +1,22 @@
+{
+  "title": "概念图审阅 · Cursor 写实摄影组",
+  "style_ref": "../../assets/images/reveal-truth-hand-can.png",
+  "note": "仅 order 13 用手持罐定帧；其余图禁止 reference 该图，避免手拿罐构图污染。review.html?set=cursor",
+  "slides": [
+    { "order": 1, "act": "氛围", "label": "拾荒大场景", "path": "scrapyard-env-cursor-photo-16x9.png" },
+    { "order": 2, "act": "第一幕", "label": "干净回忆柜 · 鱼眼", "path": "cabinet-clean-memory-fisheye-cursor-photo-16x9.png" },
+    { "order": 3, "act": "第二幕", "label": "锈蚀教学柜", "path": "cabinet-rust-teaching-fisheye-cursor-photo-16x9.png" },
+    { "order": 4, "act": "第二幕闪回", "label": "温馨柜 · 拍立得", "path": "cabinet-warm-flashback-polaroid-cursor-photo-16x9.png" },
+    { "order": 5, "act": "第三幕", "label": "拾荒配额柜", "path": "cabinet-scrap-quota-fisheye-cursor-photo-16x9.png" },
+    { "order": 6, "act": "第三幕", "label": "墙上配给单", "path": "../ui-ration-wall-scrap-cursor-photo.png" },
+    { "order": 7, "act": "道具", "label": "记忆套横排", "path": "props-memory-food-lineup-cursor-photo-16x9.png" },
+    { "order": 8, "act": "道具", "label": "现实套横排", "path": "props-reality-junk-lineup-cursor-photo-16x9.png" },
+    { "order": 9, "act": "道具", "label": "剪影对照", "path": "silhouette-pairs-bread-can-veg-cursor-photo-16x9.png" },
+    { "order": 10, "act": "第四幕", "label": "记忆餐桌", "path": "last-meal-memory-table-cursor-photo-16x9.png" },
+    { "order": 11, "act": "第五幕", "label": "方框撕裂故障", "path": "glitch-frame-tear-cursor-photo-16x9.png" },
+    { "order": 12, "act": "第五幕", "label": "废墟全景", "path": "reveal-ruins-wide-scrapyard-cursor-photo-16x9.png" },
+    { "order": 13, "act": "第五幕", "label": "真相定帧 · 手心里一罐", "path": "../../assets/images/reveal-truth-hand-can.png" },
+    { "order": 14, "act": "第五幕", "label": "最后餐桌 · 现实", "path": "last-meal-truth-table-cursor-photo-16x9.png" },
+    { "order": 15, "act": "宣传", "label": "主视觉海报", "path": "key-visual-scrapyard-claw-cursor-photo-16x9.png" }
+  ]
+}

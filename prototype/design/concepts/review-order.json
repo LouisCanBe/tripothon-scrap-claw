@@ -1,0 +1,23 @@
+{
+  "title": "概念图审阅顺序（跟剧情走）",
+  "note": "浏览器审阅：Hub http://localhost:8780/concepts 或试玩服 http://127.0.0.1:8000/design/concepts/review.html",
+  "review_html": "prototype/design/concepts/review.html",
+  "slides": [
+    { "order": 1, "act": "氛围", "label": "拾荒大场景（风格锚点）", "path": "scrapyard-thickpaint-seedream50pro-16x9.png" },
+    { "order": 2, "act": "第一幕", "label": "干净回忆柜 · 鱼眼", "path": "cabinet-clean-memory-fisheye-seedream50pro-16x9.png" },
+    { "order": 3, "act": "第二幕", "label": "锈蚀教学柜", "path": "cabinet-rust-teaching-fisheye-seedream50pro-16x9.png" },
+    { "order": 4, "act": "第二幕闪回", "label": "温馨柜 · 拍立得", "path": "cabinet-warm-flashback-polaroid-seedream50pro-16x9.png" },
+    { "order": 5, "act": "第三幕", "label": "拾荒配额柜", "path": "cabinet-scrap-quota-fisheye-seedream50pro-16x9.png" },
+    { "order": 6, "act": "第三幕", "label": "墙上配给单", "path": "../ui-ration-wall-scrap.png" },
+    { "order": 7, "act": "道具", "label": "记忆套横排", "path": "props-memory-food-lineup-seedream50pro-16x9.png" },
+    { "order": 8, "act": "道具", "label": "现实套横排", "path": "props-reality-junk-lineup-seedream50pro-16x9.png" },
+    { "order": 9, "act": "道具", "label": "剪影对照", "path": "silhouette-pairs-bread-can-veg-seedream50pro-16x9.png" },
+    { "order": 10, "act": "第四幕", "label": "记忆餐桌", "path": "last-meal-memory-table-seedream50pro-16x9.png" },
+    { "order": 11, "act": "第五幕", "label": "方框撕裂故障", "path": "glitch-frame-tear-seedream50pro-16x9.png" },
+    { "order": 12, "act": "第五幕", "label": "废墟全景", "path": "reveal-ruins-wide-scrapyard-seedream50pro-16x9.png" },
+    { "order": 13, "act": "第五幕", "label": "真相定帧 · 手心里一罐（Seedream）", "path": "reveal-truth-hand-can-seedream50pro-16x9.png" },
+    { "order": 14, "act": "第五幕", "label": "最后餐桌 · 现实", "path": "last-meal-truth-table-seedream50pro-16x9.png" },
+    { "order": 15, "act": "宣传", "label": "主视觉海报", "path": "key-visual-scrapyard-claw-seedream50pro-16x9.png" },
+    { "order": 99, "act": "备选", "label": "真相定帧（Arcane 版·已进游戏）", "path": "../../assets/images/reveal-truth-hand-can-arcane-flare-16x9.png" }
+  ]
+}
