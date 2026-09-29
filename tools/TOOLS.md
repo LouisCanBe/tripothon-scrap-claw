@@ -8,7 +8,7 @@
 |---|---|---|---|
 | **Tripo3D** | 道具/爪子模型生成（text/image/multiview → GLB） | `tools/tripo.mjs` + `tripo.serve.mjs` + `tools/ui.html` | ✅ 已实测跑通 |
 | **Marble（World Labs）** | 3D 世界/场景生成（text/image/pano → GLB mesh / SPZ 点云 / 全景图） | `tools/marble.mjs` + `marble.serve.mjs` + `tools/world.html` | ✅ 已实测跑通（draft 档 32s 出世界） |
-| **PixVerse** | 分镜/幕间视频（text/image → MP4；首尾帧过渡） | `tools/pixverse.mjs` + `pixverse.serve.mjs` + `tools/video.html` | 📋 工具就绪，待 key 实测 |
+| **PixVerse** | 分镜/幕间视频（官方 CLI + Skill，或 OpenAPI 封装） | 根目录 `npm install` → `npm run pixverse:login`；可选 `tools/pixverse.mjs` + serve | ✅ CLI/Skill 已装；需本机 `auth login` |
 | **TapTap** | 游戏包体上传发布 | 官方 TapRails CLI / APK 上传 API | 📋 待开发者凭证 |
 | **tapnow** | ？ | ？ | ❓ 待确认是什么服务 |
 
@@ -51,6 +51,15 @@ node tools/devServer.mjs 8000 --lan   # 内网可访问（终端会打印局域�
 
 美术剪影对照流程见根目录 **`ART-美术设定.md`**，配对表 **`tools/art-pairs.json`**。
 
+### 2D 概念图审阅（Hub 需本仓库 `hub.serve.mjs` 未提交前的路由补丁；已合入后重启 Hub）
+
+| 风格 | Hub（8780） | 试玩 devServer（8000） |
+|------|-------------|-------------------------|
+| Seedream 厚涂 | http://localhost:8780/concepts | http://127.0.0.1:8000/design/concepts/review.html |
+| Cursor 写实 | http://localhost:8780/concepts?set=cursor | http://127.0.0.1:8000/design/concepts/review.html?set=cursor |
+
+静态资源：`/design/*` → `prototype/design/`，`/assets/*` → `prototype/assets/`（定帧 #13 走 `assets/images/reveal-truth-hand-can.png`）。
+
 **Tripo 预览器**：左侧「漫画渲染」= 实时 Toon + 描边（`tools/comic-render.mjs`，后续可接到游戏里娃娃奖品）。
 
 ## 后续整合路线（按需做，不提前过度设计）
@@ -73,9 +82,12 @@ node tools/devServer.mjs 8000 --lan   # 内网可访问（终端会打印局域�
 
 ## PixVerse 接入
 
-详细手册（API 约定、积分估算、游戏叙事接入、已知坑）见 **[tools/PIXVERSE.md](./PIXVERSE.md)**。
+详细手册见 **[tools/PIXVERSE.md](./PIXVERSE.md)**。
+
+**会员账号（推荐）**：仓库根 `npm install` → `npm run pixverse:login` → 用 `npx pixverse create …` 或 Cursor 读项目 Skill `pixverse-ai-image-and-video-generator`。积分走网页会员，与 App 一致。
+
+**开放平台 Key**：`.env.local` 里 `PIXVERSE_API_KEY`，`node tools/pixverse.mjs serve` → http://localhost:8789/。API Credits 与网页会员**不通用**。
 
 要点速记：
-- 测试锁 **540p + 5s**；API 积分与网页会员积分**不通用**
-- 每个请求新 `Ai-trace-id`（UUID），重复会返回旧结果
-- 控制台：`node tools/pixverse.mjs serve` → http://localhost:8789/
+- 测试锁 **540p + 5s**
+- OpenAPI 路径：每个请求新 `Ai-trace-id`（UUID），重复会返回旧结果

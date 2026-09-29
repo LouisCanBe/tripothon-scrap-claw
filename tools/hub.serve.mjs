@@ -57,6 +57,15 @@ function hubStatic(req, res, u, dirs) {
   }
   if (p === '/art-pairs.json') return sendFile(res, TOOLS, 'art-pairs.json');
   if (p === '/docs/ART') return sendFile(res, ROOT, 'ART-美术设定.md');
+  if (p === '/concepts' || p === '/concepts/') {
+    return sendFile(res, path.join(ROOT, 'prototype', 'design', 'concepts'), 'review.html');
+  }
+  if (p.startsWith('/design/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'design'), decodeURIComponent(p.slice(8)));
+  }
+  if (p.startsWith('/assets/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'assets'), decodeURIComponent(p.slice(8)));
+  }
   return false;
 }
 
@@ -79,7 +88,9 @@ export function serve(port = 8780, ctx) {
           services: {
             tripo: tripo.client ? { ok: true } : { ok: false, error: tripo.error },
             marble: marble.client ? { ok: true } : { ok: false, error: marble.error },
-            pixverse: pixverse.client ? { ok: true } : { ok: false, error: pixverse.error },
+            pixverse: pixverse.client
+              ? { ok: true, mode: pixverse.mode ?? 'openapi' }
+              : { ok: false, error: pixverse.error },
           },
         });
       }
@@ -106,7 +117,7 @@ export function serve(port = 8780, ctx) {
     console.log(`工具 Hub → http://localhost:${port}/`);
     console.log('  Tripo:', tripo.client ? 'OK' : tripo.error);
     console.log('  Marble:', marble.client ? 'OK' : marble.error);
-    console.log('  PixVerse:', pixverse.client ? 'OK' : pixverse.error);
+    console.log('  PixVerse:', pixverse.client ? `OK (${pixverse.mode ?? 'openapi'})` : pixverse.error);
   });
 }
 
@@ -120,11 +131,10 @@ async function boot() {
   const { bootstrapNetworkEnv } = await import('./env-bootstrap.mjs');
   await bootstrapNetworkEnv();
   process.env.SCRAPCLAW_LIB_MODE = '1';
-  let tripoMod, marbleMod, pixMod, tripoServe, marbleServe, pixServe;
+  let tripoMod, marbleMod, tripoServe, marbleServe, pixServe;
   try {
     tripoMod = await import('./tripo.mjs');
     marbleMod = await import('./marble.mjs');
-    pixMod = await import('./pixverse.mjs');
     tripoServe = await import('./tripo.serve.mjs');
     marbleServe = await import('./marble.serve.mjs');
     pixServe = await import('./pixverse.serve.mjs');
@@ -133,10 +143,19 @@ async function boot() {
     throw e;
   }
 
+  let pixverse;
+  try {
+    const { resolvePixverseClient } = await import('./pixverse-cli.mjs');
+    const resolved = await resolvePixverseClient();
+    pixverse = { client: resolved.client, error: null, mode: resolved.mode };
+  } catch (e) {
+    pixverse = { client: null, error: e.message ?? String(e), mode: null };
+  }
+
   const ctx = {
     tripo: tryClient(tripoMod.TripoClient),
     marble: tryClient(marbleMod.MarbleClient),
-    pixverse: tryClient(pixMod.PixVerseClient),
+    pixverse,
     handleTripoApi: tripoServe.handleTripoApi,
     handleMarbleApi: marbleServe.handleMarbleApi,
     handlePixverseApi: pixServe.handlePixverseApi,

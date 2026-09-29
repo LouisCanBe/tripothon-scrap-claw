@@ -6,7 +6,6 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PixVerseClient } from './pixverse.mjs';
 import { sendFile, json, readBody, corsPreflight } from './http-util.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -19,7 +18,14 @@ export async function handlePixverseApi(req, res, u, client) {
     json(res, 200, { files });
     return 'handled';
   }
-  if (u.pathname === '/api/pixverse/health') { json(res, 200, { ok: true, service: 'pixverse' }); return 'handled'; }
+  if (u.pathname === '/api/pixverse/health') {
+    json(res, 200, {
+      ok: true,
+      service: 'pixverse',
+      auth_mode: client.authMode ?? 'openapi',
+    });
+    return 'handled';
+  }
   if (u.pathname === '/api/pixverse/balance') { json(res, 200, await client.getBalance()); return 'handled'; }
 
   if (u.pathname === '/api/pixverse/upload' && req.method === 'POST') {
@@ -88,8 +94,11 @@ export async function serve(port = 8789) {
   const { bootstrapNetworkEnv } = await import('./env-bootstrap.mjs');
   await bootstrapNetworkEnv();
   let client;
-  try { client = new PixVerseClient(); }
-  catch (e) { console.error(e.message); process.exit(1); }
+  try {
+    const { resolvePixverseClient } = await import('./pixverse-cli.mjs');
+    ({ client } = await resolvePixverseClient());
+    console.log('鉴权：', client.authMode === 'cli' ? '官方 CLI（会员账号）' : 'OpenAPI Key');
+  } catch (e) { console.error(e.message); process.exit(1); }
 
   http.createServer(async (req, res) => {
     if (req.method === 'OPTIONS') return corsPreflight(res);

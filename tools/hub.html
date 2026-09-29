@@ -68,6 +68,12 @@
         <li>若拓扑已锁死：记忆版 GLB → <code>重新贴图</code> / 图生贴图，比重做网格省积分。</li>
       </ol>
       <p>详设见仓库根目录 <a href="/docs/ART" target="_blank">ART-美术设定.md</a> · 配对表 <code>tools/art-pairs.json</code></p>
+      <h2>2D 概念图审阅</h2>
+      <p>
+        <a href="/concepts" target="_blank">Seedream 厚涂</a> ·
+        <a href="/concepts?set=cursor" target="_blank">Cursor 写实</a>
+        （同页：<code>/design/concepts/review.html</code>）
+      </p>
       <h2>配对进度</h2>
       <div id="pairs">加载中…</div>
     </div>
@@ -111,11 +117,14 @@ async function refreshHubPixverseCredits() {
   try {
     const b = await fetch('/api/pixverse/balance').then(r => r.json());
     if (b.error) throw new Error(b.error);
-    const monthly = Number(b.credit_monthly ?? 0);
-    const pack = Number(b.credit_package ?? 0);
-    const sum = monthly + pack;
-    const alt = b.credit ?? b.credits ?? b.balance ?? b.remain;
-    const n = sum > 0 ? sum : (alt != null ? Number(alt) : null);
+    let n = b.credits_total != null ? Number(b.credits_total) : null;
+    if (n == null) {
+      const monthly = Number(b.credit_monthly ?? 0);
+      const pack = Number(b.credit_package ?? 0);
+      const sum = monthly + pack;
+      const alt = b.credit ?? b.credits ?? b.balance ?? b.remain;
+      n = sum > 0 ? sum : (alt != null ? Number(alt) : null);
+    }
     setTabCredits('hubPixverseCredits', n);
   } catch {
     setTabCredits('hubPixverseCredits', null);
@@ -142,7 +151,8 @@ fetch('/api/hub/status').then(r => r.json()).then(d => {
   const el = document.getElementById('status');
   const chip = (name, s) => {
     const cls = s.ok ? 'ok' : 'bad';
-    const t = s.ok ? '就绪' : (s.error || '未配置').slice(0, 40);
+    let t = s.ok ? '就绪' : (s.error || '未配置').slice(0, 40);
+    if (s.ok && name === 'PixVerse' && s.mode === 'cli') t = '会员 CLI';
     return `<span class="${cls}">${name} <b>${t}</b></span>`;
   };
   el.innerHTML = chip('Tripo', d.services.tripo) + chip('Marble', d.services.marble) + chip('PixVerse', d.services.pixverse);

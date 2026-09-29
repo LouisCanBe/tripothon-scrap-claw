@@ -1,0 +1,36 @@
+{
+  "name": "jupiter-interlace-sdk",
+  "version": "1.0.0",
+  "description": "GLB 与通用 Three.js 多视点交织 SDK",
+  "type": "module",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE-NOTICE.txt",
+  "main": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/types/core.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./standalone": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/jupiter-interlace.standalone.js"
+    },
+    "./dist/*": "./dist/*"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE-NOTICE.txt",
+    "THIRD_PARTY_NOTICES.txt"
+  ],
+  "peerDependencies": {
+    "three": "0.180.0"
+  },
+  "jupiterLocale": "zh-CN"
+}

@@ -1,0 +1,10 @@
+第三方组件说明
+
+Three.js 0.180.0：MIT 许可证，包含 GLTFLoader、DRACOLoader、KTX2Loader、OrbitControls。许可全文：dist/THREE-LICENSE.txt。
+meshoptimizer 0.22：MIT，作者 Arseny Kapoulkine。全文：dist/licenses/meshoptimizer.txt。
+Draco：Google，Apache 2.0。全文：dist/licenses/draco.txt。
+Basis Universal：Binomial，Apache 2.0。全文：dist/licenses/basis-universal.txt。
+ktx-parse / zstddec：Don McCurdy，MIT。全文：dist/licenses/ktx-parse.txt 与 dist/licenses/zstddec.txt。
+Zstandard：BSD。全文：dist/licenses/zstandard.txt。
+
+解码器来自固定版本 Three.js。示例 KTX2 纹理来自 Three.js r180 的 examples/textures/ktx2/2d_etc1s.ktx2，适用 Three.js 许可证。为保留完整权利和许可条款，第三方许可证保留发布者原文。

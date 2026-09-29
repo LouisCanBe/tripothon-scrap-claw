@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "jupiter-30-v1",
+  "calibration": {
+    "pitch": 0.27777,
+    "tan": 10,
+    "offset": 2,
+    "order": "forward",
+    "subpixelOrder": "RGB",
+    "rotation": 0
+  },
+  "render": {
+    "views": 9,
+    "viewWidth": 640,
+    "viewSpacing": 0.006,
+    "focusDistance": 3,
+    "mode": "2d",
+    "previewView": 14,
+    "toneMapping": "aces",
+    "exposure": 1
+  }
+}

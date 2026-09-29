@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>PixVerse API 控制台</title>
+<title>PixVerse 控制台</title>
 <link rel="stylesheet" href="/console-theme.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -13,7 +13,7 @@
   header h1 { font-size: 16px; letter-spacing: 3px; font-weight: normal; color: var(--accent); }
   header .stat { color: var(--dim); font-size: 12px; }
   header .stat b { color: var(--accent); font-weight: normal; }
-  main { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+  main { flex: 1; display: grid; grid-template-columns: 380px 1fr; min-height: 0; }
   #form { padding: 16px 20px; border-right: 1px solid #26262b; overflow-y: auto; }
   #form h2, #right h2 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 14px 0 8px; }
   #form h2:first-child { margin-top: 0; }
@@ -27,8 +27,23 @@
     padding: 7px 18px; font: inherit; cursor: pointer; box-shadow: 2px 2px 0 rgba(0,0,0,.4); }
   button.ghost { background: transparent; color: var(--ink); border: 1px solid #3a3a42; box-shadow: none; padding: 4px 10px; font-size: 12px; }
   button:disabled { opacity: .4; cursor: default; }
-  .hint { color: var(--dim); font-size: 11px; margin-top: 6px; }
-  .cost { color: #c9a87a; font-size: 11px; margin: 8px 0; }
+  .hint { color: var(--dim); font-size: 11px; margin-top: 6px; line-height: 1.5; }
+  .cost { color: #c9a87a; font-size: 11px; margin: 8px 0; line-height: 1.5; }
+  .cost b { color: var(--accent); font-weight: normal; }
+  .panel { border: 1px solid #2c2c33; border-radius: 6px; margin: 10px 0; background: #0e0e12; }
+  .panel summary { cursor: pointer; padding: 8px 10px; color: var(--dim); font-size: 11px; letter-spacing: 1px; list-style: none; }
+  .panel summary::-webkit-details-marker { display: none; }
+  .panel summary::before { content: '▸ '; color: var(--accent); }
+  .panel[open] summary::before { content: '▾ '; }
+  .panel .body { padding: 0 10px 10px; font-size: 11px; color: var(--dim); line-height: 1.55; }
+  .panel .body table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 10px; }
+  .panel .body th, .panel .body td { border: 1px solid #2a2a32; padding: 4px 6px; text-align: left; }
+  .panel .body th { color: #9a9aa8; }
+  .panel .body a { color: #c9a87a; }
+  .tag-na { opacity: .55; text-decoration: line-through; }
+  .check-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+  .check-row input { width: auto; }
+  .check-row label { margin: 0; display: inline; }
   #right { display: flex; flex-direction: column; min-height: 0; }
   #tasks { padding: 8px 20px; display: flex; flex-direction: column; gap: 8px; max-height: 38%; overflow-y: auto; }
   .task { border: 1px solid #2c2c33; border-radius: 8px; padding: 10px 12px; background: #101014; }
@@ -50,14 +65,23 @@
 </head>
 <body>
 <header>
-  <h1>PixVerse API 控制台</h1>
+  <h1>PixVerse 控制台</h1>
   <span class="stat" id="health">服务：检测中…</span>
   <span class="stat" id="balance"></span>
-  <button class="ghost" id="balRefresh">↻</button>
-  <span class="stat" style="margin-left:auto">测试建议 540p·5s · V 键无关</span>
+  <button class="ghost" id="balRefresh" type="button">↻</button>
+  <span class="stat" id="headerHint" style="margin-left:auto">推荐 V6 · 540p · 5s</span>
 </header>
 <main>
   <section id="form">
+    <details class="panel" id="scopePanel" open>
+      <summary>本面板能做什么（与完整 PixVerse 的差异）</summary>
+      <div class="body" id="scopeBody"></div>
+    </details>
+    <details class="panel" id="pricingPanel">
+      <summary>积分计价（V6 官方表 · 粗算条数）</summary>
+      <div class="body" id="pricingBody"></div>
+    </details>
+
     <h2>生成类型</h2>
     <select id="mode">
       <option value="text">文本 → 视频</option>
@@ -75,25 +99,33 @@
     <label>Prompt</label>
     <textarea id="prompt" placeholder="雨夜霓虹小巷，地面水洼倒映灯光，慢推镜头"></textarea>
     <div class="row2">
-      <div><label>模型</label><select id="model"><option value="v5.5">v5.5（稳）</option><option value="v6">v6</option></select></div>
+      <div><label>模型</label><select id="model">
+        <option value="v6" selected>V6（推荐 · 省积分）</option>
+        <option value="v5.6">V5.6（整段价 · 通常更贵）</option>
+      </select></div>
       <div><label>时长</label><select id="duration"><option value="5">5 秒</option><option value="8">8 秒</option></select></div>
     </div>
     <div class="row2">
       <div><label>画质</label><select id="quality">
-        <option value="360p">360p（省积分）</option>
-        <option value="540p" selected>540p（推荐测试）</option>
+        <option value="360p">360p</option>
+        <option value="540p" selected>540p（推荐）</option>
         <option value="720p">720p</option>
-        <option value="1080p">1080p（贵）</option>
+        <option value="1080p">1080p</option>
       </select></div>
       <div><label>画幅</label><select id="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option></select></div>
     </div>
-    <div class="row2">
-      <div><label>运动</label><select id="motion"><option value="normal">normal</option><option value="fast">fast</option></select></div>
+    <div class="check-row" id="audioRow">
+      <input type="checkbox" id="audio" />
+      <label for="audio">生成配套音频（V6 约 +2 积分/秒）</label>
+    </div>
+    <div class="row2" id="openapiExtras">
+      <div><label>运动</label><select id="motion"><option value="normal">normal</option><option value="fast">fast（约×2）</option></select></div>
       <div><label>负向词</label><input id="negative" placeholder="blur, text, watermark" /></div>
     </div>
-    <p class="cost">粗估单次：540p·5s 约 30–80 积分 · API 积分与网页会员分开</p>
-    <button id="submit" style="margin-top:10px">提交生成</button>
-    <p class="hint">Ctrl+Enter 提交 · 任务自动轮询 · 完成后可预览/下载</p>
+    <p class="cost" id="costHint">本次粗估：—</p>
+    <p class="hint" id="estimateHint"></p>
+    <button id="submit" type="button" style="margin-top:10px">提交生成</button>
+    <p class="hint">Ctrl+Enter 提交 · 自动轮询 · 完成后预览/下载到 <code>prototype/assets/videos/</code></p>
   </section>
   <section id="right">
     <div style="padding:12px 20px 0"><h2 style="margin:0">任务队列</h2></div>
@@ -107,6 +139,23 @@
 <div id="toasts"></div>
 <script>
 const $ = id => document.getElementById(id);
+const PRICING_URL = 'https://docs.platform.pixverse.ai/model-pricing-796039m0';
+
+/** V6：积分/秒（无音频, 有音频）— 与官方 Model Pricing 一致 */
+const V6_PER_SEC = {
+  '360p': [5, 7], '540p': [7, 9], '720p': [9, 12], '1080p': [18, 23],
+};
+/** V5.6：整段积分（无音频, 有音频）— 仅 5s/8s */
+const V56_CLIP = {
+  '360p': { 5: [35, 80], 8: [70, 115] },
+  '540p': { 5: [35, 90], 8: [70, 115] },
+  '720p': { 5: [45, 80], 8: [90, 135] },
+  '1080p': { 5: [75, 150], 8: [150, 195] },
+};
+
+let authMode = 'openapi';
+let creditsTotal = null;
+
 const api = p => fetch('/api/pixverse' + p).then(async r => {
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw new Error(j.error || r.statusText);
@@ -125,18 +174,93 @@ const LS = 'pixverse_tasks_v1';
 let tasks = JSON.parse(localStorage.getItem(LS) || '[]');
 const save = () => localStorage.setItem(LS, JSON.stringify(tasks.slice(0, 30)));
 
-const STATUS = { 1: '完成', 5: '生成中', 6: '已删除', 7: '审核未过', 8: '生成失败' };
+const STATUS = { 1: '完成', 5: '生成中', 9: '排队', 10: '生成中', 6: '已删除', 7: '审核未过', 8: '生成失败' };
+
+function estimateCredits() {
+  const model = $('model').value;
+  const dur = +$('duration').value;
+  const q = $('quality').value;
+  const withAudio = $('audio').checked;
+  const ai = withAudio ? 1 : 0;
+  if (model === 'v6') {
+    const row = V6_PER_SEC[q] || V6_PER_SEC['540p'];
+    return dur * row[ai];
+  }
+  const clip = V56_CLIP[q]?.[dur];
+  if (clip) return clip[ai];
+  return null;
+}
+
+function updateEstimate() {
+  const c = estimateCredits();
+  if (c == null) {
+    $('costHint').innerHTML = '本次粗估：所选组合暂无表内数据，以生成后扣费为准';
+    $('estimateHint').textContent = '';
+    return;
+  }
+  $('costHint').innerHTML = `本次粗估：<b>${c}</b> 积分/条（${$('model').value} · ${$('quality').value} · ${$('duration').value}s${$('audio').checked ? ' · 含音频' : ''}）`;
+  if (creditsTotal != null && creditsTotal > 0) {
+    const n = Math.floor(creditsTotal / c);
+    $('estimateHint').textContent = `按当前余额约还可做 ${n} 条同参数（未计失败重试；会员包 ${$('balance').dataset.membership || '—'} 分/周期）`;
+  } else {
+    $('estimateHint').textContent = '刷新积分后可显示「约还可做几条」';
+  }
+}
 
 function params() {
-  return {
+  const p = {
     prompt: $('prompt').value.trim(),
     model: $('model').value,
     duration: +$('duration').value,
     quality: $('quality').value,
     aspect_ratio: $('aspect').value,
-    motion_mode: $('motion').value,
-    negative_prompt: $('negative').value.trim() || undefined,
+    audio: $('audio').checked,
   };
+  if (authMode === 'openapi') {
+    p.motion_mode = $('motion').value;
+    p.negative_prompt = $('negative').value.trim() || undefined;
+  }
+  return p;
+}
+
+function renderScope() {
+  const cli = authMode === 'cli';
+  $('scopeBody').innerHTML = cli ? `
+    <p><b>Hub 已接（会员 CLI）</b>：文生视频、图生视频、首尾帧过渡；积分与 App 同源。</p>
+    <ul style="margin:6px 0 0 16px">
+      <li>本页<b>未接</b>：续写 Extend、参考融合、模板特效、改视频、对口型、多帧 Transition 等。</li>
+      <li>负向词 / motion fast：<span class="tag-na">CLI 路径无效</span>（仅 OpenAPI 模式可用）。</li>
+    </ul>
+    <p style="margin-top:8px"><b>需要全能力时</b>：在 Cursor 里让智能体读项目 Skill <code>pixverse-ai-image-and-video-generator</code>，或终端 <code>npx pixverse create …</code>。适合批量分镜、参考生视频、复杂工作流；本面板适合<strong>快速试镜头 + 下载进游戏</strong>。</p>
+  ` : `
+    <p><b>Hub（OpenAPI Key）</b>：文生 / 图生 / 首尾帧 + 负向词 + motion；积分来自 platform.pixverse.ai，与网页会员<strong>不通用</strong>。</p>
+    <p style="margin-top:6px">若已 <code>pixverse auth login</code>，重启 Hub 会优先走会员 CLI（见顶栏「会员 CLI」）。</p>
+  `;
+}
+
+function renderPricing() {
+  const mem = $('balance').dataset.membership || '6000';
+  $('pricingBody').innerHTML = `
+    <p>费率以 <a href="${PRICING_URL}" target="_blank" rel="noopener">官方 Model &amp; Pricing</a> 为准；下表为 <b>V6</b> 每秒扣费（Transition 同族粗算）。</p>
+    <table>
+      <tr><th>画质</th><th>无音频/秒</th><th>有音频/秒</th><th>5s 示例</th></tr>
+      <tr><td>540p</td><td>7</td><td>9</td><td>35 / 45</td></tr>
+      <tr><td>720p</td><td>9</td><td>12</td><td>45 / 60</td></tr>
+      <tr><td>1080p</td><td>18</td><td>23</td><td>90 / 115</td></tr>
+    </table>
+    <p>会员包约 <b>${mem}</b> 分/周期：540p·5s·无音频 ≈ <b>${Math.floor(+mem / 35) || '—'}</b> 条；同参数含音频 ≈ <b>${Math.floor(+mem / 45) || '—'}</b> 条。日赠/奖励分见顶栏明细。</p>
+    <p>V5.6 为整段价（540p·5s 无音频 35、含音频可达 90），一般不如 V6 省。</p>
+  `;
+}
+
+function applyAuthModeUI() {
+  const cli = authMode === 'cli';
+  $('openapiExtras').hidden = cli;
+  $('audioRow').hidden = false;
+  $('headerHint').textContent = cli ? '会员 CLI · 推荐 V6·540p·5s' : 'OpenAPI · 推荐 540p·5s';
+  renderScope();
+  renderPricing();
+  updateEstimate();
 }
 
 async function uploadInput(input) {
@@ -151,12 +275,29 @@ async function uploadInput(input) {
 async function refreshBalance() {
   try {
     const b = await api('/balance');
-    const monthly = b.credit_monthly ?? 0, pack = b.credit_package ?? 0;
-    const total = monthly + pack;
-    $('balance').innerHTML = 'API 积分：<b>' + total + '</b>'
-      + (monthly || pack ? ` <span style="opacity:.7">(月赠 ${monthly} + 充值包 ${pack})</span>` : '')
-      + (total === 0 ? ' <span style="color:#c9a87a">← 与网页会员分开，需 Billing 充值</span>' : '');
-  } catch (e) { $('balance').textContent = '积分：' + e.message; }
+    if (b.auth_mode === 'cli') {
+      authMode = 'cli';
+      const t = b.credits_total ?? ((b.credit_monthly ?? 0) + (b.credit_package ?? 0));
+      creditsTotal = t;
+      const mem = b.credit_monthly ?? 0;
+      const extra = (b.credit_daily ?? 0) + (b.credit_bonus ?? 0);
+      $('balance').dataset.membership = String(mem);
+      let hq = b.high_quality_times != null ? ` · 高品质次数 ${b.high_quality_times}` : '';
+      $('balance').innerHTML = (b.member_label ? b.member_label + ' · ' : '') + '积分 <b>' + t + '</b>'
+        + ` <span style="opacity:.7">(会员 ${mem} + 日赠/奖励 ${extra})</span>${hq}`;
+    } else {
+      authMode = 'openapi';
+      const monthly = b.credit_monthly ?? 0, pack = b.credit_package ?? 0;
+      creditsTotal = monthly + pack;
+      $('balance').dataset.membership = String(monthly);
+      $('balance').innerHTML = 'API 积分 <b>' + creditsTotal + '</b>'
+        + (monthly || pack ? ` <span style="opacity:.7">(月赠 ${monthly} + 包 ${pack})</span>` : '')
+        + (creditsTotal === 0 ? ' <span style="color:#c9a87a">← 需 platform Billing</span>' : '');
+    }
+    applyAuthModeUI();
+  } catch (e) {
+    $('balance').textContent = '积分：' + e.message;
+  }
 }
 
 function renderTasks() {
@@ -172,10 +313,10 @@ function renderTasks() {
       </div>
       <div style="font-size:11px;color:var(--dim);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.prompt || ''}</div>
       <div class="ops">
-        <button class="ghost" data-a="poll" ${t.status === 1 ? 'disabled' : ''}>刷新</button>
-        <button class="ghost" data-a="preview" ${t.url ? '' : 'disabled'}>预览</button>
-        <button class="ghost" data-a="dl" ${t.url ? '' : 'disabled'}>下载</button>
-        <button class="ghost" data-a="del" style="margin-left:auto">删除</button>
+        <button type="button" class="ghost" data-a="poll" ${t.status === 1 ? 'disabled' : ''}>刷新</button>
+        <button type="button" class="ghost" data-a="preview" ${t.url ? '' : 'disabled'}>预览</button>
+        <button type="button" class="ghost" data-a="dl" ${t.url ? '' : 'disabled'}>下载</button>
+        <button type="button" class="ghost" data-a="del" style="margin-left:auto">删除</button>
       </div>`;
     el.querySelector('[data-a=poll]').onclick = () => pollOne(i);
     el.querySelector('[data-a=preview]').onclick = () => play(t.url || (t.saved ? '/videos/' + t.saved : null));
@@ -212,10 +353,11 @@ async function pollOne(i) {
   const t = tasks[i];
   try {
     const r = await api('/video/' + t.videoId);
-    t.status = r.status;
-    t.label = STATUS[r.status] || ('status ' + r.status);
-    t.failed = r.status === 6 || r.status === 7 || r.status === 8;
-    if (r.status === 1) { t.url = r.url ?? r.video_url; toast('生成完成'); play(t.url); }
+    const st = r.status;
+    t.status = st;
+    t.label = STATUS[st] || (st === 1 ? '完成' : 'status ' + st);
+    t.failed = st === 6 || st === 7 || st === 8;
+    if (st === 1) { t.url = r.url ?? r.video_url; toast('生成完成'); play(t.url); }
     save(); renderTasks();
   } catch (e) { toast(e.message, true); }
 }
@@ -231,6 +373,10 @@ $('mode').onchange = () => {
   $('file2Wrap').hidden = m !== 'transition';
   $('file1Label').textContent = m === 'transition' ? '首帧图' : '参考图';
 };
+
+['model', 'duration', 'quality', 'audio'].forEach(id => {
+  $(id).addEventListener('change', updateEstimate);
+});
 
 $('submit').onclick = submit;
 document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') submit(); });
@@ -255,18 +401,21 @@ async function submit() {
     }
     const videoId = resp.video_id ?? resp.VideoId ?? resp.id;
     if (!videoId) throw new Error('未返回 video_id：' + JSON.stringify(resp));
-    tasks.unshift({ kind: mode, videoId, prompt: p.prompt, status: 5, label: '生成中', created: Date.now() });
+    const est = estimateCredits();
+    tasks.unshift({ kind: mode, videoId, prompt: p.prompt, status: 5, label: '生成中', created: Date.now(), est });
     save(); renderTasks();
-    toast('已提交 #' + videoId);
+    toast('已提交 #' + videoId + (est ? '（约 ' + est + ' 分）' : ''));
     setTimeout(pollLoop, 3000);
+    setTimeout(refreshBalance, 4000);
   } catch (e) { toast(e.message, true); }
   finally { $('submit').disabled = false; }
 }
 
 (async () => {
   try {
-    await api('/health');
-    $('health').textContent = '服务：正常';
+    const h = await api('/health');
+    authMode = h.auth_mode === 'cli' ? 'cli' : 'openapi';
+    $('health').textContent = '服务：正常 · ' + (authMode === 'cli' ? '会员 CLI' : 'OpenAPI');
     await refreshBalance();
   } catch (e) { $('health').textContent = '服务：' + e.message; }
   renderTasks();

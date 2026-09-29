@@ -1,9 +1,44 @@
 # PixVerse 视频生成 → 游戏接入手册
 
 > Marble 管「3D 世界」，PixVerse 管「动态镜头」——分镜过渡、幕间视频、终幕氛围短片。
-> 本地工具与 Tripo/Marble 同构：`pixverse.mjs` + `pixverse.serve.mjs` + `video.html`。
 
-## 快速开始
+## 两条通路（别混用）
+
+| 通路 | 鉴权 | 积分 | 适合 |
+|---|---|---|---|
+| **官方 `pixverse` CLI**（推荐：你有网页会员） | `pixverse auth login`，令牌在 `~/.pixverse/` | **网页会员积分**，与 App 同源 | Cursor 智能体 + Skill、`pixverse create video` 等全能力 |
+| **`tools/pixverse.mjs`**（OpenAPI） | 根目录 `.env.local` 里 `PIXVERSE_API_KEY` | [platform.pixverse.ai](https://platform.pixverse.ai/billing) **API Credits**，与网页会员**不通用** | 本地 `serve` + `video.html`、脚本批处理、与 Hub 同构的 HTTP 封装 |
+
+会员账号请走 **CLI + 登录**；只有开放平台 Key 时再走下面的 `pixverse.mjs`。
+
+## 官方三步（项目级，勿 `npm -g`）
+
+在仓库根目录：
+
+```bash
+npm install                    # 已写入 devDependency: pixverse
+npm run pixverse:login         # 浏览器用 PixVerse 账号登录，延续会员权益与积分
+npm run pixverse:status        # 应显示已登录
+```
+
+智能体能力包（已装可跳过）：
+
+```bash
+npm run skills:pixverse
+# 等价：npx skills add https://github.com/pixverseai/skills --skill pixverse-ai-image-and-video-generator --project -y
+```
+
+- 技能文件：`.agents/skills/pixverse-ai-image-and-video-generator/`（Cursor 通过 `.cursor/skills/` 目录联接指向同一份）
+- 生成示例：`npx pixverse create video --prompt "雨夜霓虹小巷，慢推" --quality 540p --duration 5 --json`，再用 `pixverse asset download` 落到 `prototype/assets/videos/`
+- 智能体读 Skill 时会优先用 **`npx pixverse` / `npm run pixverse`**，与全局 `pixverse` 命令等价（本项目不装全局 CLI）
+
+登录一次后，本机所有终端会话共用 `~/.pixverse/` 里的会话。
+
+**Hub 已接入**：`node tools/hub.serve.mjs` 在检测到 CLI 已登录时，PixVerse 标签页走会员账号（`auto` 优先 CLI；强制 OpenAPI 设 `PIXVERSE_HUB=openapi`）。
+
+Hub 内 `video.html` 仅覆盖 **文生 / 图生 / 首尾帧** + 积分粗算说明；续写、参考融合、模板等见面板内「差异说明」，或 Cursor Skill / `npx pixverse`。
+
+## OpenAPI 快速开始（`pixverse.mjs`）
 
 ```bash
 # .env.local
@@ -44,7 +79,7 @@ node tools/pixverse.mjs text --prompt "雨夜霓虹小巷，慢推" --wait --out
 | 下载 | `--out` | `POST /api/pixverse/download` |
 | 逃生舱 | `call` | `POST /api/pixverse/call` |
 
-下载目录：`prototype/assets/videos/`
+下载目录：`prototype/assets/videos/`。CLI `asset download` 会生成 `pixverse_video_<id>_<时间戳>.mp4`；建议 **重命名** 为 `demo-*.mp4` 后删掉自动名，避免同一任务占双份空间（Hub「下载」则直接用你填的文件名）。
 
 ## 暂未封装（用 call 或后续加）
 

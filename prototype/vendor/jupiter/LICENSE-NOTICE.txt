@@ -1,0 +1,5 @@
+Jupiter Interlace SDK 1.0.0 — 交付说明
+
+本 SDK 根据提供的 Jupiter-World-Viewer-v0.17.1-source.zip 及新增接入代码制作。交织相位与相机约定来自压缩包中的 JupiterWorldViewer/web/main.js。原项目 web/package.json 声明 ISC；已检查文件中未发现该项目自有代码的独立完整许可证。本说明记录来源，不代表原权利人授予额外权利。
+
+项目自有代码和新增代码的分发条款由交付权利人确定。第三方组件继续适用各自许可证，见 THIRD_PARTY_NOTICES.txt 与 dist/licenses。附带的程序化示例场景专为本 SDK 创建。

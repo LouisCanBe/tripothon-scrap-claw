@@ -4,9 +4,9 @@
 
 | 入口 | 地址 |
 |------|------|
-| 工具 Hub · Seedream | [http://localhost:8780/concepts](http://localhost:8780/concepts) |
-| 工具 Hub · Cursor 写实 | [http://localhost:8780/concepts?set=cursor](http://localhost:8780/concepts?set=cursor) |
-| 游戏试玩 devServer | [http://127.0.0.1:8000/design/concepts/review.html](http://127.0.0.1:8000/design/concepts/review.html) |
+| 工具 Hub · Seedream | [http://localhost:8780/concepts](http://localhost:8780/concepts) 或 [/design/concepts/review.html](http://localhost:8780/design/concepts/review.html) |
+| 工具 Hub · Cursor 写实 | [http://localhost:8780/concepts?set=cursor](http://localhost:8780/concepts?set=cursor) 或 [review.html?set=cursor](http://localhost:8780/design/concepts/review.html?set=cursor) |
+| 试玩 devServer（`prototype/` 根） | [http://127.0.0.1:8000/design/concepts/review.html](http://127.0.0.1:8000/design/concepts/review.html) |
 
 顺序数据：`review-order.json` · 写实组：`review-order-cursor.json`
 

@@ -6,3 +6,6 @@ node_modules/
 
 # Tripo 生成缓冲区（确认好用后改名进 prizes/ 才入库）
 prototype/assets/generated/
+
+# 鐩告鍘熷巶 SDK 鍘嬬缉鍖呬笌瑙ｅ帇鐩綍銆傚紑鍙戝壇鏈湪 prototype/vendor/jupiter
+JupiterSR/**/Jupiter-Interlace-SDK-*
