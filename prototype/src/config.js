@@ -11,6 +11,64 @@ export const CONFIG = {
   // 叙事概念图组：'cursor' 写实摄影 | 'seedream' 厚涂；URL ?art=cursor 可临时覆盖
   narrativeSet: 'cursor',
 
+  // —— 呈现 / TA（底图与 3D 统一镜头感，见 present.js）——
+  present: {
+    grainOpacity: 0.052,
+    marginVignette: 0.58,
+    narrativeKenBurns: true,
+    acts: {
+      default: { imgFilter: 'saturate(0.88) contrast(1.05) brightness(0.9)', shade: 'default', kenBurns: true },
+      1: {
+        moodClass: 'memory',
+        imgFilter: 'sepia(0.14) saturate(0.86) contrast(1.08) brightness(0.88)',
+        shade: 'memory',
+      },
+      2: {
+        imgFilter: 'saturate(0.82) contrast(1.06) brightness(0.86)',
+        shade: 'default',
+      },
+      3: {
+        imgFilter: 'saturate(0.7) contrast(1.12) brightness(0.8) hue-rotate(-6deg)',
+        shade: 'harsh',
+      },
+      4: {
+        imgFilter: 'sepia(0.2) saturate(0.95) contrast(1.04) brightness(0.94)',
+        shade: 'warm',
+      },
+      5: {
+        imgFilter: 'saturate(0.62) contrast(1.1) brightness(0.76) hue-rotate(-12deg)',
+        shade: 'cold',
+        kenBurns: false,
+      },
+    },
+    shadeGradients: {
+      default:
+        'radial-gradient(ellipse 88% 84% at 50% 48%, rgba(16,15,20,0.93) 0%, rgba(5,5,9,0.99) 78%)',
+      memory:
+        'radial-gradient(ellipse 90% 86% at 52% 46%, rgba(22,18,16,0.92) 0%, rgba(8,7,10,0.99) 80%)',
+      harsh:
+        'radial-gradient(ellipse 86% 82% at 50% 50%, rgba(12,14,18,0.95) 0%, rgba(3,4,8,1) 75%)',
+      warm:
+        'radial-gradient(ellipse 88% 84% at 50% 48%, rgba(24,20,16,0.9) 0%, rgba(10,8,8,0.98) 78%)',
+      cold:
+        'radial-gradient(ellipse 92% 88% at 50% 50%, rgba(10,12,16,0.96) 0%, rgba(2,3,6,1) 72%)',
+    },
+    transition: {
+      backdropMs: 1100,
+      backdropDip: 0.48,
+      interstitialFadeIn: 0.72,
+      interstitialFadeOut: 0.9,
+      interstitialDip: 0.52,
+    },
+    post: { warmth: 0.06, chroma: 0.32, saturation: 1.02 },
+    actPost: {
+      1: { warmth: 0.12, chroma: 0.38 },
+      3: { warmth: -0.04, chroma: 0.48, satMul: 0.94 },
+      4: { warmth: 0.16, chroma: 0.28, satMul: 1.04 },
+      5: { warmth: -0.08, chroma: 0.42, satMul: 0.9 },
+    },
+  },
+
   claw: {
     // —— 水平移动（惯性手感核心）——
     moveSpeed: 1.7,          // 目标点移动速度（单位/秒）
@@ -169,13 +227,14 @@ export const CONFIG = {
     boundsZ: [-0.85, 0.85],
     boundsWallMargin: 0.06,  // 按娃娃足迹 clamp 时额外留白（防穿模）
     // 奖品视觉体量：槽位尺寸来自 prizePool PRIZE_TABLE[].collider，再乘此系数（GLB 走 normalizeGLB 同倍率）
+    glbSet: 'good',          // good | legacy；URL ?models=legacy 回退旧 prizes/
     visualScale: 2.5,
     // Tripo 娃娃若横躺：绕 X 额外旋转（弧度），与 Hub 预览里手动摆正同理，默认 0 等你验证后再调
     glbExtraRotX: 0,
 
     // 漫画渲染（与 tools/ui.html「漫画渲染」同参，只作用于奖池 mesh）
     comicFx: {
-      enabled: false,
+      enabled: true,
       outline: 0.028,
       outlineColor: 0x141210,
       exposure: 1.15,
@@ -218,6 +277,7 @@ export const CONFIG = {
     enabled: true,
     channel: 'tripo.collect-display.v1',
     displayPath: '/display.html',
+    shareFrame: true,          // 扫码/复制链接用 display-frame.html（相框副屏）
     // 相框固定打开 frame.path。介绍词只改 copy，两个副屏一起变。
     copy: {
       kicker: 'COLLECT DISPLAY',
@@ -232,8 +292,8 @@ export const CONFIG = {
       pitch: 0.27777,
       tan: 10,
       offset: 2,
-      views: 9,
-      viewWidth: 1200,
+      views: 3,
+      viewWidth: 640,
       viewSpacing: 0.04,
       focusDistance: 2.5,
     },

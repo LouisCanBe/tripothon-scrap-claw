@@ -10,6 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CONFIG } from './config.js';
+import { presentPostCoeffs } from './present.js';
 
 const GradeShader = {
   uniforms: {
@@ -20,7 +21,10 @@ const GradeShader = {
     uVig:     { value: 0.55 },   // 暗角
     uTime:    { value: 0 },
     uAspect:  { value: 1 },
-    uCenter:  { value: new Vector2(0.5, 0.5) },   // 畸变/暗角中心（对齐画幅中心），main 每帧写入
+    uCenter:  { value: new Vector2(0.5, 0.5) },
+    uWarmth:  { value: 0.06 },
+    uChroma:  { value: 0.32 },
+    uSat:     { value: 1.0 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -30,7 +34,7 @@ const GradeShader = {
     }`,
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse;
-    uniform float uK1, uK2, uGrain, uVig, uTime, uAspect;
+    uniform float uK1, uK2, uGrain, uVig, uTime, uAspect, uWarmth, uChroma, uSat;
     uniform vec2 uCenter;
     varying vec2 vUv;
 
@@ -46,14 +50,21 @@ const GradeShader = {
       d.x /= uAspect;
       vec2 suv = d + uCenter;
 
-      vec3 col = (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0)
-        ? vec3(0.0)
-        : texture2D(tDiffuse, suv).rgb;
+      bool inside = suv.x >= 0.0 && suv.x <= 1.0 && suv.y >= 0.0 && suv.y <= 1.0;
+      vec3 col = vec3(0.0);
+      if (inside) {
+        float edge = smoothstep(0.15, 0.92, length(uv));
+        float ca = uChroma * edge * 0.0028;
+        col.r = texture2D(tDiffuse, suv + vec2(ca, 0.0)).r;
+        col.g = texture2D(tDiffuse, suv).g;
+        col.b = texture2D(tDiffuse, suv - vec2(ca, 0.0)).b;
+        float lum = dot(col, vec3(0.299, 0.587, 0.114));
+        col = mix(col, col * vec3(1.08, 1.02, 0.9), uWarmth * (1.0 - lum));
+        col = mix(vec3(lum), col, uSat);
+      }
 
-      // 动态胶片颗粒
       col += (hash(suv * vec2(1920.0, 1080.0) + fract(uTime) * 7.13) - 0.5) * uGrain;
 
-      // 暗角（同样以画幅中心为圆心）
       float v = smoothstep(0.95, 0.30, length(uv));
       col *= mix(1.0, v, uVig);
 
@@ -105,6 +116,11 @@ export class Post {
     u.uGrain.value = p.grain;
     u.uVig.value = p.vignette;
     u.uTime.value = t;
+    const pc = presentPostCoeffs();
+    const f = this.fisheyeFade;
+    u.uWarmth.value = pc.warmth * f;
+    u.uChroma.value = pc.chroma * f;
+    u.uSat.value = pc.sat;
     this.composer.render();
   }
 }

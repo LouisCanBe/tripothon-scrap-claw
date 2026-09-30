@@ -22,9 +22,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT_PRIZES = path.join(ROOT, 'prototype', 'assets', 'prizes');
 const OUT_MACHINE = path.join(ROOT, 'prototype', 'assets', 'machine');
-const MANIFEST = path.join(ROOT, 'prototype', 'src', 'assets.manifest.js');
 const POLL_MS = 3000;
 const TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -67,6 +65,15 @@ const FORCE = args.includes('--force');
 const onlyIdx = args.indexOf('--only');
 const ONLY = onlyIdx >= 0 ? args[onlyIdx + 1].split(',').map(s => s.trim()).filter(Boolean) : null;
 const CLAW_TEST = args[0] === 'claw';
+const setIdx = args.indexOf('--set');
+const PRIZE_SET = setIdx >= 0 ? args[setIdx + 1] : 'default';
+const OUT_PRIZES = PRIZE_SET === 'good'
+  ? path.join(ROOT, 'prototype', 'assets', 'prizes-good')
+  : path.join(ROOT, 'prototype', 'assets', 'prizes');
+const MANIFEST = PRIZE_SET === 'good'
+  ? path.join(ROOT, 'prototype', 'src', 'assets.manifest-good.js')
+  : path.join(ROOT, 'prototype', 'src', 'assets.manifest.js');
+const PROMPTS_FILE = PRIZE_SET === 'good' ? 'prompts-good.json' : 'prompts.json';
 
 const loadKey = () => process.env.TRIPO_API_KEY?.trim() ?? null;
 
@@ -113,19 +120,24 @@ async function download(url, dest) {
   return (fs.statSync(dest).size / 1024).toFixed(0) + 'KB';
 }
 
-// manifest 永远反映 assets/prizes/ 目录实况：有文件才登记
+// manifest 永远反映 OUT_PRIZES 目录实况：有文件才登记
 function rebuildManifest() {
   if (!fs.existsSync(OUT_PRIZES)) return;
+  const relDir = PRIZE_SET === 'good' ? 'prizes-good' : 'prizes';
+  const exportName = PRIZE_SET === 'good' ? 'GLB_MANIFEST_GOOD' : 'GLB_MANIFEST';
   const ids = fs.readdirSync(OUT_PRIZES).filter(f => f.endsWith('.glb')).map(f => f.slice(0, -4)).sort();
-  const lines = ids.map(id => `  ${JSON.stringify(id)}: './assets/prizes/${id}.glb',`).join('\n');
-  fs.writeFileSync(MANIFEST, `// 【自动生成，勿手改】由 tools/generate.mjs 维护
+  const lines = ids.map(id => `  ${JSON.stringify(id)}: './assets/${relDir}/${id}.glb',`).join('\n');
+  const header = PRIZE_SET === 'good'
+    ? `// 【自动生成，勿手改】由 tools/generate.mjs --set good 维护`
+    : `// 【自动生成，勿手改】由 tools/generate.mjs 维护
 // 键 = 奖品 id（对应 prizePool.js 数据表），值 = GLB 路径
-// 无条目的物品保持几何体显示 —— 灰盒与 Tripo 资产可混用
-export const GLB_MANIFEST = {
+// 无条目的物品保持几何体显示 —— 灰盒与 Tripo 资产可混用`;
+  fs.writeFileSync(MANIFEST, `${header}
+export const ${exportName} = {
 ${lines}
 };
 `);
-  console.log(`manifest 已更新（${ids.length} 件）→ prototype/src/assets.manifest.js`);
+  console.log(`manifest 已更新（${ids.length} 件, set=${PRIZE_SET})→ ${path.relative(ROOT, MANIFEST)}`);
 }
 
 // def.prompt 经 _style 统一风格后缀；def 里带 "image" 字段则走 image-to-model
@@ -148,7 +160,8 @@ async function runOne(key, endpoint, body, label, dest) {
 }
 
 async function main() {
-  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'prompts.json'), 'utf8'));
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', PROMPTS_FILE), 'utf8'));
+  if (!DRY) console.log(`奖品套：${PRIZE_SET}（${PROMPTS_FILE} → ${path.relative(ROOT, OUT_PRIZES)}/）`);
 
   const key = DRY ? '(dry)' : loadKey();
   if (!key) {

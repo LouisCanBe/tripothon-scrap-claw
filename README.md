@@ -58,7 +58,8 @@ node tools/devServer.mjs 8000 --lan   # 监听 0.0.0.0，手机/副屏用 http:/
 # 首次：复制 .env.example 为 .env.local，填入 TRIPO_API_KEY
 node tools/generate.mjs --dry           # 只看不调，检查 prompt
 node tools/generate.mjs --only bread,can  # 冒烟：只生成两件
-node tools/generate.mjs                 # 全量 16 件
+node tools/generate.mjs                 # 全量 16 件（默认套 → assets/prizes/）
+node tools/generate.mjs --set good --force   # 好版 16 件 → assets/prizes-good/（见 tools/prompts-good.json）
 ```
 
 GLB 落到 `prototype/assets/prizes/`，manifest 自动重建，刷新页面即热替换。

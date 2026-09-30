@@ -22,14 +22,37 @@
   #narrativeBg { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
                   transition: opacity 1.05s ease; overflow: hidden; }
   #narrativeBg.on { opacity: 1; }
-  #narrativeBg img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  #narrativeBg .narrative-stack { position: absolute; inset: 0; }
+  #narrativeBg .narrative-layer { position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: center; opacity: 0;
+    transform-origin: 50% 45%; will-change: transform, opacity; }
+  #narrativeBg .narrative-layer.is-active { opacity: 1; }
+  #narrativeBg img.ken-burns {
+    animation: narrativeKenBurns 52s ease-in-out infinite alternate;
+  }
+  @keyframes narrativeKenBurns {
+    from { transform: scale(1.04) translate(0, 0); }
+    to   { transform: scale(1.09) translate(-1.2%, -0.6%); }
+  }
   #narrativeBg .veil { position: absolute; inset: 0;
-    background: linear-gradient(165deg, rgba(6,6,10,.62) 0%, rgba(8,8,12,.38) 45%, rgba(6,6,10,.68) 100%); }
+    background: linear-gradient(165deg, rgba(6,6,10,.55) 0%, rgba(8,8,12,.32) 42%, rgba(6,6,10,.62) 100%);
+    mix-blend-mode: multiply; }
+  #narrativeBg[data-mood="memory"] .veil {
+    background: linear-gradient(155deg, rgba(28,20,14,.45) 0%, rgba(8,8,12,.35) 50%, rgba(6,6,10,.55) 100%);
+  }
+  #presentMarginVig { position: fixed; inset: 0; z-index: 3; pointer-events: none;
+    background: radial-gradient(ellipse 78% 72% at 50% 48%, transparent 42%, rgba(0,0,0,.72) 100%); }
+  #presentGrain { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    mix-blend-mode: soft-light; }
   /* 与 #frameBorder 同矩形（frameMask 统一定位）：视口内挡住概念底图，上面再叠 3D */
   #narrativeViewportShade { position: fixed; z-index: 1; pointer-events: none;
     background: rgba(7,7,11,.96); box-sizing: border-box;
     transition: left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
-                width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1); }
+                width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1),
+                background 0.95s ease; }
+  #narrativeDip { position: fixed; inset: 0; z-index: 3; pointer-events: none;
+    background: #070708; opacity: 0; }
   #narrativeViewportShade.no-anim { transition: none !important; }
   html.game-booting #stage,
   html.game-booting #frameBorder,
@@ -37,8 +60,12 @@
   #narrativeInterstitial { position: fixed; inset: 0; z-index: 18; pointer-events: none;
     display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); }
   #narrativeInterstitial[hidden] { display: none !important; opacity: 0 !important; }
+  #narrativeInterstitial.cinematic { background: rgba(0,0,0,.72);
+    backdrop-filter: blur(6px) saturate(0.85); }
   #narrativeInterstitial img { max-width: 100%; max-height: 100%; object-fit: contain;
-    box-shadow: 0 16px 48px rgba(0,0,0,.65); }
+    box-shadow: 0 20px 56px rgba(0,0,0,.75);
+    filter: contrast(1.04) saturate(0.92);
+    transform-origin: 50% 48%; will-change: transform, opacity; }
   #hud.hud-ration-decor { background-image: linear-gradient(rgba(9,9,12,.82), rgba(9,9,12,.82)),
     var(--hud-decor-url, none); background-size: cover; background-position: center top; }
 
@@ -253,14 +280,20 @@
 </head>
 <body>
   <div id="narrativeBg" aria-hidden="true">
-    <img id="narrativeBgImg" alt="" width="1920" height="1080" decoding="async" />
+    <div class="narrative-stack">
+      <img id="narrativeBgImgA" class="narrative-layer" alt="" width="1920" height="1080" decoding="async" />
+      <img id="narrativeBgImgB" class="narrative-layer" alt="" width="1920" height="1080" decoding="async" />
+    </div>
     <div class="veil"></div>
   </div>
   <div id="narrativeViewportShade" hidden aria-hidden="true"></div>
+  <div id="presentMarginVig" aria-hidden="true"></div>
+  <div id="presentGrain" aria-hidden="true"></div>
   <div id="narrativeInterstitial" hidden>
     <img id="narrativeInterstitialImg" alt="" width="1280" height="720" decoding="async" />
   </div>
   <div id="stage"></div>
+  <div id="narrativeDip" aria-hidden="true"></div>
   <div id="frameBorder"></div>
   <div id="flash"></div>
 

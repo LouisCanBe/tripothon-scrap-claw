@@ -13,3 +13,5 @@
 首屏：`main.js` 在 loading 结束前 `mask.bootstrapLayout(起始幕 layout)`，避免 `center`→`right` 动画拖影。
 
 `#narrativeInterstitial` 必须带 `[hidden] { display: none !important }`（勿用 `display:flex` 盖掉 hidden）。
+
+呈现 / TA：`config.present` + `present.js`（幕情绪、底图滤镜、视口渐变、全屏颗粒与 margin 暗角）；3D 色温/边缘色散见 `post.js` + `presentPostCoeffs()`。

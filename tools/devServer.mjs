@@ -97,6 +97,7 @@ http.createServer(async (req, res) => {
   console.log(`[collect] 默认配对口令 pair=${pair}（config.collectDisplay.pairId；书签可无参，多展台改 ?pair=）`);
   console.log(`  主游戏  http://127.0.0.1:${PORT}/`);
   console.log(`  副屏    http://127.0.0.1:${PORT}/display.html`);
+  console.log(`  相框    http://127.0.0.1:${PORT}/display-frame.html`);
   console.log(`  含参示例 http://127.0.0.1:${PORT}/?pair=${q}`);
   console.log(`          http://127.0.0.1:${PORT}/display.html?pair=${q}`);
   if (HOST === '0.0.0.0') {

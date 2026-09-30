@@ -1,0 +1,32 @@
+{
+  "_note": "第二套「好版」奖品：v3.1 + detailed 贴图，强调单体完整、无碎屑漂浮。生成：node tools/generate.mjs --set good [--only id] [--force]",
+  "_defaults": {
+    "model": "v3.1-20260211",
+    "face_limit": 10000,
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "detailed",
+    "geometry_quality": "high",
+    "auto_size": true
+  },
+  "_style": "stylized low-poly scavenging game prop, post-apocalyptic ration aesthetic, single solid object only, centered upright on ground, clean closed mesh, no floating shards no extra debris, muted desaturated hand-painted PBR, plain dark gray studio background, game-ready collectible",
+
+  "items": {
+    "bread":   { "prompt": "one small crusty bread loaf, rounded boxy silhouette, intact loaf not sliced" },
+    "can":     { "prompt": "one short cylindrical food tin can with pull-ring lid, readable label, not crushed" },
+    "veg":     { "prompt": "one bundle of leafy greens vegetables tied together, lumpy oval silhouette" },
+    "moldy":   { "prompt": "one moldy bread loaf same boxy silhouette as fresh bread, green-grey surface fuzz, still one solid loaf" },
+    "rustcan": { "prompt": "one rusty empty tin can same short cylinder proportions as food can, dented but whole cylinder" },
+    "rot":     { "prompt": "one rotten organic lump same round silhouette as vegetable bundle, dark green-brown, single cohesive mass" },
+    "carton":  { "prompt": "one small rectangular drink milk carton, slightly worn, standing upright" },
+    "cheese":  { "prompt": "one wedge of hard yellow cheese block, clean cut faces" },
+    "bottle":  { "prompt": "one slim glass bottle with narrow neck, empty, standing upright" },
+    "apple":   { "prompt": "one small withered apple fruit, single round fruit" },
+    "jar":     { "prompt": "one squat glass jar with metal screw lid, pantry prop" },
+    "brick":   { "prompt": "one broken red brick chunk, heavy rectangular rubble piece, single fragment" },
+    "bone":    { "prompt": "one large animal bone, single piece, not shattered" },
+    "cloth":   { "prompt": "one wadded ball of dirty fabric rags, compact sphere shape" },
+    "stone":   { "prompt": "one dull grey river stone pebble, single rock" },
+    "foil":    { "prompt": "one crumpled aluminum foil ball, compact metallic wad" }
+  }
+}

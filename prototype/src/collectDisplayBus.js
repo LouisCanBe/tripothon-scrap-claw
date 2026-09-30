@@ -1,6 +1,6 @@
 // 出货展示屏联动：同机 BC + 跨设备 SSE（devServer /api/collect/*）
 import { CONFIG } from './config.js';
-import { GLB_MANIFEST } from './assets.manifest.js';
+import { prizeGlbUrl } from './glbManifest.js';
 import { poolVisualScale } from './prizePool.js';
 import { resolveBounceMaterial } from './collectBouncePresets.js';
 import { DEFAULT_COLLECT_PAIR } from './collectPairDefault.js';
@@ -36,7 +36,10 @@ export function resolveCollectPair() {
 /** 副屏完整 URL（扫码用，始终带 ?pair=） */
 export function collectDisplayShareUrl() {
   const pair = resolveCollectPair();
-  const path = CONFIG.collectDisplay?.displayPath ?? '/display.html';
+  const useFrame = CONFIG.collectDisplay?.shareFrame === true;
+  const path = useFrame
+    ? (CONFIG.collectDisplay?.frame?.path ?? '/display-frame.html')
+    : (CONFIG.collectDisplay?.displayPath ?? '/display.html');
   const base = `${location.origin}${path}`;
   const sep = path.includes('?') ? '&' : '?';
   return `${base}${sep}pair=${encodeURIComponent(pair)}`;
@@ -65,13 +68,18 @@ export function shouldUseRemotePublish() {
   return true;
 }
 
+/** 出货副屏页（含相框 display-frame.html，跨设备必须 SSE） */
+export function isCollectDisplayPage() {
+  return /display(?:-frame)?\.html/i.test(location.pathname || '');
+}
+
 export function shouldUseRemoteSubscribe() {
   if (!CONFIG.collectDisplay?.enabled) return false;
   const t = transport();
   if (t === 'local') return false;
   if (typeof location === 'undefined' || location.protocol === 'file:') return false;
   if (t === 'lan') return true;
-  return /display\.html/i.test(location.pathname || '');
+  return isCollectDisplayPage();
 }
 
 /** @param {object} item prizePool 条目 */
@@ -82,7 +90,7 @@ export function itemToPrizePayload(item) {
     name: item.name,
     category: item.category,
     quest: !!item.quest,
-    glbUrl: GLB_MANIFEST[id] ?? null,
+    glbUrl: prizeGlbUrl(id),
     visualScale: poolVisualScale(),
     bounceMaterial: resolveBounceMaterial(item),
   };
@@ -192,8 +200,29 @@ export function subscribeCollectDisplay(handler, opts = {}) {
   return subscribeCollectLocal(handler);
 }
 
+/** 主游戏前台心跳（副屏判 gameActive；与第三幕 HUD 面板无关） */
+export function startCollectGamePing() {
+  if (!shouldUseRemotePublish()) return () => {};
+  const path = CONFIG.collectDisplay?.pingPath ?? '/api/collect/ping';
+  const tick = () => {
+    if (document.hidden) return;
+    fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pair: resolveCollectPair() }),
+      keepalive: true,
+    }).catch(() => {});
+  };
+  tick();
+  const iv = setInterval(tick, 8000);
+  return () => clearInterval(iv);
+}
+
 export function openCollectDisplayWindow() {
-  const base = CONFIG.collectDisplay?.displayPath ?? '/display.html';
+  const useFrame = CONFIG.collectDisplay?.shareFrame === true;
+  const base = useFrame
+    ? (CONFIG.collectDisplay?.frame?.path ?? '/display-frame.html')
+    : (CONFIG.collectDisplay?.displayPath ?? '/display.html');
   const url = collectDisplayPathWithPair(base);
   return window.open(url, 'tripo-collect-display', 'noopener');
 }

@@ -28,15 +28,19 @@ import { mountMarbleImmersive } from './revealMarble.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
 import { refreshClawComicFx } from './clawComicFx.js';
 import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
-import { publishHoleDrop, publishVended, openCollectDisplayWindow } from './collectDisplayBus.js';
+import {
+  publishHoleDrop, publishVended, openCollectDisplayWindow, startCollectGamePing,
+} from './collectDisplayBus.js';
 import { startCollectDisplayPairPanel } from './collectDisplayPairPanel.js';
 import { createSceneLights, applyRevealColdLighting, applyMemoryLighting } from './sceneLighting.js';
 import { NarrativeBg } from './narrativeBg.js';
 import { applyNarrativeToConfig, preloadNarrativeImages } from './narrativeAssets.js';
+import { initPresent } from './present.js';
 
 loadPoolDevOverrides();
 applyNarrativeToConfig();
 preloadNarrativeImages();
+initPresent();
 const narrativeBg = new NarrativeBg();
 narrativeBg.showAmbient();
 
@@ -346,6 +350,7 @@ director = new Director({
   },
 });
 startCollectDisplayPairPanel(director);
+startCollectGamePing();
 
 // —— 输入接线（带幕间权限闸）——
 input.on('drop', () => { if (director.allow('drop')) claw.startDrop(); });

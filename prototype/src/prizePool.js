@@ -12,7 +12,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { GLB_MANIFEST } from './assets.manifest.js';
+import { getGlbManifest } from './glbManifest.js';
 import { markItemVisualScale } from './poolDevPersist.js';
 
 // shape: 'box' [w,h,d] | 'cylinder' [r,h] | 'sphere' [r, y压扁系数]
@@ -211,7 +211,8 @@ export function tickUpgrades(dt) {
 }
 
 export async function upgradeVisuals(parent, items, renderer, camera, onProgress) {
-  const pending = items.filter(it => GLB_MANIFEST[it.id]);
+  const manifest = getGlbManifest();
+  const pending = items.filter(it => manifest[it.id]);
   if (!pending.length) return;
 
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
@@ -225,7 +226,7 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
     while (next < pending.length) {
       const i = next++;
       try {
-        results[i] = { status: 'fulfilled', value: await track(loader.loadAsync(GLB_MANIFEST[pending[i].id])) };
+        results[i] = { status: 'fulfilled', value: await track(loader.loadAsync(manifest[pending[i].id])) };
       } catch (reason) {
         results[i] = { status: 'rejected', reason };
       }

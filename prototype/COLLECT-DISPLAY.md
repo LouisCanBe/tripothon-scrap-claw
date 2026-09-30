@@ -82,7 +82,9 @@
 ```
 
 - 实现：`tools/collectDisplayHub.mjs`，由 `devServer.mjs` 挂载。
-- `config.collectDisplay.transport`：`auto`（默认）主屏 HTTP 下会 POST；`display.html` 订阅 SSE。`local` 仅 BroadcastChannel。
+- `config.collectDisplay.transport`：`auto`（默认）主屏 HTTP 下会 POST；`display.html` / **`display-frame.html`** 订阅 SSE。`local` 仅 BroadcastChannel。
+- 相框页必须用 SSE（已识别 `display-frame.html`）；勿只开 `display.html` 的 BC 逻辑跨设备。
+- `shareFrame: true` 时主屏二维码指向 `config.collectDisplay.frame.path`。
 - `pair`：默认 **`config.collectDisplay.pairId`**（口令样式，见 `collectPairDefault.js`）；多展台时 URL **`?pair=XXXX-XXXX`** 覆盖。主副屏须同一 pair。
 - 同机第二标签：仍可用 BC；副屏在 `auto` 下 **只订 SSE**（避免双份事件）。
 

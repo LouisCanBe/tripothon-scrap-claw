@@ -148,7 +148,7 @@ export class Director {
     }
 
     this.hooks.onActEnter?.(act, i);
-    this.narrativeBg?.applyAct(act);
+    const bgTask = this.narrativeBg?.applyAct(act, { immediate: i === 0 }) ?? Promise.resolve();
 
     this.elHud.style.display = act.quest ? 'block' : 'none';
     if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = (act.id ?? 0) < 3;
@@ -165,7 +165,8 @@ export class Director {
 
     this.#panel('left', ''); this.#panel('right', '');
 
-    await sleep(400);
+    await bgTask;
+    await sleep(280);
     if (gen !== this._runGen) return;
     await this.#run(act, gen);
     if (gen !== this._runGen) return;
@@ -183,7 +184,7 @@ export class Director {
         case 'wait':  await this.#waitFor(step.event); break;
         case 'synthesis': await this.#synthesis(act); break;
         case 'interstitial':
-          await this.narrativeBg?.showInterstitial(step.image, step.dur ?? 2.5);
+          await this.narrativeBg?.showInterstitial(step.image, step.dur ?? 2.5, step);
           break;
         case 'glitch': await this.#glitch(step); break;
         case 'revealBeat': await this.#revealBeat(step); break;
