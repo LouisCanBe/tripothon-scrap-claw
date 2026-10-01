@@ -9,24 +9,24 @@
     "geometry_quality": "high",
     "auto_size": true
   },
-  "_style": "stylized low-poly scavenging game prop, post-apocalyptic ration aesthetic, single solid object only, centered upright on ground, clean closed mesh, no floating shards no extra debris, muted desaturated hand-painted PBR, plain dark gray studio background, game-ready collectible",
+  "_style": "stylized low-poly game prop, fresh food aesthetic, single solid object only, centered upright on ground, clean closed mesh, no floating debris, hand-painted PBR with natural colors, plain dark gray studio background, game-ready collectible",
 
   "items": {
-    "bread":   { "prompt": "one small crusty bread loaf, rounded boxy silhouette, intact loaf not sliced" },
-    "can":     { "prompt": "one short cylindrical food tin can with pull-ring lid, readable label, not crushed" },
-    "veg":     { "prompt": "one bundle of leafy greens vegetables tied together, lumpy oval silhouette" },
-    "moldy":   { "prompt": "one moldy bread loaf same boxy silhouette as fresh bread, green-grey surface fuzz, still one solid loaf" },
-    "rustcan": { "prompt": "one rusty empty tin can same short cylinder proportions as food can, dented but whole cylinder" },
-    "rot":     { "prompt": "one rotten organic lump same round silhouette as vegetable bundle, dark green-brown, single cohesive mass" },
-    "carton":  { "prompt": "one small rectangular drink milk carton, slightly worn, standing upright" },
-    "cheese":  { "prompt": "one wedge of hard yellow cheese block, clean cut faces" },
-    "bottle":  { "prompt": "one slim glass bottle with narrow neck, empty, standing upright" },
-    "apple":   { "prompt": "one small withered apple fruit, single round fruit" },
-    "jar":     { "prompt": "one squat glass jar with metal screw lid, pantry prop" },
-    "brick":   { "prompt": "one broken red brick chunk, heavy rectangular rubble piece, single fragment" },
-    "bone":    { "prompt": "one large animal bone, single piece, not shattered" },
-    "cloth":   { "prompt": "one wadded ball of dirty fabric rags, compact sphere shape" },
-    "stone":   { "prompt": "one dull grey river stone pebble, single rock" },
-    "foil":    { "prompt": "one crumpled aluminum foil ball, compact metallic wad" }
+    "bread":   { "prompt": "one fresh crusty bread loaf, golden brown crust, rounded boxy silhouette, intact loaf not sliced" },
+    "can":     { "prompt": "one clean cylindrical food tin can with pull-ring lid, colorful readable label, not crushed" },
+    "veg":     { "prompt": "one fresh bundle of leafy greens vegetables tied together, vibrant green, lumpy oval silhouette" },
+    "moldy":   { "prompt": "one fresh bread loaf same boxy silhouette as bread, golden crust, clean surface no mold, intact loaf" },
+    "rustcan": { "prompt": "one clean food tin can same short cylinder as can, shiny metal with colorful label, no rust no dents" },
+    "rot":     { "prompt": "one fresh vegetable bundle same round silhouette as veg, bright green leaves, no rot no brown spots" },
+    "carton":  { "prompt": "one fresh rectangular milk carton, clean white surface, standing upright" },
+    "cheese":  { "prompt": "one wedge of fresh yellow cheese block, clean cut faces, no mold" },
+    "bottle":  { "prompt": "one clean glass bottle with narrow neck, clear glass, standing upright" },
+    "apple":   { "prompt": "one fresh red apple fruit, smooth shiny skin, single round fruit" },
+    "jar":     { "prompt": "one clean glass jar with metal screw lid, pantry prop, no dust" },
+    "brick":   { "prompt": "one intact red brick, clean rectangular shape, not broken" },
+    "bone":    { "prompt": "one clean large animal bone, white surface, single piece not gnawed" },
+    "cloth":   { "prompt": "one wadded ball of clean white fabric, compact sphere shape, no dirt" },
+    "stone":   { "prompt": "one smooth grey river stone pebble, clean surface, single rock" },
+    "foil":    { "prompt": "one crumpled aluminum foil ball, shiny metallic surface, compact wad" }
   }
 }

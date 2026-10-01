@@ -282,8 +282,24 @@ export class SceneControls {
     const obj = this.mode === 'fps' ? this.pos : this.target;
     const moved = this._moveBody(obj, fwd, right, axis, keys, speed);
 
-    if (moved) this.apply();
+    if (this._orbit) {
+      const step = Math.min(this._orbit.left, this._orbit.rate * dt);
+      this.yaw += step;
+      this._orbit.left -= step;
+      if (this._orbit.left <= 1e-4) this._orbit = null;
+      this.apply();
+    } else if (moved) this.apply();
     else if (this.features.keyboardLook && axis) this.apply();
+  }
+
+  /** 终幕自动环视一圈（秒）。拖拽仍可叠加。 */
+  beginOrbitSweep(turns = 1, seconds = 10) {
+    const span = Math.PI * 2 * turns;
+    this._orbit = { left: span, rate: span / Math.max(seconds, 0.2) };
+  }
+
+  stopOrbitSweep() {
+    this._orbit = null;
   }
 
   apply() {

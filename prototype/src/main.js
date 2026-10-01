@@ -250,6 +250,7 @@ async function teardownRevealAssets() {
 }
 
 function disableRevealControls() {
+  revealCtl.stopOrbitSweep();
   revealCtl.setEnabled(false);
   revealControlsOn = false;
   pointerCtl.setLookMode(true);
@@ -347,6 +348,9 @@ director = new Director({
     onReveal,
     onLightsCold: onRevealColdLighting,
     onRestart: onGameplayRestart,
+    onEndingOrbit: () => {
+      if (revealControlsOn) revealCtl.beginOrbitSweep(1, 10);
+    },
   },
 });
 startCollectDisplayPairPanel(director);

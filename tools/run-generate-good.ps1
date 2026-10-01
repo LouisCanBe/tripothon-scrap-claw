@@ -1,25 +1,28 @@
-# 好版 16 件奖品：避开失效代理，默认走国内 openapi.tripo3d.com
+# 好版奖品：读根目录 .env.local（TRIPO_API_KEY / TRIPO_API_BASE / HTTPS_PROXY）
 # 用法：
-#   .\tools\run-generate-good.ps1
-#   .\tools\run-generate-good.ps1 -Only bread,can,veg
 #   .\tools\run-generate-good.ps1 -Force
+#   .\tools\run-generate-good.ps1 -Force -Only "bread,can,veg"
+#   .\tools\run-generate-good.ps1 -Force -NoProxy   # 仅当代理端口失效、需直连 .com 时用
 param(
   [string]$Only = '',
-  [switch]$Force
+  [switch]$Force,
+  [switch]$NoProxy
 )
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $Root
 
-Remove-Item Env:HTTPS_PROXY, Env:HTTP_PROXY, Env:https_proxy, Env:http_proxy -ErrorAction SilentlyContinue
-$env:NODE_USE_ENV_PROXY = ''
-if (-not $env:TRIPO_API_BASE) { $env:TRIPO_API_BASE = 'https://openapi.tripo3d.com/v3' }
+if ($NoProxy) {
+  Remove-Item Env:HTTPS_PROXY, Env:HTTP_PROXY, Env:https_proxy, Env:http_proxy -ErrorAction SilentlyContinue
+  $env:NODE_USE_ENV_PROXY = ''
+}
+# 勿在 shell 里写死 TRIPO_API_BASE：国际站 key 打 .com 会 Invalid API key；域名以 .env.local 为准
+Remove-Item Env:TRIPO_API_BASE -ErrorAction SilentlyContinue
 
 $argsList = @('tools/generate.mjs', '--set', 'good')
 if ($Force) { $argsList += '--force' }
 if ($Only) { $argsList += '--only'; $argsList += $Only }
 
-Write-Host "TRIPO_API_BASE=$($env:TRIPO_API_BASE)"
 Write-Host "node $($argsList -join ' ')"
 & node @argsList

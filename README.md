@@ -9,9 +9,10 @@ Web3D 抓娃娃机叙事 Demo：四幕方框画幅（记忆）+ 终幕 16:9 故�
 需要一个静态文件服务器（ES Module 不能双击 html 直接开）：
 
 ```powershell
-node tools/devServer.mjs 8000    # 推荐：no-store 禁缓存，改代码普通刷新即生效
-node tools/devServer.mjs 8000 --lan   # 监听 0.0.0.0，手机/副屏用 http://<本机局域网IP>:8000/
-# 或传统方式：cd prototype; python -m http.server 8021（改 JS 后需 Ctrl+F5 强刷）
+npm start                        # 游戏 http://127.0.0.1:8000/（等同 npm run game）
+npm run game:lan                 # 同上，并监听 0.0.0.0，手机/副屏用局域网 IP
+npm run hub                      # 工具台 http://localhost:8780/
+# 长命令仍可用：node tools/devServer.mjs 8000
 ```
 
 浏览器打开 **http://localhost:8000/** 即玩（根目录就是 `prototype/`，不要加 `/prototype` 路径）。  
@@ -68,7 +69,7 @@ GLB 落到 `prototype/assets/prizes/`，manifest 自动重建，刷新页面即�
 ## AI 工具台（Tripo + Marble + PixVerse）
 
 ```bash
-node tools/hub.serve.mjs    # http://localhost:8780/  黄强调色统一控制台
+npm run hub    # http://localhost:8780/  黄强调色统一控制台
 ```
 
 PixVerse（网页会员）：仓库根 `npm install` → `npm run pixverse:login`（项目级 CLI，勿全局 `-g`）；智能体 Skill 在 `.agents/skills/pixverse-ai-image-and-video-generator/`。OpenAPI 批处理仍用 `tools/pixverse.mjs`，见 `tools/PIXVERSE.md`。

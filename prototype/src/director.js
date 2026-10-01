@@ -38,6 +38,13 @@ export class Director {
     this.elQuestProg = document.getElementById('questProgress');
     this.elRevealBeat = document.getElementById('revealBeat');
     this.elGlobalGrabStat = document.getElementById('globalGrabStat');
+    this.elReplay = document.getElementById('replayCue');
+    this._replayTimer = 0;
+    this.elReplay?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.#hideReplayCue();
+      this.restart();
+    });
   }
 
   get act() { return ACTS[this.idx]; }
@@ -131,6 +138,7 @@ export class Director {
     const act = this.act;
     if (!act) return;
     this._skip = false;
+    this.#hideReplayCue();
     this.happened = new Set();
     this._questDone = new Set();
     this._viewsSeen = null;
@@ -179,7 +187,12 @@ export class Director {
       if (this._skip || gen !== this._runGen) return;
       switch (step.type) {
         case 'sub':   await this.#sub(step); break;
-        case 'panel': this.#panel(step.side, step.text); if (step.dur) await sleep(step.dur * 1000); break;
+        case 'panel':
+          this.#panel(step.side, step.text);
+          if (step.continue && step.text) await this.#untilContinue(step, gen);
+          else if (step.dur) await sleep(step.dur * 1000);
+          if (step.hideAfter) this.#panel(step.side, '');
+          break;
         case 'hint':  this.elHint.textContent = step.text; break;
         case 'wait':  await this.#waitFor(step.event); break;
         case 'synthesis': await this.#synthesis(act); break;
@@ -228,9 +241,43 @@ export class Director {
   #panel(side, text) {
     const el = this.elPanel[side];
     if (!el) return;
+    el.classList.remove('await-continue');
     if (!text) { el.classList.remove('show'); return; }
     el.textContent = text;
     el.classList.add('show');
+  }
+
+  /** 旁白闸门：点当前框、派发 narrative:continue、或 continueAfter 秒后继续。 */
+  #untilContinue(step, gen) {
+    const el = this.elPanel[step.side];
+    const ms = (step.continueAfter ?? 3.4) * 1000;
+    el?.classList.add('await-continue');
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve();
+      };
+      const onClick = (e) => {
+        e.stopPropagation();
+        finish();
+      };
+      const timer = setTimeout(finish, ms);
+      const poll = setInterval(() => {
+        if (this._skip || gen !== this._runGen) finish();
+      }, 120);
+      const cleanup = () => {
+        clearTimeout(timer);
+        clearInterval(poll);
+        el?.removeEventListener('pointerdown', onClick);
+        window.removeEventListener('narrative:continue', finish);
+        el?.classList.remove('await-continue');
+      };
+      el?.addEventListener('pointerdown', onClick);
+      window.addEventListener('narrative:continue', finish);
+    });
   }
 
   async #synthesis(act) {
@@ -321,21 +368,35 @@ export class Director {
     el.hidden = true;
   }
 
+  #hideReplayCue() {
+    clearTimeout(this._replayTimer);
+    this._replayTimer = 0;
+    const el = this.elReplay;
+    if (!el) return;
+    el.classList.remove('show');
+    el.hidden = true;
+  }
+
+  #showReplayCue() {
+    const el = this.elReplay;
+    if (!el || this.idx !== ACTS.length - 1) return;
+    el.hidden = false;
+    requestAnimationFrame(() => el.classList.add('show'));
+  }
+
   #stinger(text) {
     playMusicBoxStinger();
     this.elMsg.classList.add('stinger');
     this.elMsg.textContent = text;
     this.elMsg.style.opacity = '1';
-    setTimeout(() => {
-      this.elHint.style.opacity = '1';
-      this.elHint.textContent = '（环视 · 点击继续 · Y 再玩一次）';
-      const once = () => {
-        window.removeEventListener('pointerdown', once);
-        this.elHint.style.opacity = '0';
-        this.elMsg.classList.remove('stinger');
-        this.msg('……风里有一段走调的八音盒旋律。');
-      };
-      window.addEventListener('pointerdown', once);
-    }, 5200);
+    this.elHint.style.opacity = '1';
+    this.elHint.textContent = '按住拖拽，自己再看一圈。';
+    this.hooks.onEndingOrbit?.();
+    this.#hideReplayCue();
+    this._replayTimer = setTimeout(() => {
+      if (this.idx !== ACTS.length - 1) return;
+      this.elHint.textContent = '风停在这儿。想再记一遍，就点下面。';
+      this.#showReplayCue();
+    }, 10000);
   }
 }

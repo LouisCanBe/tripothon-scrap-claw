@@ -6,8 +6,8 @@
 
 | 范围 | 路径 | 运行方式 |
 |------|------|----------|
-| **游戏** | `prototype/` | `node tools/devServer.mjs 8000` — **不需要** `npm install` |
-| **工具 Hub** | `tools/` + 根目录 `package.json` | `npm install` → `node tools/hub.serve.mjs`（Tripo / Marble / PixVerse） |
+| **游戏** | `prototype/` | 根目录 `npm start`（或 `npm run game`）— **不需要** `npm install` |
+| **工具 Hub** | `tools/` + 根目录 `package.json` | `npm install` → `npm run hub`（Tripo / Marble / PixVerse） |
 | **本机 Agent** | `.agents/`、`.cursor/` | `npm run skills:pixverse` 安装 PixVerse Skill；**不入库**，每人本机一份 |
 
 Marble / PixVerse 在 Hub 里下载的自动命名文件（如 `world-<id>-pano.png`）视为缓冲区；确认进游戏后改名为 `reveal-draft-*` 或写入 `config.js` 再提交。
@@ -41,7 +41,7 @@ tools/<service>.serve.mjs  # 本地 HTTP 转发（绕 CORS，key 不出前端）
 
 ```bash
 # 推荐：统一工具台（单端口，Tab 切换 Tripo / Marble / PixVerse / 剪影对照）
-node tools/hub.serve.mjs              # 默认 http://localhost:8780/（配了 HTTPS_PROXY 时会像 tripo serve 一样自动带代理重启子进程）
+npm run hub                           # http://localhost:8780/（配了 HTTPS_PROXY 时会像 tripo serve 一样自动带代理重启子进程）
 
 # 也可单独起各服务（调试时用）
 node tools/tripo.mjs serve            # → 8787  tools/ui.html
@@ -53,9 +53,9 @@ node tools/tripo.mjs text --prompt "生锈的罐头" --wait --out prototype/asse
 node tools/marble.mjs gen --text "雨后小巷，霓虹倒影" --wait --out prototype/assets/worlds/alley.glb
 node tools/pixverse.mjs text --prompt "雨夜小巷" --wait --out prototype/assets/videos/test.mp4
 
-# 游戏开发服务器
-node tools/devServer.mjs 8000
-node tools/devServer.mjs 8000 --lan   # 内网可访问（终端会打印局域网 IP）
+# 游戏开发服务器（项目根目录）
+npm start                             # http://127.0.0.1:8000/
+npm run game:lan                      # 内网可访问（终端会打印局域网 IP）
 # 主屏 /  副屏出货展示：http://localhost:8000/display.html（见 prototype/COLLECT-DISPLAY.md）
 ```
 

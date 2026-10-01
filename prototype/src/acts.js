@@ -8,6 +8,8 @@
 //   script  步骤序列：
 //     { sub, dur }            底部字幕，dur 秒
 //     { panel, side, text, dur? }  漫画旁白框；text:'' 收起；无 dur 常驻
+//       continue + continueAfter：先只显示本侧，点击该框或到时再往下走（也可派发 window 事件 narrative:continue）
+//       hideAfter：本步结束后收起，避免左右同时占屏
 //     { hint }                改底部提示
 //     { wait: 事件名 }         等待事件：allViews / firstCollect / questComplete
 //     { synthesis }           四幕合成演出
@@ -46,7 +48,7 @@ export const ACTS = [
     tuning: { gripStrength: 1.0, baseSlipProb: 0 },   // 教学：首抓必成
     hint: DEFAULT_HINT,
     script: [
-      { type: 'panel', side: 'left', text: '移动爪子。\n对准。' },
+      { type: 'panel', side: 'left', text: '移动爪子。\n对准。', continue: true, continueAfter: 3.4, hideAfter: true },
       { type: 'panel', side: 'right', text: '按下空格。\n落爪。' },
       { type: 'wait', event: 'firstCollect' },
       { type: 'panel', side: 'right', text: '' },
@@ -66,7 +68,7 @@ export const ACTS = [
     },
     hint: DEFAULT_HINT,
     script: [
-      { type: 'panel', side: 'left', text: '配额写在墙上了。\n今天也是三样。' },
+      { type: 'panel', side: 'left', text: '配额写在墙上了。\n今天也是三样。', continue: true, continueAfter: 3.6, hideAfter: true },
       { type: 'panel', side: 'right', text: '抓够之前，\n别去想机器外面是什么。' },
       { type: 'wait', event: 'questComplete' },
       { type: 'sub', text: '……齐了。今天能吃了。', dur: 2.5 },

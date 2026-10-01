@@ -6,6 +6,10 @@
     "pixverse": "^1.4.6"
   },
   "scripts": {
+    "start": "node tools/devServer.mjs 8000",
+    "game": "node tools/devServer.mjs 8000",
+    "game:lan": "node tools/devServer.mjs 8000 --lan",
+    "hub": "node tools/hub.serve.mjs",
     "pixverse": "pixverse",
     "pixverse:login": "pixverse auth login",
     "pixverse:status": "pixverse auth status",
