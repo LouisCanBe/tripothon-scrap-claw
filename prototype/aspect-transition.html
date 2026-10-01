@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>画幅切换 · 动效测试</title>
+<style>
+  :root {
+    --bg: #09090a;
+    --ink: #f3f1eb;
+    --muted: #8f8e92;
+    --dim: #5d5c61;
+    --accent: #e95d3f;
+    --plate: #020203;
+    --line: #2b2b2f;
+    --hair: #46464c;
+    --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+    --mono: "Cascadia Mono", Consolas, "Courier New", ui-monospace, monospace;
+    --reveal: 1.15s;
+    --ease: cubic-bezier(0.22, 0.08, 0.18, 1);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body {
+    min-height: 100%;
+    font-family: var(--sans);
+    padding: 56px 40px 48px;
+  }
+  .board {
+    width: min(1120px, 100%);
+    margin: 0 auto;
+  }
+
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 32px;
+    padding-bottom: 36px;
+  }
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .eyebrow i {
+    display: block;
+    width: 28px;
+    height: 2px;
+    background: var(--accent);
+  }
+  h1 {
+    margin-top: 16px;
+    font-size: clamp(36px, 4.6vw, 56px);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  .meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    padding-bottom: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  .meta .focus { color: var(--accent); }
+
+  .stage-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    min-height: 54px;
+    margin-bottom: 16px;
+  }
+  .stage-name {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+  }
+  .num {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #000;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    flex: none;
+  }
+  .swap { display: grid; }
+  .swap > * {
+    grid-area: 1 / 1;
+    opacity: 0;
+    transition: opacity 0.42s ease;
+  }
+  .swap > .on { opacity: 1; }
+  .name {
+    font-size: 20px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .line {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .ratio {
+    text-align: right;
+    flex: none;
+  }
+  .ratio b {
+    display: block;
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+  .ratio span {
+    display: block;
+    margin-top: 4px;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .plate {
+    --win-w: 56.25%;
+    --win-h: 100%;
+    position: relative;
+    width: min(100%, calc(62vh * 16 / 9));
+    margin-inline: auto;
+    aspect-ratio: 16 / 9;
+    background: var(--plate);
+    border: 1px solid var(--line);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+  }
+  .window {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--win-w);
+    height: var(--win-h);
+    transform: translate(-50%, -50%);
+    overflow: hidden;
+    border: 1px solid var(--hair);
+    transition: width var(--reveal) var(--ease), height var(--reveal) var(--ease);
+  }
+  .panorama {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    pointer-events: none;
+  }
+  .plate.is-moving .window { box-shadow: inset 0 0 0 1px var(--accent); }
+  .plate.no-anim .window { transition: none; }
+  .size {
+    position: absolute;
+    z-index: 2;
+    left: 23px;
+    bottom: 15px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #000;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .cue-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    height: 64px;
+  }
+  .cue-row .arm {
+    width: 86px;
+    height: 1px;
+    background: var(--accent);
+    opacity: 0.35;
+    transition: opacity 0.3s ease;
+  }
+  .cue-row .arrow {
+    width: 16px;
+    height: 1px;
+    background: var(--ink);
+    opacity: 0.35;
+    position: relative;
+  }
+  .cue-row .arrow.left::before,
+  .cue-row .arrow.right::before {
+    content: "";
+    position: absolute;
+    top: -3px;
+    width: 7px;
+    height: 7px;
+    border-top: 1px solid var(--ink);
+    border-right: 1px solid var(--ink);
+  }
+  .cue-row .arrow.left::before { left: 0; transform: rotate(-135deg); }
+  .cue-row .arrow.right::before { right: 0; transform: rotate(45deg); }
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 280px;
+    justify-content: center;
+    padding: 7px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #111113;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .pill .down {
+    width: 8px;
+    height: 8px;
+    border-right: 1.5px solid var(--ink);
+    border-bottom: 1.5px solid var(--ink);
+    transform: rotate(45deg) translateY(-2px);
+    opacity: 0.7;
+  }
+  .cue-row.live .arm,
+  .cue-row.live .arrow { opacity: 1; }
+
+  footer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding-top: 8px;
+  }
+  .principle {
+    max-width: 720px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .legend {
+    display: flex;
+    gap: 24px;
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+  .legend span { display: flex; align-items: center; gap: 8px; }
+  .swatch {
+    width: 18px;
+    height: 8px;
+    background: var(--plate);
+    border: 1px solid var(--line);
+  }
+  .swatch.hot { background: var(--accent); border: 0; }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 28px;
+  }
+  button {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: #111113;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 8px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover { border-color: var(--hair); }
+  button.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 700;
+  }
+  .hint {
+    margin-left: auto;
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  @media (max-width: 800px) {
+    body { padding: 28px 16px 32px; }
+    header, .stage-row, footer { flex-direction: column; align-items: flex-start; }
+    .meta, .ratio { align-items: flex-start; text-align: left; }
+    .line { white-space: normal; }
+    .hint { margin-left: 0; }
+    .pill { min-width: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .window, .swap > * { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="board">
+    <header>
+      <div>
+        <div class="eyebrow"><i></i> Aspect ratio transition study</div>
+        <h1>画幅在叙事中展开</h1>
+      </div>
+      <div class="meta">
+        <span>FRAME STUDY / 01</span>
+        <span>CENTER-LOCKED REVEAL</span>
+        <span class="focus">FOCUS: MOTEL SIGN</span>
+      </div>
+    </header>
+
+    <section class="stage-row">
+      <div class="stage-name">
+        <div class="num" id="num">01</div>
+        <div>
+          <div class="swap" id="nameSwap">
+            <p class="name on">收束 · 主观凝视</p>
+            <p class="name">拓展 · 建立空间</p>
+            <p class="name">释放 · 世界显现</p>
+          </div>
+          <div class="swap" id="lineSwap">
+            <p class="line on">方形画幅只保留人物、落日与霓虹招牌，信息被压缩到单一情绪焦点。</p>
+            <p class="line">宽屏带入电线杆与停靠车辆，观者开始理解人物所处的公路环境。</p>
+            <p class="line">超宽银幕放进 16:9 屏幕，上下留白，完整地平线与两侧一次进入视野。</p>
+          </div>
+        </div>
+      </div>
+      <div class="ratio">
+        <div class="swap" id="ratioSwap">
+          <b class="on">1:1</b>
+          <b>16:9</b>
+          <b>2.39:1</b>
+        </div>
+        <div class="swap" id="tagSwap">
+          <span class="on">Isolate the focus</span>
+          <span>Establish the place</span>
+          <span>Reveal the world</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="plate" id="plate" data-step="0">
+      <div class="window">
+        <img class="panorama" alt="" src="./assets/aspect-study/panorama.png" />
+      </div>
+      <div class="size" id="size">左右黑边</div>
+    </div>
+
+    <div class="cue-row" id="cueRow">
+      <i class="arm"></i>
+      <i class="arrow left"></i>
+      <div class="pill"><i class="down"></i><span id="cue">焦点锁定 · CENTER LOCKED</span></div>
+      <i class="arrow right"></i>
+      <i class="arm"></i>
+    </div>
+
+    <footer>
+      <p class="principle">外框固定为 16:9。比它窄时左右黑边，比它宽时上下留白。焦点始终锁在画面中心。</p>
+      <div class="legend">
+        <span><i class="swatch"></i> MATTE</span>
+        <span><i class="swatch hot"></i> TRANSITION</span>
+      </div>
+    </footer>
+
+    <div class="controls">
+      <button type="button" id="prev">上一步</button>
+      <button type="button" id="toggle">暂停</button>
+      <button type="button" id="next">下一步</button>
+      <button type="button" data-jump="0" class="on">01</button>
+      <button type="button" data-jump="1">02</button>
+      <button type="button" data-jump="2">03</button>
+      <span class="hint">1 / 2 / 3 跳步 · ← → 单步 · 空格 暂停</span>
+    </div>
+  </main>
+
+<script>
+const SCOPE = 2.39;
+const STEPS = [
+  { n: '01', w: 9 / 16, h: 1, size: '左右黑边', cue: '焦点锁定 · SIDE MATTE', back: '两侧回到黑边 · SIDE MATTE' },
+  { n: '02', w: 1, h: 1, size: '满幅', cue: '遮幅向两侧退场 · FILL 16:9', back: '回到 16:9 满幅 · FILL FRAME' },
+  { n: '03', w: 1, h: (16 / 9) / SCOPE, size: '上下留白', cue: '上下留出距离 · LETTERBOX', back: '收回上下留白 · LETTERBOX' },
+];
+const REVEAL = 1150;
+const HOLD = [2700, 2700, 3400];
+
+const plate = document.getElementById('plate');
+const cueRow = document.getElementById('cueRow');
+const cue = document.getElementById('cue');
+const num = document.getElementById('num');
+const size = document.getElementById('size');
+const toggle = document.getElementById('toggle');
+const swaps = [...document.querySelectorAll('.swap')];
+const jumps = [...document.querySelectorAll('[data-jump]')];
+
+let step = 0;
+let playing = true;
+let timer = 0;
+let moveTimer = 0;
+
+function mark(index) {
+  swaps.forEach((group) => {
+    [...group.children].forEach((el, i) => el.classList.toggle('on', i === index));
+  });
+  jumps.forEach((btn) => btn.classList.toggle('on', Number(btn.dataset.jump) === index));
+  num.textContent = STEPS[index].n;
+  size.textContent = STEPS[index].size;
+  plate.dataset.step = String(index);
+}
+
+function go(index, animate) {
+  if (index === step && animate) return;
+  const forward = index > step;
+  clearTimeout(moveTimer);
+  step = index;
+  if (!animate) {
+    plate.classList.add('no-anim');
+    plate.classList.remove('is-moving');
+    cueRow.classList.remove('live');
+    void plate.offsetWidth;
+  }
+  const fit = STEPS[index];
+  plate.style.setProperty('--win-w', (fit.w * 100) + '%');
+  plate.style.setProperty('--win-h', (fit.h * 100) + '%');
+  mark(index);
+  cue.textContent = animate
+    ? (forward ? fit.cue : fit.back)
+    : fit.cue;
+  if (animate) {
+    plate.classList.add('is-moving');
+    cueRow.classList.add('live');
+    clearTimeout(moveTimer);
+    moveTimer = setTimeout(() => {
+      plate.classList.remove('is-moving');
+      cueRow.classList.remove('live');
+      cue.textContent = STEPS[step].cue;
+    }, REVEAL);
+  } else {
+    requestAnimationFrame(() => plate.classList.remove('no-anim'));
+  }
+}
+
+function clearArm() {
+  clearTimeout(timer);
+  clearTimeout(moveTimer);
+}
+
+function arm(ms, fn) {
+  clearTimeout(timer);
+  if (!playing) return;
+  timer = setTimeout(fn, ms);
+}
+
+function afterArrive() {
+  arm(HOLD[step], () => {
+    if (step === STEPS.length - 1) {
+      go(0, false);
+      arm(1500, afterArrive);
+      return;
+    }
+    go(step + 1, true);
+    arm(REVEAL, afterArrive);
+  });
+}
+
+function setPlaying(next) {
+  playing = next;
+  toggle.textContent = playing ? '暂停' : '播放';
+  clearArm();
+  plate.classList.remove('is-moving');
+  cueRow.classList.remove('live');
+  if (playing) afterArrive();
+}
+
+toggle.addEventListener('click', () => setPlaying(!playing));
+document.getElementById('next').addEventListener('click', () => {
+  setPlaying(false);
+  go(Math.min(STEPS.length - 1, step + 1), true);
+});
+document.getElementById('prev').addEventListener('click', () => {
+  setPlaying(false);
+  go(Math.max(0, step - 1), true);
+});
+jumps.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    setPlaying(false);
+    go(Number(btn.dataset.jump), true);
+  });
+});
+
+addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLButtonElement) return;
+  if (e.key === '1' || e.key === '2' || e.key === '3') {
+    setPlaying(false);
+    go(Number(e.key) - 1, true);
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    setPlaying(false);
+    go(Math.min(STEPS.length - 1, step + 1), true);
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    setPlaying(false);
+    go(Math.max(0, step - 1), true);
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    setPlaying(!playing);
+  }
+});
+
+go(0, false);
+afterArrive();
+</script>
+</body>
+</html>
