@@ -32,6 +32,7 @@ export class CameraRig {
     this.baseZoom = 1;      // 幕级变焦（acts.js 的 zoom 字段）
     this.modeZoom = 1;      // 取景模式倍率（near 凑近 / far 站远），main 每帧写入
     this.userZoom = 1;      // 用户缩放（滚轮/双指），与上两者相乘、互不覆盖
+    this._userZoomMax = cfg.userZoomMax ?? 1.6;
     this._afterFront = null; // 数字键左↔右时先到正面再到位
     this._m = new THREE.Matrix4();
     this._q = new THREE.Quaternion();
@@ -41,7 +42,21 @@ export class CameraRig {
 
   setZoom(z) { this.baseZoom = z; }
   setModeZoom(f) { this.modeZoom = f; }
-  setUserZoom(f) { this.userZoom = THREE.MathUtils.clamp(f, this.cfg.userZoomMin ?? 0.55, this.cfg.userZoomMax ?? 1.6); }
+  setUserZoom(f) {
+    const min = this.cfg.userZoomMin ?? 0.55;
+    const max = this._userZoomMax ?? this.cfg.userZoomMax ?? 1.6;
+    this.userZoom = THREE.MathUtils.clamp(f, min, max);
+  }
+
+  /** 按幕限制滚轮最远倍率（三幕起用 userZoomMaxGameplay） */
+  applyUserZoomPolicy(actId = 1) {
+    const cam = this.cfg;
+    const per = CONFIG.present?.actCamera?.[actId]?.userZoomMax;
+    const gameplay = cam.userZoomMaxGameplay ?? 1.28;
+    const intro = cam.userZoomMax ?? 1.6;
+    this._userZoomMax = per ?? (actId >= 3 ? gameplay : intro);
+    this.setUserZoom(this.userZoom);
+  }
 
   setView(name) {
     if (!this.cfg.views[name] || name === this.cur) return;

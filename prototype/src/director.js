@@ -147,6 +147,7 @@ export class Director {
     this.mask.syncFromAct(act, i > 0);
     if (act.framing) this.mask.setViewMode(act.framing);
     this.rig?.setZoom(act.zoom ?? 1);
+    this.rig?.applyUserZoomPolicy(act.id ?? 1);
     this.claw.controlEnabled = !!(act.control.move || act.control.drop);
     if (act.tuning) {
       const { decayPerGrab, ...params } = act.tuning;

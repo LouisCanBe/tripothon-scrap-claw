@@ -16,6 +16,7 @@ export function initPresent() {
   const p = CONFIG.present ?? {};
   if (g) g.style.opacity = String(p.grainOpacity ?? 0.05);
   syncViewportEdgeToDom();
+  applyActPostLens(1);
 }
 
 /**
@@ -48,6 +49,18 @@ export function applyPresentAct(act, layer = null) {
   if (root) {
     root.dataset.mood = mood.moodClass ?? `act-${id}`;
   }
+  applyActPostLens(id);
+}
+
+/** 按幕写入 CONFIG.post.k1/k2（三幕起用 postLensGameplay 0.65/0.45） */
+export function applyActPostLens(actId) {
+  const p = CONFIG.present ?? {};
+  const extra = p.actPost?.[actId] ?? {};
+  const post = CONFIG.post;
+  const g = CONFIG.postLensGameplay ?? { k1: 0.65, k2: 0.45 };
+  if (!post) return;
+  post.k1 = extra.k1 ?? g.k1;
+  post.k2 = extra.k2 ?? g.k2;
 }
 
 export function presentPostCoeffs() {
