@@ -315,6 +315,116 @@
     font-size: 11px;
   }
 
+  .show {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: grid;
+    place-items: center;
+    background: #000;
+    transition: opacity 0.7s ease;
+  }
+  .show[hidden] { display: none; }
+  .show.is-done { pointer-events: none; }
+  .show.is-done .screen,
+  .show.is-done .show-skip { opacity: 0; }
+  body.is-showing { overflow: hidden; }
+  .screen {
+    --show-w: 56.25%;
+    --show-h: 100%;
+    container-type: size;
+    position: relative;
+    width: min(100vw, calc(100vh * 16 / 9));
+    aspect-ratio: 16 / 9;
+    background: #020203;
+    overflow: hidden;
+    transition: opacity 0.7s ease;
+  }
+  .picture {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--show-w);
+    height: var(--show-h);
+    transform: translate(-50%, -50%);
+    overflow: hidden;
+    transition: width var(--reveal) var(--ease), height var(--reveal) var(--ease), opacity 0.8s ease;
+  }
+  .picture img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+  .mark {
+    position: absolute;
+    z-index: 2;
+    left: calc(39 / 1920 * 100cqw);
+    top: calc(31 / 1080 * 100cqh);
+    width: calc(55.5 / 1920 * 100cqw);
+    aspect-ratio: 1;
+    object-fit: contain;
+  }
+  .corner-brand,
+  .finale {
+    position: absolute;
+    z-index: 2;
+    container-type: inline-size;
+    transition: opacity 0.8s ease;
+  }
+  .corner-brand {
+    left: calc(1699 / 1920 * 100cqw);
+    top: calc(32 / 1080 * 100cqh);
+    width: calc(186.576 / 1920 * 100cqw);
+  }
+  .wordmark,
+  .wordmark-lg {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 186.576 / 43.6076;
+    object-fit: contain;
+  }
+  .credit-art {
+    display: block;
+    margin-top: calc(4.4 / 186.576 * 100cqi);
+    width: auto;
+    height: calc(10 / 186.576 * 100cqi);
+    object-fit: contain;
+    object-position: left center;
+  }
+  .finale {
+    left: 50%;
+    top: 50%;
+    width: calc(892.424 / 1920 * 100cqw);
+    transform: translate(-50%, -54%);
+    opacity: 0;
+  }
+  .produced-art {
+    display: block;
+    margin-bottom: calc(70 / 892.424 * 100cqi);
+    width: auto;
+    height: calc(40 / 892.424 * 100cqi);
+    object-fit: contain;
+    object-position: left center;
+    opacity: 0.92;
+  }
+  .finale .credit-art {
+    margin-top: calc(21 / 892.424 * 100cqi);
+    height: calc(47.832 / 892.424 * 100cqi);
+  }
+  .screen.is-end .picture,
+  .screen.is-end .corner-brand { opacity: 0; }
+  .screen.is-end .finale { opacity: 1; }
+  .screen.no-anim .picture { transition: none; }
+  .show-skip {
+    position: absolute;
+    right: 28px;
+    bottom: 22px;
+    z-index: 3;
+    opacity: 0.72;
+  }
+
   @media (max-width: 800px) {
     body { padding: 28px 16px 32px; }
     header, .stage-row, footer { flex-direction: column; align-items: flex-start; }
@@ -324,11 +434,29 @@
     .pill { min-width: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .window, .swap > * { transition: none; }
+    .window, .swap > *, .picture, .corner-brand, .finale, .show { transition: none; }
   }
 </style>
 </head>
-<body>
+<body class="is-showing">
+  <div class="show" id="show">
+    <div class="screen" id="screen">
+      <div class="picture">
+        <img alt="" src="./assets/aspect-study/panorama.png" />
+      </div>
+      <img class="mark" alt="" src="./assets/aspect-study/mark.svg" />
+      <div class="corner-brand">
+        <img class="wordmark" alt="哇哇叽哇" src="./assets/aspect-study/wordmark.svg" />
+        <img class="credit-art" alt="WAWAJIWA @ LouisCanBe &amp; Jenny" src="./assets/aspect-study/credit-corner.png" />
+      </div>
+      <div class="finale">
+        <img class="produced-art" alt="Produced by" src="./assets/aspect-study/produced-by.png" />
+        <img class="wordmark-lg" alt="哇哇叽哇" src="./assets/aspect-study/wordmark-lg.svg" />
+        <img class="credit-art" alt="WAWAJIWA @ LouisCanBe &amp; Jenny" src="./assets/aspect-study/credit-corner.png" />
+      </div>
+    </div>
+    <button type="button" class="show-skip" id="skipShow">跳过</button>
+  </div>
   <main class="board">
     <header>
       <div>
@@ -397,11 +525,12 @@
 
     <div class="controls">
       <button type="button" id="prev">上一步</button>
-      <button type="button" id="toggle">暂停</button>
+      <button type="button" id="toggle">播放</button>
       <button type="button" id="next">下一步</button>
       <button type="button" data-jump="0" class="on">01</button>
       <button type="button" data-jump="1">02</button>
       <button type="button" data-jump="2">03</button>
+      <button type="button" id="replay">重播</button>
       <span class="hint">1 / 2 / 3 跳步 · ← → 单步 · 空格 暂停</span>
     </div>
   </main>
@@ -426,9 +555,22 @@ const swaps = [...document.querySelectorAll('.swap')];
 const jumps = [...document.querySelectorAll('[data-jump]')];
 
 let step = 0;
-let playing = true;
+let playing = false;
+let studyStarted = false;
 let timer = 0;
 let moveTimer = 0;
+
+const show = document.getElementById('show');
+const screen = document.getElementById('screen');
+const SHOW = [
+  { w: 9 / 16, h: 1, hold: 2400 },
+  { w: 1, h: 1, hold: 2600 },
+  { w: 1, h: (16 / 9) / SCOPE, hold: 2800 },
+  { end: true, hold: 3800 },
+];
+let showGen = 0;
+let showTimer = 0;
+let resumeAfter = false;
 
 function mark(index) {
   swaps.forEach((group) => {
@@ -520,7 +662,61 @@ jumps.forEach((btn) => {
   });
 });
 
+function playShow(gen, index, animate) {
+  if (gen !== showGen) return;
+  const beat = SHOW[index];
+  screen.classList.toggle('is-end', Boolean(beat.end));
+  if (!beat.end) {
+    if (!animate) screen.classList.add('no-anim');
+    screen.style.setProperty('--show-w', (beat.w * 100) + '%');
+    screen.style.setProperty('--show-h', (beat.h * 100) + '%');
+    if (!animate) {
+      void screen.offsetWidth;
+      screen.classList.remove('no-anim');
+    }
+  }
+  showTimer = setTimeout(() => {
+    if (index === SHOW.length - 1) finishShow(gen);
+    else playShow(gen, index + 1, true);
+  }, (animate && !beat.end ? REVEAL : 0) + beat.hold);
+}
+
+function finishShow(gen) {
+  if (gen !== showGen) return;
+  show.classList.add('is-done');
+  document.body.classList.remove('is-showing');
+  showTimer = setTimeout(() => {
+    if (gen !== showGen) return;
+    show.hidden = true;
+    if (!studyStarted) {
+      studyStarted = true;
+      setPlaying(true);
+    } else if (resumeAfter) {
+      setPlaying(true);
+    }
+  }, 700);
+}
+
+function startShow() {
+  resumeAfter = studyStarted && playing;
+  clearTimeout(showTimer);
+  const gen = ++showGen;
+  setPlaying(false);
+  show.hidden = false;
+  show.classList.remove('is-done');
+  document.body.classList.add('is-showing');
+  playShow(gen, 0, false);
+}
+
+document.getElementById('replay').addEventListener('click', startShow);
+document.getElementById('skipShow').addEventListener('click', () => finishShow(showGen));
+
 addEventListener('keydown', (e) => {
+  if (document.body.classList.contains('is-showing')) {
+    if (e.key === 'Escape') finishShow(showGen);
+    if (e.key === ' ') e.preventDefault();
+    return;
+  }
   if (e.target instanceof HTMLButtonElement) return;
   if (e.key === '1' || e.key === '2' || e.key === '3') {
     setPlaying(false);
@@ -540,7 +736,7 @@ addEventListener('keydown', (e) => {
 });
 
 go(0, false);
-afterArrive();
+startShow();
 </script>
 </body>
 </html>
