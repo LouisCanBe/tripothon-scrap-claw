@@ -1,21 +1,35 @@
-// 奖品 GLB 路径：默认套 / 好版套（?models=legacy | ?models=good）
+// 奖品 GLB 路径：?models=legacy | good | good-p2（默认 good-p2 → good → legacy）
 import { CONFIG } from './config.js';
 import { GLB_MANIFEST } from './assets.manifest.js';
 import { GLB_MANIFEST_GOOD } from './assets.manifest-good.js';
+import { GLB_MANIFEST_GOOD_P2 } from './assets.manifest-good-p2.js';
+
+const SETS = {
+  legacy: GLB_MANIFEST,
+  good: GLB_MANIFEST_GOOD,
+  'good-p2': GLB_MANIFEST_GOOD_P2,
+};
 
 export function resolvePrizeGlbSet() {
   try {
     const q = new URLSearchParams(location.search).get('models');
-    if (q === 'good' || q === 'legacy' || q === 'default') return q === 'default' ? 'legacy' : q;
+    if (q && SETS[q] !== undefined) return q === 'default' ? 'legacy' : q;
   } catch { /* SSR / 测试 */ }
   const cfg = CONFIG.pool?.glbSet;
-  if (cfg === 'good' || cfg === 'legacy') return cfg;
-  return 'good';
+  if (cfg && SETS[cfg] !== undefined) return cfg;
+  return 'good-p2';
 }
 
 export function getGlbManifest() {
-  if (resolvePrizeGlbSet() === 'good' && Object.keys(GLB_MANIFEST_GOOD).length > 0) {
-    return GLB_MANIFEST_GOOD;
+  const want = resolvePrizeGlbSet();
+  const order = want === 'good-p2'
+    ? ['good-p2', 'good', 'legacy']
+    : want === 'good'
+      ? ['good', 'good-p2', 'legacy']
+      : ['legacy', 'good-p2', 'good'];
+  for (const key of order) {
+    const m = SETS[key];
+    if (m && Object.keys(m).length > 0) return m;
   }
   return GLB_MANIFEST;
 }

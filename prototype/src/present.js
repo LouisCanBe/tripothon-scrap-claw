@@ -15,7 +15,10 @@ export function initPresent() {
   const v = document.getElementById('presentMarginVig');
   const p = CONFIG.present ?? {};
   if (g) g.style.opacity = String(p.grainOpacity ?? 0.05);
-  if (v) v.style.opacity = String(p.marginVignette ?? 0.5);
+  const marginVig = (p.backdropInViewport && p.backdropAsSceneBackground)
+    ? 0
+    : (p.marginVignette ?? 0.5);
+  if (v) v.style.opacity = String(marginVig);
 }
 
 /**

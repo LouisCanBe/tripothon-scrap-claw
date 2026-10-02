@@ -139,6 +139,41 @@ node tools/devServer.mjs 8000 --lan
 - 触控屏可丰富 **出货层 UI**（动效、文案、按钮），逻辑仍建议：**只改 display 页 DOM/Three**，经 **上行消息**（规划 `collect.display_action`）回 hub，主游戏是否响应另议。
 - 预留 DOM：`#cta[data-prize-id]`；总线 schema 版本号 `schema: 1` 便于加字段而不破副屏。
 
+## 游戏部署 vs 工具 Hub（别混）
+
+| 服务 | 命令 | 作用 | 云端 |
+|------|------|------|------|
+| **游戏 + 出货 SSE** | `npm start` / `npm run game:lan` → `devServer.mjs` | 静态 `prototype/` + `/api/collect/*` 内存 Hub | 需要副屏跨网时再部署 |
+| **工具 Hub** | `npm run hub` → `:8780` | Tripo / Marble / PixVerse 预览与生成 | **不部署**，本机 `.env.local` + 代理即可 |
+
+出货同步的「Hub」是 **`collectDisplayHub.mjs` 嵌在 devServer 里**（单进程内存、按 `pair`  fan-out SSE），不是 8780 那个工具站。
+
+## 带 SSE 的部署方案
+
+副屏要跨设备收 `collect.*` 事件，必须有一个 **长连接友好的 Node 进程** 跑同一套 `devServer`（静态 + API 同源）。纯静态托管 **不够**。
+
+| 平台 | 适合 SSE？ | 做法 |
+|------|------------|------|
+| **展馆笔记本** | ✅ 推荐 | `npm run game:lan`，平板/盒子连同一 WiFi，URL 用局域网 IP |
+| **Render Web Service** | ✅ | Build 可空；Start：`node tools/devServer.mjs`（读 `PORT`，自动 `0.0.0.0`）。免费档冷启动 + 单实例内存 Hub 重启会丢状态，适合试玩/demo |
+| **Railway / Fly.io / VPS** | ✅ | 同上一条命令；VPS 最稳（无 sleep、可固定 pair） |
+| **Netlify Drop / Vercel 纯静态** | ❌ 无 `/api/collect` | 只能主屏单机或同机 BroadcastChannel |
+| **Netlify/Vercel Functions** | ⚠️ 差 | 无标准长连接 SSE；超时短，不适合 25s 心跳副屏 |
+| **静态 CDN + 小 Node** | ✅ 进阶 | `prototype/` 上 Cloudflare Pages，仅把 `hubUrl` 指到 Render 上的 collect API（需改前端 API 根，当前默认同源） |
+
+**Render 最小配置（示意）**
+
+- Runtime：Node
+- Build Command：（留空或 `npm install` 无依赖可跳过）
+- Start Command：`node tools/devServer.mjs`
+- 环境变量：一般无需；HTTPS 由 Render 终止，浏览器访问 `https://xxx.onrender.com`
+
+发布前减包：默认 `glbSet: 'good-p2'`，勿上传 `prizes-good/`（高精套）；`design/` 若不上线可剔除。
+
+## 相框裸眼 3D
+
+探索记录和暂停原因见 [FRAME-EXPLORE.md](FRAME-EXPLORE.md)。当前相框动效不理想，展示仍用普通副屏 `display.html`。
+
 ## 扩展（未实现）
 
 - **配对 UI**：副屏出码、平板扫（`pairingEnabled`）

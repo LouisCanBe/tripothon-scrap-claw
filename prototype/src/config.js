@@ -16,12 +16,17 @@ export const CONFIG = {
     grainOpacity: 0.052,
     marginVignette: 0.58,
     narrativeKenBurns: true,
+    // 前几幕：概念图只在方框视口内；方框外黑底。16:9 概念图直接作 scene.background（见 main.js）
+    backdropInViewport: true,
+    backdropAsSceneBackground: true,
+    sceneBackgroundIntensity: 0.92,
     acts: {
       default: { imgFilter: 'saturate(0.88) contrast(1.05) brightness(0.9)', shade: 'default', kenBurns: true },
       1: {
         moodClass: 'memory',
         imgFilter: 'sepia(0.14) saturate(0.86) contrast(1.08) brightness(0.88)',
         shade: 'memory',
+        sceneBackgroundIntensity: 0.78, // 干净回忆柜偏白，略压暗（换图后可只改这一格）
       },
       2: {
         imgFilter: 'saturate(0.82) contrast(1.06) brightness(0.86)',
@@ -43,15 +48,15 @@ export const CONFIG = {
     },
     shadeGradients: {
       default:
-        'radial-gradient(ellipse 88% 84% at 50% 48%, rgba(16,15,20,0.93) 0%, rgba(5,5,9,0.99) 78%)',
+        'radial-gradient(ellipse 92% 88% at 50% 48%, transparent 42%, rgba(0,0,0,.38) 100%)',
       memory:
-        'radial-gradient(ellipse 90% 86% at 52% 46%, rgba(22,18,16,0.92) 0%, rgba(8,7,10,0.99) 80%)',
+        'radial-gradient(ellipse 94% 90% at 52% 46%, transparent 40%, rgba(12,8,6,.42) 100%)',
       harsh:
-        'radial-gradient(ellipse 86% 82% at 50% 50%, rgba(12,14,18,0.95) 0%, rgba(3,4,8,1) 75%)',
+        'radial-gradient(ellipse 90% 86% at 50% 50%, transparent 38%, rgba(0,0,0,.48) 100%)',
       warm:
-        'radial-gradient(ellipse 88% 84% at 50% 48%, rgba(24,20,16,0.9) 0%, rgba(10,8,8,0.98) 78%)',
+        'radial-gradient(ellipse 92% 88% at 50% 48%, transparent 42%, rgba(16,10,8,.36) 100%)',
       cold:
-        'radial-gradient(ellipse 92% 88% at 50% 50%, rgba(10,12,16,0.96) 0%, rgba(2,3,6,1) 72%)',
+        'radial-gradient(ellipse 94% 90% at 50% 50%, transparent 36%, rgba(0,0,0,.52) 100%)',
     },
     transition: {
       backdropMs: 1100,
@@ -150,22 +155,25 @@ export const CONFIG = {
 
   camera: {
     fov: 78,                 // 广角，outline 建议 70~85
-    tau: 0.38,               // 视角切换时间常数(秒)
+    tau: 0.38,               // 呼吸/变焦等阻尼
+    viewTau: 0.48,           // 左/前/右 机位插值（略慢更顺、减穿模感）
+    viewHandoffDist: 0.12,   // 数字键经正面中转：到正面多近后切到目标侧
     breathDeg: 0.25,         // 呼吸晃动幅度(度)，outline 上限 <0.3°
     breathFreq: 0.22,        // 呼吸频率(Hz)
     userZoomMin: 0.55,       // 滚轮/双指缩放的最近倍率（防止钻进机器内部）
     userZoomMax: 1.6,        // 最远倍率
     views: {
       front: { pos: [ 0.00, 2.05, 3.15], look: [ 0.0, 0.30, -0.05] },
-      left:  { pos: [-2.25, 1.95, 2.30], look: [ 0.1, 0.30, -0.05] },
-      right: { pos: [ 2.25, 1.95, 2.30], look: [-0.1, 0.30, -0.05] },
+      // 左右：更靠侧面（|x|↑、z↓），look 略向机柜中心偏，切换后以侧视为主
+      left:  { pos: [-2.85, 1.92, 1.22], look: [ 0.26, 0.30, -0.02], distanceScale: 1.1 },
+      right: { pos: [ 2.85, 1.92, 1.22], look: [-0.26, 0.30, -0.02], distanceScale: 1.1 },
     },
   },
 
   post: {
     k1: 0.10,                // 鱼眼一阶系数（边缘约 10% 畸变；若呈枕形把符号取反）
     k2: 0.04,                // 鱼眼二阶系数
-    grain: 0.055,            // 胶片颗粒强度
+    grain: 0.02,            // 胶片颗粒强度
     vignette: 0.55,          // 暗角强度
     bloom: 0.32,             // 泛光强度（0=关；只让灯带/高光晕开，画面不糊）
     bloomThreshold: 0.8,     // 泛光亮度阈值：只有比它亮的才晕（0.72 时金属爪会晕开）
@@ -222,9 +230,15 @@ export const CONFIG = {
     transitionSec: 1.15,     // 画幅展开时长（需与 index.html 的 CSS transition 一致）
     fisheyeFadeOnWide: true, // 展开 16:9 时鱼眼同步消退（"梦醒了"的镜头语言）
     nearZoom: 0.7,           // near 取景的变焦倍率（有效变焦 = 幕zoom × 此值；far=1）
-    photoBorder: true,       // 操作视口描边（与 clip-path 同矩形，见 frameMask.js）
-    borderWidth: 6,          // 操作视口外描边粗细（px）
-    borderColor: 'rgba(236,232,220,0.94)', // 旧照片式白框
+    edgeVignette: true,      // 视口内缘黑色渐变（替代白描边）
+    photoBorder: false,      // true = 旧照片白框（与 edgeVignette 互斥）
+    borderWidth: 6,
+    borderColor: 'rgba(236,232,220,0.94)',
+    centerWidthFrac: 0.56,   // 居中幕视口宽（高=满屏）
+    rightWidthFrac: 0.58,
+    rightMargin: 0.03,
+    chromeIdleMs: 5200,      // 底部指示层无操作后变淡
+    chromeDimOpacity: 0.24,
     viewportCoverPad: 2,     // 描边/内遮罩相对 clip 外扩 px（压住边缘抗锯齿漏缝）
     questPulseColor: 'rgba(220,216,200,0.32)', // 配额完成等：勿用全屏 #fff
     glitchFlashMax: 0.42,    // 终幕 glitch #flash 最高不透明度（只黑闪，不白屏）
@@ -248,6 +262,41 @@ export const CONFIG = {
       exposure: 1.15,
       keyIntensity: 1.35,
       envIntensity: 0.12,
+    },
+    // 奖池底「堆娃娃」装饰：不进 PRIZE_TABLE，不参与抓取
+    decor: {
+      enabled: true,
+      count: 48,
+      rimCount: 22,
+      sizeMul: 1.48,
+      scaleMin: 0.68,
+      scaleMax: 1.62,        // 单件尺寸随机区间（差别更大）
+      edgeInner: 0.68,       // 越大越贴墙
+      maxStackY: 0.26,
+      avoidHoleRadius: 0.5,
+      minSpacing: 0.085,
+      settleIterations: 16,
+      physics: {
+        iterations: 3,
+        iterationsIdle: 1,
+        prizePush: 0.72,
+        prizeMoveThreshold: 0.004,
+        clawPush: 0.38,
+        clawInfluenceRadius: 0.24,
+        damping: 6.5,
+        decorStiffness: 0.38,
+        decorStiffnessIdle: 0.2,
+        sleepVelocity: 0.018,
+      },
+    },
+    // 可抓奖品互挤（远弱于装饰）
+    prizePhysics: {
+      enabled: true,
+      stiffness: 0.06,
+      rest: 0.01,
+      maxStepPerFrame: 0.003,
+      iterations: 1,
+      radiusMul: 0.86,
     },
   },
 

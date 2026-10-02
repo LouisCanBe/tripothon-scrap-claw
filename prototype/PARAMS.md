@@ -192,9 +192,9 @@ Hub 单模型预览还会把模型缩到约 `1.4 / max(包围盒)` 摆到网格�
 
 **好版第二套**（v3.1 + detailed 贴图，强调单体完整、少碎屑；旧套保留在 `prizes/`）：
 
-- 配置：`tools/prompts-good.json`；生成：`node tools/generate.mjs --set good --force` 或 `.\tools\run-generate-good.ps1`（会清掉失效代理并默认 `.com` 域名）
-- 输出：`prototype/assets/prizes-good/` + `src/assets.manifest-good.js`
-- 游戏默认 `config.pool.glbSet: 'good'`；好版 manifest 为空时自动回退旧套。对比：`?models=legacy` / `?models=good`
+- **轻量好版（推荐部署）**：`tools/prompts-good-p2.json`（P2、`face_limit` 5500、standard 贴图）→ `.\tools\run-generate-good-p2.ps1 -Force`（默认并行 4 路）→ `assets/prizes-good-p2/`
+- **高精好版**：`prompts-good.json`（v3.1 detailed）→ `prizes-good/`（体积大，试效果用）
+- 游戏默认 `glbSet: 'good-p2'`；manifest 空则回退 good → legacy。URL：`?models=good-p2` | `good` | `legacy`
 5. 爪子分件实验：`node tools/generate.mjs claw`（generate_parts 与贴图互斥，出无贴图分件；不行就沿用灰盒的 procedural 爪子）
 6. 风格漂移控制：prompts.json 里给某件加 `"image": "概念图URL"` 即切换为 image-to-model 路线
 7. 积分提醒：每件标准贴图约 20 积分（以官网计费为准），先 `--dry` 检查 prompt 再花钱

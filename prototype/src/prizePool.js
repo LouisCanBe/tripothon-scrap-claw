@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { getGlbManifest } from './glbManifest.js';
 import { markItemVisualScale } from './poolDevPersist.js';
+import { enqueueRendererCompile } from './renderCompile.js';
 
 // shape: 'box' [w,h,d] | 'cylinder' [r,h] | 'sphere' [r, y压扁系数]
 // gripFactor: 0~1，越小越滑/越重（ junk 普遍偏低 ）
@@ -255,8 +256,17 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
   }
   if (!ready.length) return;
 
-  // 一次性异步编译全部新材质（KHR_parallel_shader_compile 支持时不卡帧）
-  try { await renderer.compileAsync(parent, camera); } catch { /* 不支持则退化为同步，与旧行为一致 */ }
+  // 只编译本批奖品（勿 compile 整个 world；且与外壳/爪 compile 串行排队）
+  const batch = new THREE.Group();
+  for (const { g } of ready) {
+    parent.remove(g);
+    batch.add(g);
+  }
+  await enqueueRendererCompile(renderer, camera, batch);
+  for (const { g } of ready) {
+    batch.remove(g);
+    parent.add(g);
+  }
 
   // 逐个弹出换装
   for (const { item, g } of ready) {

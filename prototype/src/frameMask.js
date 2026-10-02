@@ -40,17 +40,19 @@ export class FrameMask {
 
   #rect() {
     const w = innerWidth, h = innerHeight, f = CONFIG.frame;
+    const vh = h;
     if (this.mode === 'right') {
-      const s = Math.min(h * 0.82, w * 0.58);
-      return { x: w * 0.97 - s, y: (h - s) / 2, w: s, h: s };
+      const margin = w * (f.rightMargin ?? 0.03);
+      const vw = Math.min(vh, w * (f.rightWidthFrac ?? 0.58));
+      return { x: w - margin - vw, y: 0, w: vw, h: vh };
     }
     if (this.mode === 'wide') {
       const ww = w * f.wideFill;
-      const hh = Math.min(ww * 9 / 16, h * 0.92);
+      const hh = Math.min(ww * 9 / 16, h * 0.98);
       return { x: (w - ww) / 2, y: (h - hh) / 2, w: ww, h: hh };
     }
-    const s = Math.min(w * 0.56, h * 0.88);   // center：屏宽 50~60%（outline 二幕规范）
-    return { x: (w - s) / 2, y: (h - s) / 2, w: s, h: s };
+    const vw = Math.min(vh, w * (f.centerWidthFrac ?? 0.56));
+    return { x: (w - vw) / 2, y: 0, w: vw, h: vh };
   }
 
   // 当前布局的目标矩形（px）—— 相机 setViewOffset / 鱼眼中心对齐用
@@ -59,7 +61,8 @@ export class FrameMask {
   apply(animate = true) {
     const w = innerWidth, h = innerHeight, r = this.#rect();
     const shade = document.getElementById('narrativeViewportShade');
-    for (const el of [this.stage, this.border, shade].filter(Boolean)) {
+    const chrome = document.getElementById('viewportChrome');
+    for (const el of [this.stage, this.border, shade, chrome].filter(Boolean)) {
       el.classList.toggle('no-anim', !animate);
     }
     this.stage.style.clipPath = `inset(${r.y}px ${w - r.x - r.w}px ${h - r.y - r.h}px ${r.x}px)`;
@@ -69,18 +72,31 @@ export class FrameMask {
     const fw = r.w + pad * 2;
     const fh = r.h + pad * 2;
     if (this.border) {
-      const showBorder = CONFIG.frame.photoBorder === true;
-      this.border.style.display = showBorder ? 'block' : 'none';
-      if (showBorder) {
-        const bw = CONFIG.frame.borderWidth ?? 4;
-        const bc = CONFIG.frame.borderColor ?? 'rgba(236,232,220,0.94)';
-        this.border.style.boxSizing = 'border-box';
-        this.border.style.border = `${bw}px solid ${bc}`;
-        this.border.style.boxShadow = 'none';
-        this.border.style.background = 'transparent';
+      const f = CONFIG.frame;
+      const vignette = f.edgeVignette !== false;
+      const legacyBorder = f.photoBorder === true && !vignette;
+      const show = vignette || legacyBorder;
+      this.border.style.display = show ? 'block' : 'none';
+      this.border.classList.toggle('edge-vignette', vignette);
+      this.border.classList.toggle('photo-border', legacyBorder);
+      if (show) {
         Object.assign(this.border.style, {
-          left: fx + 'px', top: fy + 'px', width: fw + 'px', height: fh + 'px',
+          left: `${r.x}px`,
+          top: `${r.y}px`,
+          width: `${r.w}px`,
+          height: `${r.h}px`,
         });
+        if (legacyBorder) {
+          const bw = f.borderWidth ?? 4;
+          const bc = f.borderColor ?? 'rgba(236,232,220,0.94)';
+          this.border.style.boxSizing = 'border-box';
+          this.border.style.border = `${bw}px solid ${bc}`;
+          this.border.style.boxShadow = 'none';
+          this.border.style.background = 'transparent';
+        } else {
+          this.border.style.border = 'none';
+          this.border.style.background = 'transparent';
+        }
       }
     }
     if (shade) {
@@ -90,7 +106,7 @@ export class FrameMask {
     }
     if (!animate) {
       void this.stage.offsetWidth; // 强制 reflow，让 no-anim 立即生效
-      for (const el of [this.stage, this.border, shade].filter(Boolean)) {
+      for (const el of [this.stage, this.border, shade, chrome].filter(Boolean)) {
         el.classList.remove('no-anim');
       }
     }

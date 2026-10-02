@@ -1,6 +1,6 @@
 // 奖池漫画渲染：复用 Hub Tripo 预览的 tools/comic-render.mjs
 import { CONFIG } from './config.js';
-import { applyComicStyle } from '/comic-render.mjs';
+import { applyComicStyle } from '/comic-render.mjs'; // decor 组同样走 toon+描边
 
 export function applyPrizeComicFx(items, enabled) {
   const cfg = CONFIG.pool.comicFx;
@@ -26,8 +26,13 @@ export function syncComicLighting({ renderer, key, scene }, enabled) {
   }
 }
 
-export function refreshPrizeComicFx(items, ctx) {
+/** @param {THREE.Object3D | null} decorRoot poolDecor 组 */
+export function refreshPrizeComicFx(items, ctx, decorRoot = null) {
   const on = !!CONFIG.pool.comicFx.enabled;
   applyPrizeComicFx(items, on);
+  if (decorRoot) applyComicStyle(decorRoot, on, {
+    outline: CONFIG.pool.comicFx.outline ?? 0.028,
+    outlineColor: CONFIG.pool.comicFx.outlineColor ?? 0x141210,
+  });
   syncComicLighting(ctx, on);
 }

@@ -94,6 +94,12 @@ export function handleTripoStatic(req, res, u) {
   if (u.pathname === '/comic-render.mjs') {
     return sendFile(res, path.join(ROOT, 'tools'), 'comic-render.mjs');
   }
+  if (u.pathname === '/prompts-machine.json') {
+    return sendFile(res, path.join(ROOT, 'tools'), 'prompts-machine.json');
+  }
+  if (u.pathname.startsWith('/design/')) {
+    return sendFile(res, path.join(ROOT, 'prototype', 'design'), decodeURIComponent(u.pathname.slice(8)));
+  }
   return false;
 }
 

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="./assets/aspect-study/mark.svg" type="image/svg+xml" />
 <title>画幅切换 · 动效测试</title>
 <style>
   :root {
@@ -396,17 +397,22 @@
   .finale {
     left: 50%;
     top: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     width: calc(892.424 / 1920 * 100cqw);
-    transform: translate(-50%, -54%);
+    transform: translate(-50%, -50%);
     opacity: 0;
   }
   .produced-art {
     display: block;
+    flex: 0 0 auto;
     margin-bottom: calc(70 / 892.424 * 100cqi);
     width: auto;
+    max-width: 100%;
     height: calc(40 / 892.424 * 100cqi);
     object-fit: contain;
-    object-position: left center;
+    object-position: center center;
   }
   .finale .credit-art {
     margin-top: calc(21 / 892.424 * 100cqi);

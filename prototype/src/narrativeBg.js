@@ -75,10 +75,59 @@ export class NarrativeBg {
 
   syncViewport(detail) {
     this._viewport = detail;
+    const root = this.root;
     const el = this.shade;
+    const p = CONFIG.present ?? {};
+    const sceneBg = p.backdropAsSceneBackground === true;
+    const inViewport = p.backdropInViewport !== false;
+
+    if (root && detail && inViewport && !sceneBg) {
+      const pad = CONFIG.frame.viewportCoverPad ?? 0;
+      const fx = detail.x - pad;
+      const fy = detail.y - pad;
+      const fw = detail.w + pad * 2;
+      const fh = detail.h + pad * 2;
+      Object.assign(root.style, {
+        left: `${fx}px`,
+        top: `${fy}px`,
+        width: `${fw}px`,
+        height: `${fh}px`,
+        right: 'auto',
+        bottom: 'auto',
+      });
+      root.classList.add('in-viewport');
+    } else if (root) {
+      root.style.left = root.style.top = root.style.width = root.style.height = '';
+      root.classList.remove('in-viewport');
+    }
+
     if (!el) return;
-    const on = this.root?.classList.contains('on');
-    el.hidden = !on || !detail || detail.mode === 'wide';
+    const on = root?.classList.contains('on');
+    if (!on || !detail || sceneBg) {
+      el.hidden = true;
+      return;
+    }
+    const pad = CONFIG.frame.viewportCoverPad ?? 0;
+    const fx = detail.x - pad;
+    const fy = detail.y - pad;
+    const fw = detail.w + pad * 2;
+    const fh = detail.h + pad * 2;
+    Object.assign(el.style, {
+      left: `${fx}px`,
+      top: `${fy}px`,
+      width: `${fw}px`,
+      height: `${fh}px`,
+    });
+    el.hidden = false;
+  }
+
+  _emitSceneBackground(url, immediate, act = null) {
+    const p = CONFIG.present ?? {};
+    if (!p.backdropAsSceneBackground || !url) return;
+    document.documentElement.classList.add('narrative-scene-bg');
+    window.dispatchEvent(new CustomEvent('narrative:scene-bg', {
+      detail: { url, immediate, actId: act?.id ?? null },
+    }));
   }
 
   showAmbient() {
@@ -135,6 +184,7 @@ export class NarrativeBg {
       this.root.classList.add('on');
       document.documentElement.classList.add('narrative-backdrop');
       if (this._viewport) this.syncViewport(this._viewport);
+      this._emitSceneBackground(url, true, act);
       return;
     }
 
@@ -159,6 +209,7 @@ export class NarrativeBg {
     if (gen !== this._backdropGen) return;
     inEl.style.opacity = '1';
     outEl.style.opacity = '0';
+    this._emitSceneBackground(url, false, act);
 
     await Promise.all([sleep(ms), dipTask]);
     if (gen !== this._backdropGen) return;
@@ -171,6 +222,7 @@ export class NarrativeBg {
     this.root.classList.add('on');
     document.documentElement.classList.add('narrative-backdrop');
     if (this._viewport) this.syncViewport(this._viewport);
+    if (!dip) this._emitSceneBackground(url, false, act);
   }
 
   async showInterstitial(keyOrUrl, dur = 2.5, step = {}) {

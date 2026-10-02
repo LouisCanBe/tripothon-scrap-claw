@@ -42,12 +42,16 @@ function hubStatusPayload(pairId) {
   };
 }
 
-function broadcastStatus(pairId) {
+function writeAll(pairId, msg) {
   const st = pairState(pairId);
-  const line = `data: ${JSON.stringify(hubStatusPayload(pairId))}\n\n`;
+  const line = `data: ${JSON.stringify(msg)}\n\n`;
   for (const res of st.clients) {
     try { res.write(line); } catch { st.clients.delete(res); }
   }
+}
+
+function broadcastStatus(pairId) {
+  writeAll(pairId, hubStatusPayload(pairId));
 }
 
 export function hubPublish(pairId, msg) {
@@ -57,11 +61,31 @@ export function hubPublish(pairId, msg) {
   st.lastPublishAt = Date.now();
   const prize = msg.prize?.name ?? msg.prize?.id ?? '—';
   hubLog(id, `publish ${msg.type} · ${prize} → ${st.clients.size} 路副屏`);
-  const line = `data: ${JSON.stringify(msg)}\n\n`;
-  for (const res of st.clients) {
-    try { res.write(line); } catch { st.clients.delete(res); }
-  }
+  writeAll(id, msg);
   broadcastStatus(id);
+}
+
+/** 光学校准。不覆盖最后一条出货事件。 */
+export function hubCalibrate(pairId, cal) {
+  const id = pairId || DEFAULT_COLLECT_PAIR;
+  const st = pairState(id);
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const msg = {
+    schema: 1,
+    type: 'frame.calibration',
+    ts: Date.now(),
+    pitch: num(cal.pitch),
+    tan: num(cal.tan),
+    offset: num(cal.offset),
+    views: num(cal.views),
+    viewWidth: num(cal.viewWidth),
+    viewSpacing: num(cal.viewSpacing),
+    focusDistance: num(cal.focusDistance),
+    pattern: cal.pattern === true,
+  };
+  st.calibration = msg;
+  hubLog(id, `calibrate pitch=${msg.pitch} offset=${msg.offset} → ${st.clients.size} 路副屏`);
+  writeAll(id, msg);
 }
 
 export function hubGamePing(pairId) {
@@ -104,6 +128,7 @@ export function hubStream(pairId, res) {
   st.clients.add(res);
   hubLog(id, `副屏 SSE 接入（共 ${st.clients.size} 路）`);
   if (st.last) res.write(`data: ${JSON.stringify(st.last)}\n\n`);
+  if (st.calibration) res.write(`data: ${JSON.stringify(st.calibration)}\n\n`);
   res.write(`data: ${JSON.stringify(hubStatusPayload(id))}\n\n`);
 
   const ping = setInterval(() => {
@@ -157,6 +182,18 @@ export async function handleCollectApi(req, res, url) {
       hubGamePing(body.pair || DEFAULT_COLLECT_PAIR);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: String(e?.message ?? e) }));
+    }
+    return true;
+  }
+  if (path === '/api/collect/calibrate' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      hubCalibrate(body.pair || DEFAULT_COLLECT_PAIR, body);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ ok: true, subscribers: pairState(body.pair || DEFAULT_COLLECT_PAIR).clients.size }));
     } catch (e) {
       res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ ok: false, error: String(e?.message ?? e) }));

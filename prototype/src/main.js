@@ -11,9 +11,13 @@ import GUI from 'three/addons/libs/lil-gui.module.min.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CONFIG } from './config.js';
 import { spawnPool, upgradeVisuals, tickUpgrades, enableShadows, resetAllPoolItems } from './prizePool.js';
+import { spawnPoolDecor } from './prizePoolDecor.js';
+import { attachPoolDecorPhysics } from './prizePoolDecorPhysics.js';
+import { attachPrizeItemPhysics } from './prizePoolItemPhysics.js';
 import { ClawMachine } from './clawMachine.js';
 import { CameraRig } from './cameraRig.js';
 import { FrameMask } from './frameMask.js';
+import { initViewportChrome } from './viewportChrome.js';
 import { Post } from './post.js';
 import { Input } from './input.js';
 import { PointerControls } from './pointerControls.js';
@@ -43,7 +47,9 @@ applyNarrativeToConfig();
 preloadNarrativeImages();
 initPresent();
 const narrativeBg = new NarrativeBg();
-narrativeBg.showAmbient();
+const narrativeSceneBgCache = new Map();
+const narrativeBgLoader = new THREE.TextureLoader();
+const GAMEPLAY_SCENE_BG = new THREE.Color(0x0b0b0d);
 
 const CLAW_DEFAULTS = {
   gripStrength: CONFIG.claw.gripStrength,
@@ -78,7 +84,41 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b0b0d);
+scene.background = GAMEPLAY_SCENE_BG;
+
+async function applyNarrativeSceneBackground(url, { immediate = true, actId = null } = {}) {
+  const p = CONFIG.present ?? {};
+  if (!p.backdropAsSceneBackground || !url) {
+    scene.background = GAMEPLAY_SCENE_BG;
+    scene.backgroundIntensity = CONFIG.render.envIntensity ?? 1;
+    document.documentElement.classList.remove('narrative-scene-bg');
+    return;
+  }
+  let tex = narrativeSceneBgCache.get(url);
+  if (!tex) {
+    try {
+      tex = await narrativeBgLoader.loadAsync(url);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      narrativeSceneBgCache.set(url, tex);
+    } catch (e) {
+      console.warn('[narrative] scene.background 加载失败', url, e);
+      return;
+    }
+  }
+  scene.background = tex;
+  const actCfg = actId != null ? p.acts?.[actId] : null;
+  scene.backgroundIntensity = actCfg?.sceneBackgroundIntensity
+    ?? p.sceneBackgroundIntensity
+    ?? 0.92;
+  document.documentElement.classList.add('narrative-scene-bg');
+}
+
+window.addEventListener('narrative:scene-bg', (e) => {
+  applyNarrativeSceneBackground(e.detail?.url, e.detail ?? {});
+});
+
+narrativeBg.showAmbient();
+
 // IBL：RoomEnvironment 给 PBR 材质环境反射与补光（无需外部 HDR 文件）
 {
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -105,13 +145,16 @@ const machineShellBuilt = buildMachineShell(world);
 if (new URLSearchParams(location.search).get('machineShell') === 'proc') {
   CONFIG.machineShell.useTripo = false;
 }
+const poolDecor = spawnPoolDecor(world);
+const poolDecorSim = attachPoolDecorPhysics(poolDecor);
 const items = spawnPool(world);
+const prizeItemSim = attachPrizeItemPhysics(items);
 enableShadows(world);   // 机器壳+几何体奖品统一开阴影（玻璃罩透明自动跳过投影）
 // manifest 有 GLB 的：预编译后逐个弹出热替换；进度喂给加载画面
 const prizesReady = upgradeVisuals(world, items, renderer, camera, (d, t) => {
   prizeDone = d; prizeTotal = t; paintLoading();
 }).then(() => {
-  refreshPrizeComicFx(items, { renderer, key, scene });
+  refreshPrizeComicFx(items, { renderer, key, scene }, poolDecor);
 });
 
 // —— 飘字 toast（收集反馈 / 模式切换提示）——
@@ -170,6 +213,7 @@ const clawReady = Promise.all([shellReady, claw.upgradeClawVisual(renderer, came
 const rig = new CameraRig(camera);
 document.documentElement.classList.add('game-booting');
 const mask = new FrameMask();
+initViewportChrome();
 mask.bootstrapLayout(ACTS[parseStartActIndex()]?.layout ?? 'right');
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
@@ -270,10 +314,11 @@ function disableRevealControls() {
   pointerCtl.setLookMode(true);
   pointerCtl.setStagePassthrough(false);
   if (elViewDots) elViewDots.style.opacity = '';
-  scene.background = new THREE.Color(0x0b0b0d);
+  scene.background = GAMEPLAY_SCENE_BG;
   scene.backgroundIntensity = CONFIG.render.envIntensity ?? 1;
   scene.fog = null;
   applyMemoryLighting({ key, fill, glow, hemi, ambient });
+  document.documentElement.classList.remove('narrative-scene-bg');
   world.visible = true;
   CONFIG.post.grain = POST_GRAIN_DEFAULT;
 }
@@ -500,7 +545,7 @@ const gui = new GUI({ title: '爪机手感调参' });
     toast('glbExtraRotX 已保存，刷新页面后载入');
   });
   const comic = CONFIG.pool.comicFx;
-  const refreshComic = () => refreshPrizeComicFx(items, { renderer, key, scene });
+  const refreshComic = () => refreshPrizeComicFx(items, { renderer, key, scene }, poolDecor);
   pf.add(comic, 'enabled').name('漫画渲染').onChange(() => { refreshComic(); savePoolDev(); });
   pf.add(comic, 'outline', 0, 0.08, 0.002).name('描边厚度').onChange(() => {
     if (comic.enabled) refreshComic();
@@ -631,6 +676,8 @@ function tick() {
     rig.update(dt, t);
   }
   claw.update(dt, t);
+  prizeItemSim?.tick(dt);
+  poolDecorSim?.tick(items, dt, claw.getPoolPhysicsContext());
   tickUpgrades(dt);
   post.render(dt, t);
 }

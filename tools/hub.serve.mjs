@@ -56,6 +56,7 @@ function hubStatic(req, res, u, dirs) {
     return sendFile(res, dirs.video, decodeURIComponent(p.slice(8)));
   }
   if (p === '/art-pairs.json') return sendFile(res, TOOLS, 'art-pairs.json');
+  if (p === '/prompts-machine.json') return sendFile(res, TOOLS, 'prompts-machine.json');
   if (p === '/docs/ART') return sendFile(res, ROOT, 'ART-美术设定.md');
   if (p === '/concepts' || p === '/concepts/') {
     return sendFile(res, path.join(ROOT, 'prototype', 'design', 'concepts'), 'review.html');

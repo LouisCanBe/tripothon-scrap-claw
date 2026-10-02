@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { GLB_MANIFEST_MACHINE } from './assets.manifest-machine.js';
 import { capTextures, enableShadows } from './prizePool.js';
+import { enqueueRendererCompile } from './renderCompile.js';
 import { MACHINE_SHELL_SLOTS, fitMeshToSlot } from './machineShellSlots.js';
 
 export { MACHINE_SHELL_SLOTS };
@@ -28,7 +29,7 @@ async function loadPlacedShell(shell, procedural, renderer, camera, url) {
   if (rim) rim.visible = false;
   if (renderer && camera) {
     root.visible = false;
-    try { await renderer.compileAsync(root, camera); } catch { /* noop */ }
+    await enqueueRendererCompile(renderer, camera, root);
     root.visible = true;
   }
   return 1;
@@ -84,7 +85,7 @@ export async function upgradeMachineShellTripo(shell, procedural, renderer, came
 
   if (renderer && camera) {
     tripo.visible = false;
-    try { await renderer.compileAsync(tripo, camera); } catch { /* noop */ }
+    await enqueueRendererCompile(renderer, camera, tripo);
     tripo.visible = true;
   }
   console.log('[machineShell] Tripo 分件已拼装', loaded, '/', ids.length);

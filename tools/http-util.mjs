@@ -3,7 +3,7 @@ import path from 'node:path';
 
 export const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
-  '.css': 'text/css', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg',
+  '.css': 'text/css', '.glb': 'model/gltf-binary', '.obj': 'text/plain; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.spz': 'application/octet-stream', '.webp': 'image/webp',
   '.mp4': 'video/mp4', '.webm': 'video/webm',
 };

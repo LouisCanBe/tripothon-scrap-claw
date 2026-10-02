@@ -15,6 +15,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleCollectApi } from './collectDisplayHub.mjs';
+import { handleFrameUpgrade } from './frameStream.mjs';
 import { DEFAULT_COLLECT_PAIR } from '../prototype/src/collectPairDefault.js';
 
 const TOOLS = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
@@ -31,7 +32,14 @@ function parseArgs(argv) {
   return { port, host };
 }
 
-const { port: PORT, host: HOST } = parseArgs(process.argv.slice(2));
+let { port: PORT, host: HOST } = parseArgs(process.argv.slice(2));
+// PaaS（Render / Railway 等）注入 PORT，并需监听 0.0.0.0
+if (process.env.PORT && /^\d+$/.test(process.env.PORT)) {
+  PORT = +process.env.PORT;
+  if (!process.argv.includes('--lan') && !process.argv.some((a) => a.startsWith('--host='))) {
+    HOST = '0.0.0.0';
+  }
+}
 
 function ipv4Lan() {
   const out = [];
@@ -51,12 +59,12 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-  '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json',
+  '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.obj': 'text/plain; charset=utf-8',
   '.woff2': 'font/woff2', '.woff': 'font/woff',
   '.ico': 'image/x-icon',
 };
 
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     if (await handleCollectApi(req, res, url)) return;
@@ -84,7 +92,11 @@ http.createServer(async (req, res) => {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(String(e?.message ?? e));
   }
-}).listen(PORT, HOST, () => {
+});
+server.on('upgrade', (req, socket) => {
+  handleFrameUpgrade(req, socket);
+});
+server.listen(PORT, HOST, () => {
   const pair = DEFAULT_COLLECT_PAIR;
   console.log(`[dev] http://127.0.0.1:${PORT}/  (no-store, prototype/)`);
   if (HOST === '0.0.0.0') {
@@ -98,12 +110,19 @@ http.createServer(async (req, res) => {
   console.log(`  主游戏  http://127.0.0.1:${PORT}/`);
   console.log(`  副屏    http://127.0.0.1:${PORT}/display.html`);
   console.log(`  相框    http://127.0.0.1:${PORT}/display-frame.html`);
+  console.log(`  相框放映 http://127.0.0.1:${PORT}/display-frame-play.html`);
+  console.log(`  电脑出图 http://127.0.0.1:${PORT}/display-frame.html?relay=host`);
+  console.log(`  校准    http://127.0.0.1:${PORT}/frame-calibrate.html`);
   console.log(`  含参示例 http://127.0.0.1:${PORT}/?pair=${q}`);
   console.log(`          http://127.0.0.1:${PORT}/display.html?pair=${q}`);
   if (HOST === '0.0.0.0') {
     for (const ip of ipv4Lan()) {
       console.log(`  主游戏  http://${ip}:${PORT}/`);
       console.log(`  副屏    http://${ip}:${PORT}/display.html`);
+      console.log(`  相框    http://${ip}:${PORT}/display-frame.html`);
+      console.log(`  相框放映 http://${ip}:${PORT}/display-frame-play.html`);
+      console.log(`  电脑出图 http://${ip}:${PORT}/display-frame.html?relay=host`);
+      console.log(`  校准    http://${ip}:${PORT}/frame-calibrate.html`);
       console.log(`  含参示例 http://${ip}:${PORT}/?pair=${q}`);
       console.log(`          http://${ip}:${PORT}/display.html?pair=${q}`);
     }

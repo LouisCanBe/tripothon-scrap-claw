@@ -13,15 +13,22 @@
 <link rel="stylesheet" href="./theme.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--color-bg); }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
   body { font-family: var(--font-main); color: var(--color-ink); }
 
   /* 舞台：canvas 始终全窗口渲染，用 clip-path 控制可见画幅（见 frameMask.js）
      —— 这是 outline 定的方案：不渲染进 RT，遮罩切视口，16:9 展开零成本 */
-  /* Seedream 概念图：画幅外 / 幕间氛围（见 narrativeBg.js） */
+  /* 概念底图：默认走 three scene.background（方框内）；关闭后见 narrativeBg.in-viewport */
   #narrativeBg { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0;
                   transition: opacity 1.05s ease; overflow: hidden; }
   #narrativeBg.on { opacity: 1; }
+  #narrativeBg.in-viewport {
+    inset: auto;
+    transition: opacity 1.05s ease, left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
+                width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1);
+  }
+  html.narrative-scene-bg #narrativeBg .narrative-stack { visibility: hidden; }
+  html.narrative-backdrop #presentMarginVig { opacity: 0 !important; }
   #narrativeBg .narrative-stack { position: absolute; inset: 0; }
   #narrativeBg .narrative-layer { position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; object-position: center; opacity: 0;
@@ -45,9 +52,9 @@
   #presentGrain { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0.05;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
     mix-blend-mode: soft-light; }
-  /* 与 #frameBorder 同矩形（frameMask 统一定位）：视口内挡住概念底图，上面再叠 3D */
+  /* 与 #frameBorder 同矩形：视口内轻暗角（scene.background 模式下隐藏） */
   #narrativeViewportShade { position: fixed; z-index: 1; pointer-events: none;
-    background: rgba(7,7,11,.96); box-sizing: border-box;
+    background: transparent; box-sizing: border-box;
     transition: left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
                 width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1),
                 background 0.95s ease; }
@@ -56,7 +63,9 @@
   #narrativeViewportShade.no-anim { transition: none !important; }
   html.game-booting #stage,
   html.game-booting #frameBorder,
-  html.game-booting #narrativeViewportShade { transition: none !important; }
+  html.game-booting #narrativeViewportShade,
+  html.game-booting #narrativeBg.in-viewport,
+  html.game-booting #viewportChrome { transition: none !important; }
   #narrativeInterstitial { position: fixed; inset: 0; z-index: 18; pointer-events: none;
     display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); }
   #narrativeInterstitial[hidden] { display: none !important; opacity: 0 !important; }
@@ -74,12 +83,34 @@
   #stage.no-anim { transition: none; }
   #stage canvas { display: block; width: 100%; height: 100%; }
 
-  /* 操作视口描边（与 clip 同矩形；颜色/粗细见 config.frame + frameMask.js） */
+  /* 操作视口叠层：内缘渐变暗角（与 clip 同矩形，见 frameMask.js） */
   #frameBorder { position: fixed; pointer-events: none; z-index: 5;
-                 border-radius: 2px; box-sizing: border-box; background: transparent;
+                 border-radius: 0; box-sizing: border-box; background: transparent;
                  transition: left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
                              width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1); }
+  #frameBorder.edge-vignette {
+    border: none;
+    background:
+      linear-gradient(to bottom, rgba(0,0,0,.85) 0%, transparent 12%, transparent 88%, rgba(0,0,0,.85) 100%),
+      linear-gradient(to right, rgba(0,0,0,.9) 0%, transparent 10%, transparent 90%, rgba(0,0,0,.9) 100%);
+    box-shadow: inset 0 0 42px rgba(0,0,0,.5);
+  }
+  #frameBorder.photo-border { border-radius: 2px; }
   #frameBorder.no-anim { transition: none; }
+  #viewportChrome {
+    position: fixed; z-index: 12; pointer-events: none; overflow: hidden;
+    transition: opacity 0.65s ease, left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
+                width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1);
+  }
+  #viewportChrome.no-anim { transition: none !important; }
+  #viewportChrome.dimmed { opacity: var(--chrome-dim, 0.24); }
+  #viewportChrome #hint {
+    position: absolute; left: 0; right: 0; bottom: 10px; width: auto;
+    text-align: center; margin: 0;
+  }
+  #viewportChrome #viewDots {
+    position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%);
+  }
 
   /* 黑屏闪（终幕"硬切"降级方案用） */
   #flash { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 20; }
@@ -188,9 +219,9 @@
   #replayCue .label { display: block; font-family: var(--font-hand); font-size: 26px; letter-spacing: 4px; }
   #msg.stinger { font-family: var(--font-hand); font-size: 24px; letter-spacing: 2px;
                  background: none; border: none; }
-  #hint { position: fixed; bottom: 14px; width: 100%; text-align: center; z-index: 10;
-          font-size: var(--font-size-hint); color: var(--color-ink-dim);
-          letter-spacing: var(--letter-spacing); pointer-events: none; transition: opacity .5s; }
+  #hint { font-size: var(--font-size-hint); color: var(--color-ink-dim);
+          letter-spacing: var(--letter-spacing); pointer-events: none; transition: opacity .5s;
+          text-shadow: 0 1px 8px rgba(0,0,0,.85); }
 
   /* —— 漫画旁白框（二/三幕两侧）—— */
   .panel { position: fixed; top: 50%; left: 5%; transform: translateY(-50%) rotate(-.8deg);
@@ -223,8 +254,7 @@
   .toast.out { opacity: 0; transform: translateY(-26px) rotate(1deg); transition-duration: .45s; }
 
   /* —— 视角指示点（左/正/右机位）—— */
-  #viewDots { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 10;
-              display: flex; gap: 9px; pointer-events: none; opacity: .85; }
+  #viewDots { display: flex; gap: 9px; pointer-events: none; opacity: .9; }
   #viewDots i { width: 6px; height: 6px; border-radius: 50%; background: transparent;
                 border: 1px solid var(--color-ink-dim); transition: all .35s; }
   #viewDots i.on { background: var(--color-ink); border-color: var(--color-ink); transform: scale(1.35); }
@@ -348,7 +378,10 @@
   </div>
   <div id="globalGrabStat" hidden>本局入洞 <span id="globalGrabCount">0</span> 次</div>
   <div id="toasts"></div>
-  <div id="viewDots"><i data-v="left"></i><i data-v="front" class="on"></i><i data-v="right"></i></div>
+  <div id="viewportChrome" aria-hidden="false">
+    <div id="viewDots"><i data-v="left"></i><i data-v="front" class="on"></i><i data-v="right"></i></div>
+    <div id="hint"></div>
+  </div>
   <div id="panelLeft" class="panel"></div>
   <div id="panelRight" class="panel right"></div>
   <div id="actLabel"></div>
@@ -371,7 +404,6 @@
     <span class="kicker">手心里还是那一罐</span>
     <span class="label">再记一遍</span>
   </button>
-  <div id="hint"></div>
   <div id="loading"><div class="title">拾荒娃娃机</div><div class="t">上货中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div></div>
 
   <script src="./vendor/qrcode-generator.js"></script>

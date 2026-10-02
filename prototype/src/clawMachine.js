@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { nearestItem, capTextures, enableShadows, poolVisualScale, clampItemToPoolBounds } from './prizePool.js';
 import { tameClawMaterials } from './clawMaterials.js';
+import { enqueueRendererCompile } from './renderCompile.js';
 
 const C = () => CONFIG.claw;
 
@@ -71,6 +72,15 @@ export class ClawMachine {
     const clawS = (C().meshVisualScale ?? 1) * (cfg.scaleWithPrize ?? 1);
     this._tripoVisual.scale.setScalar(cfg.scale * clawS);
     this._tripoVisual.position.y = cfg.offsetY * clawS;
+  }
+
+  /** 奖池装饰推力：仅待机巡移时由爪子推开，落爪～回位复位期间关闭 */
+  getPoolPhysicsContext() {
+    return {
+      x: this.rig.position.x,
+      z: this.rig.position.z,
+      pushDecor: this.state === S.IDLE,
+    };
   }
 
   reset() {
@@ -227,7 +237,7 @@ export class ClawMachine {
       // 预编译材质，避免替换瞬间卡帧
       if (renderer && camera) {
         newClaw.visible = false;
-        try { await renderer.compileAsync(newClaw, camera); } catch { /* 退化为同步 */ }
+        await enqueueRendererCompile(renderer, camera, newClaw);
         newClaw.visible = true;
       }
 

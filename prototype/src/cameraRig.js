@@ -8,6 +8,18 @@ import { CONFIG } from './config.js';
 const damp = (a, b, tau, dt) => a + (b - a) * (1 - Math.exp(-dt / Math.max(tau, 1e-4)));
 const ORDER = ['left', 'front', 'right'];
 
+/** 左—前—右 一字排开：Q/E 与甩手只走相邻位，不右↔左跨跳 */
+function adjacentView(cur, dir) {
+  if (dir > 0) {
+    if (cur === 'left') return 'front';
+    if (cur === 'front') return 'right';
+    return 'right';
+  }
+  if (cur === 'right') return 'front';
+  if (cur === 'front') return 'left';
+  return 'left';
+}
+
 export class CameraRig {
   constructor(camera, cfg = CONFIG.camera) {
     this.camera = camera;
@@ -20,35 +32,74 @@ export class CameraRig {
     this.baseZoom = 1;      // 幕级变焦（acts.js 的 zoom 字段）
     this.modeZoom = 1;      // 取景模式倍率（near 凑近 / far 站远），main 每帧写入
     this.userZoom = 1;      // 用户缩放（滚轮/双指），与上两者相乘、互不覆盖
+    this._afterFront = null; // 数字键左↔右时先到正面再到位
     this._m = new THREE.Matrix4();
     this._q = new THREE.Quaternion();
     this._e = new THREE.Euler();
+    this._tmpTarget = new THREE.Vector3();
   }
 
   setZoom(z) { this.baseZoom = z; }
   setModeZoom(f) { this.modeZoom = f; }
   setUserZoom(f) { this.userZoom = THREE.MathUtils.clamp(f, this.cfg.userZoomMin ?? 0.55, this.cfg.userZoomMax ?? 1.6); }
 
-  setView(name) { if (this.cfg.views[name]) this.cur = name; }
+  setView(name) {
+    if (!this.cfg.views[name] || name === this.cur) return;
+    const i = ORDER.indexOf(this.cur);
+    const j = ORDER.indexOf(name);
+    if (i >= 0 && j >= 0 && Math.abs(i - j) === 2) {
+      this._afterFront = name;
+      this.cur = 'front';
+      return;
+    }
+    this._afterFront = null;
+    this.cur = name;
+  }
 
   cycle(dir) {
-    const i = ORDER.indexOf(this.cur);
-    this.cur = ORDER[(i + dir + ORDER.length) % ORDER.length];
+    this._afterFront = null;
+    this.cur = adjacentView(this.cur, dir);
+  }
+
+  _viewTau(cfg) {
+    return cfg.viewTau ?? cfg.tau;
+  }
+
+  _targetPos(v, z) {
+    const pull = v.distanceScale ?? 1;
+    const ox = (v.pos[0] - v.look[0]) * z * pull;
+    const oy = (v.pos[1] - v.look[1]) * z * pull;
+    const oz = (v.pos[2] - v.look[2]) * z * pull;
+    return this._tmpTarget.set(
+      v.look[0] + ox,
+      v.look[1] + oy,
+      v.look[2] + oz,
+    );
   }
 
   update(dt, t) {
     const cfg = this.cfg;
     const v = cfg.views[this.cur];
-    this.zoom = damp(this.zoom, this.baseZoom * this.modeZoom * this.userZoom, cfg.tau, dt);
+    const tau = this._viewTau(cfg);
+    this.zoom = damp(this.zoom, this.baseZoom * this.modeZoom * this.userZoom, tau, dt);
     const z = this.zoom;
+    const target = this._targetPos(v, z);
 
     // 以观察目标为锚点缩放机位（zoom<1 = 贴近玻璃柜）
-    this.pos.x = damp(this.pos.x, v.look[0] + (v.pos[0] - v.look[0]) * z, cfg.tau, dt);
-    this.pos.y = damp(this.pos.y, v.look[1] + (v.pos[1] - v.look[1]) * z, cfg.tau, dt);
-    this.pos.z = damp(this.pos.z, v.look[2] + (v.pos[2] - v.look[2]) * z, cfg.tau, dt);
-    this.look.x = damp(this.look.x, v.look[0], cfg.tau, dt);
-    this.look.y = damp(this.look.y, v.look[1], cfg.tau, dt);
-    this.look.z = damp(this.look.z, v.look[2], cfg.tau, dt);
+    this.pos.x = damp(this.pos.x, target.x, tau, dt);
+    this.pos.y = damp(this.pos.y, target.y, tau, dt);
+    this.pos.z = damp(this.pos.z, target.z, tau, dt);
+    this.look.x = damp(this.look.x, v.look[0], tau, dt);
+    this.look.y = damp(this.look.y, v.look[1], tau, dt);
+    this.look.z = damp(this.look.z, v.look[2], tau, dt);
+
+    if (this._afterFront && this.cur === 'front') {
+      const snap = cfg.viewHandoffDist ?? 0.12;
+      if (this.pos.distanceTo(target) < snap) {
+        this.cur = this._afterFront;
+        this._afterFront = null;
+      }
+    }
 
     this.camera.position.copy(this.pos);
     if (this.camera.fov !== cfg.fov) {
