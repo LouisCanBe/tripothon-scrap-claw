@@ -76,7 +76,8 @@ export const CONFIG = {
     },
     post: { warmth: 0.06, chroma: 0.32, saturation: 1.02 },
     actPost: {
-      1: { warmth: 0.12, chroma: 0.38 },
+      1: { k1: 0.12, k2: 0.048, warmth: 0.12, chroma: 0.38 },
+      2: { k1: 0.12, k2: 0.048 },
       3: { warmth: -0.04, chroma: 0.48, satMul: 0.94 },
       4: { warmth: 0.16, chroma: 0.28, satMul: 1.04 },
       5: { warmth: -0.08, chroma: 0.42, satMul: 0.9 },
@@ -105,7 +106,7 @@ export const CONFIG = {
     grabRadius: 0.75,        // 合爪判定半径；≈ grabRadiusBase × pool.visualScale
     grabRadiusBase: 0.30,
     // 垂直（米）：grabY/hang 只跟爪 meshVisualScale；grabRadius 跟 pool.visualScale
-    grabY: 0.80,             // 落爪停高度（claw 组 y）；灰盒尖深≈tipDepthBase → 尖近池底
+    grabY: 0.64,             // 落爪停高度（claw 组 y）；灰盒尖深≈tipDepthBase → 尖近池底
     grabYBase: 0.50,
     restYBase: 1.55,
     tipDepthBase: 0.53,      // 灰盒爪尖相对 crown 的向下伸出（× meshVisualScale）
@@ -169,8 +170,9 @@ export const CONFIG = {
     viewHandoffDist: 0.12,   // 数字键经正面中转：到正面多近后切到目标侧
     breathDeg: 0.25,         // 呼吸晃动幅度(度)，outline 上限 <0.3°
     breathFreq: 0.22,        // 呼吸频率(Hz)
-    userZoomMin: 0.55,       // 滚轮/双指缩放的最近倍率（防止钻进机器内部）
-    userZoomMax: 1.6,        // 最远倍率
+    userZoomMin: 0.55,       // 滚轮/双指缩放的最近倍率（zoom 大=机位远）
+    userZoomMax: 1.6,        // 一二幕等：滚轮最远倍率上限
+    userZoomMaxGameplay: 0.85, // 三幕起滚轮最远（H「镜头」可调；>1 拉远）
     views: {
       front: { pos: [ 0.00, 2.05, 3.15], look: [ 0.0, 0.30, -0.05] },
       // 左右：更靠侧面（|x|↑、z↓），look 略向机柜中心偏，切换后以侧视为主
@@ -179,9 +181,11 @@ export const CONFIG = {
     },
   },
 
+  // 三幕及以后桶形基准（切幕时写回 CONFIG.post；一二幕见 present.actPost）
+  postLensGameplay: { k1: 0.65, k2: 0.45 },
   post: {
-    k1: 0.12,                // 鱼眼一阶（fisheye 视口缘；square 时由 frameEdge 关）
-    k2: 0.048,               // 鱼眼二阶系数
+    k1: 0.65,
+    k2: 0.45,
     grain: 0.02,            // 胶片颗粒强度
     vignette: 0.55,          // 暗角强度（fisheye 视口缘）
     vignetteSquare: 0,       // square：关径向暗角（与桶形畸变一起关）
@@ -285,15 +289,47 @@ export const CONFIG = {
     // 奖池底「堆娃娃」装饰：不进 PRIZE_TABLE，不参与抓取
     decor: {
       enabled: true,
-      count: 48,
-      rimCount: 22,
+      glbEnabled: true,        // Tripo 小件替换部分灰盒（见 assets/decor-low）
+      glbShare: 1,               // 1=每件按 decorKind 全换 Tripo；<1 随机保留毛绒
+      glbTargetSize: 0.095,    // 归一化基准（米）
+      glbTargetSizeByKind: { disk: 0.62, ribbon: 0.9 }, // 瓶盖更小
+      decorDiskScaleCap: 1.08, // 换装时瓶盖相对灰盒的缩放上限
+      count: 54,                 // 主撒点目标（摆不满会继续用 fill 补）
+      rimCount: 26,
+      fillCount: 22,             // 小号补缝（scale 更小、间隙略紧）
+      fillScaleMin: 0.5,
+      fillScaleMax: 0.82,
+      fillPlacementGap: 0.012,
+      placementRetries: 420,
       sizeMul: 1.48,
       scaleMin: 0.68,
       scaleMax: 1.62,        // 单件尺寸随机区间（差别更大）
-      edgeInner: 0.68,       // 越大越贴墙
-      maxStackY: 0.26,
+      edgeInner: 0.32,       // 越小越靠池壁（中心仍会有）
+      edgeBand: 0.74,        // 贴墙采样：半径比例下限
+      edgeScatterChance: 0.45, // 随机点落在四周边带的比例
+      edgeMargin: 0.032,     // 装饰离可视池壁边距（娃娃撒点仍用 pool 内 0.12）
+      boundsExpandX: 0.075,  // 装饰范围比爪子 bounds 再外扩（仅装饰）
+      boundsExpandZ: 0.06,
+      edgePlacementShare: 0.62, // 主撒点中强制落在外圈的比例
+      prizeEdgeClearanceScale: 0.6, // 外圈装饰躲娃娃半径缩放（更贴墙）
+      decorEdgePrizeRelaxFrac: 0.66, // 距池心超过半宽×此值视为外圈
+      edgeScatterCount: 28,  // 额外沿四周边带补点
+      maxStackY: 0.26,           // 相对池底的最大堆高（落垛超过则重采样位置）
+      floorY: 0.018,               // 池底装饰脚底基准
+      stackOnPrizes: false,        // false=装饰一律贴池底（仅 XZ 躲娃娃）
+      stackGap: 0.004,             // stackOnPrizes 时与支撑顶面的间隙
+      prizeClearanceMul: 1.08,     // 运行时物理推挤（可略大）
+      prizePlacementClearanceMul: 0.94, // 开局摆放：略小于实体，靠 relax 防穿
+      placementRadiusMul: 0.86,    // 装饰摆放判定半径（视觉可略大）
+      placementGridStep: 0.095,    // 摆不满时网格补点步长
+      supportRadiusMul: 0.72,      // 落垛判定用更小半径，避免误叠
       avoidHoleRadius: 0.5,
-      minSpacing: 0.085,
+      minSpacing: 0.085,       // 灰盒摆放时的最小中心距（已含 placementGap 时作兜底）
+      placementGap: 0.024,     // 两件装饰半径之和之外的额外间隙
+      footprintPad: 1.1,       // 换装后 XZ 碰撞半径 = 包围盒半宽 × 此系数
+      postUpgradeSettleIterations: 36,
+      postUpgradeSeparateRest: 0.014,
+      bboxRelaxPasses: 10,     // 换装后用世界 AABB 在 XZ 上推开穿模
       settleIterations: 16,
       physics: {
         iterations: 3,

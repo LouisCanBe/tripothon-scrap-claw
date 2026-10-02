@@ -311,6 +311,19 @@ export function normalizeGLB(obj, collider, restY) {
 }
 
 /** 通关重开：已入洞物品回到初始位 */
+/** GLB/几何体底面与池底 (y=0) 偏差时校正（仅 idle 开局） */
+export function groundIdlePrizesToFloor(items, floorY = 0) {
+  for (const it of items ?? []) {
+    if (!it?.mesh || it.state !== 'idle') continue;
+    it.mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(it.mesh);
+    const dy = floorY - box.min.y;
+    if (Math.abs(dy) < 0.0004) continue;
+    it.mesh.position.y += dy;
+    it.restY = it.mesh.position.y;
+  }
+}
+
 export function resetAllPoolItems(items) {
   for (const it of items) {
     if (!it.mesh || !it.spawn) continue;

@@ -1,0 +1,38 @@
+{
+  "_note": "与 prizePoolDecor 四类灰盒一一对应（好/坏）。生成：node tools/generate.mjs --set decor-low",
+  "_defaults": {
+    "model": "P2-20260801",
+    "face_limit": 1600,
+    "texture": false,
+    "pbr": false,
+    "smart_low_poly": true
+  },
+  "_style": "ultra low poly gray clay mockup, tiny claw-machine pit clutter, single object only, bottom flat on ground, no scene no pedestal, game-ready",
+
+  "items": {
+    "ball_good": {
+      "prompt": "small round plush pom pom ball toy, fluffy sphere, intact clean"
+    },
+    "ball_junk": {
+      "prompt": "deflated crushed plush lump, squashed dirty fabric ball scrap"
+    },
+    "roll_good": {
+      "prompt": "clean foam cylinder roll, short plush log shape, intact"
+    },
+    "roll_junk": {
+      "prompt": "crushed bent cardboard tube scrap, collapsed cylinder junk"
+    },
+    "disk_good": {
+      "prompt": "flat round plastic bottle cap disc, clean intact, low height"
+    },
+    "disk_junk": {
+      "prompt": "bent rusty metal cap scrap, dented flat disc junk"
+    },
+    "ribbon_good": {
+      "prompt": "clean folded fabric ribbon strip, soft cloth sash, intact"
+    },
+    "ribbon_junk": {
+      "prompt": "torn dirty rag strip, frayed fabric scrap piece"
+    }
+  }
+}

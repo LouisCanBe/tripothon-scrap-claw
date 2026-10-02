@@ -115,6 +115,14 @@ const PRIZE_SET_CFG = {
     prompts: 'prompts-machine-mv.json',
     header: '// 【自动生成，勿手改】由 tools/generate.mjs --set machine-mv 维护（四视图 P2）',
   },
+  'decor-low': {
+    relDir: 'decor-low',
+    manifest: 'assets.manifest-decor.js',
+    exportName: 'GLB_MANIFEST_DECOR',
+    prompts: 'prompts-decor-low.json',
+    header: `// 【自动生成，勿手改】由 tools/generate.mjs --set decor-low 维护
+// 奖池底装饰 GLB（不参与抓取）；无文件时 prizePoolDecor 用灰盒回退`,
+  },
 };
 const SET_META = PRIZE_SET_CFG[PRIZE_SET] ?? PRIZE_SET_CFG.default;
 const OUT_PRIZES = path.join(ROOT, 'prototype', 'assets', SET_META.relDir);

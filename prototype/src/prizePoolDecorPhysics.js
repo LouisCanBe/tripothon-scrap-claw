@@ -2,15 +2,47 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { itemFootprintRadius } from './prizePool.js';
+import { getDecorPoolBounds } from './poolDecorStack.js';
 
-function meshFootprintRadius(mesh) {
-  if (mesh.userData.decorRadius) return mesh.userData.decorRadius;
+function meshFootprintRadius(mesh, force = false) {
+  const cfg = CONFIG.pool?.decor;
+  const pad = cfg?.footprintPad ?? 1.08;
+  if (!force && mesh.userData.decorRadius) return mesh.userData.decorRadius;
+  mesh.updateMatrixWorld?.(true);
   const box = new THREE.Box3().setFromObject(mesh);
   const sx = box.max.x - box.min.x;
   const sz = box.max.z - box.min.z;
-  const r = Math.max(sx, sz) * 0.5;
+  const r = Math.max(sx, sz) * 0.5 * pad;
   mesh.userData.decorRadius = r;
   return r;
+}
+
+export function invalidateDecorRadii(group) {
+  if (!group) return;
+  for (const mesh of group.children) {
+    if (mesh.userData?.poolDecor) delete mesh.userData.decorRadius;
+  }
+}
+
+function buildDecorBodies(group) {
+  const bodies = [];
+  if (!group) return bodies;
+  for (const mesh of group.children) {
+    if (!mesh.userData?.poolDecor) continue;
+    const r = meshFootprintRadius(mesh);
+    bodies.push({
+      mesh,
+      x: mesh.position.x,
+      z: mesh.position.z,
+      baseY: mesh.position.y,
+      vx: 0,
+      vz: 0,
+      r,
+      mass: r * r,
+      sleeping: true,
+    });
+  }
+  return bodies;
 }
 
 function clampDecorXZ(b, bx0, bx1, bz0, bz1, margin) {
@@ -46,10 +78,11 @@ function settleBodies(bodies, cfg, bounds) {
   const { bx0, bx1, bz0, bz1 } = bounds;
   const iters = cfg.settleIterations ?? 14;
   const stiff = cfg.decorStiffness ?? 0.55;
+  const rest = cfg.separateRest ?? 0.004;
   for (let k = 0; k < iters; k++) {
     for (let i = 0; i < bodies.length; i++) {
       for (let j = i + 1; j < bodies.length; j++) {
-        separatePair(bodies[i], bodies[j], 0.004, stiff, false);
+        separatePair(bodies[i], bodies[j], rest, stiff, false);
       }
     }
     for (const b of bodies) clampDecorXZ(b, bx0, bx1, bz0, bz1, 0.05);
@@ -57,6 +90,7 @@ function settleBodies(bodies, cfg, bounds) {
   for (const b of bodies) {
     b.mesh.position.x = b.x;
     b.mesh.position.z = b.z;
+    b.baseY = b.mesh.position.y;
     b.vx = 0;
     b.vz = 0;
     b.sleeping = true;
@@ -74,6 +108,30 @@ function itemMoved(it, threshold) {
 }
 
 /**
+ * 按当前网格/GLB 实际 XZ 占地做松弛（换装后应调用）。
+ * @param {THREE.Group | null} group
+ * @param {{ settleIterations?: number, separateRest?: number, footprintPad?: number }} overrides
+ */
+export function settlePoolDecorGroup(group, overrides = {}) {
+  const cfg = CONFIG.pool?.decor;
+  if (!group || !cfg?.enabled) return;
+
+  invalidateDecorRadii(group);
+  const { bx0, bx1, bz0, bz1 } = getDecorPoolBounds();
+  const phys = typeof cfg.physics === 'object' ? cfg.physics : {};
+  const settleCfg = {
+    ...cfg,
+    ...phys,
+    settleIterations: overrides.settleIterations ?? cfg.settleIterations ?? 16,
+    separateRest: overrides.separateRest ?? cfg.separateRest ?? 0.004,
+    decorStiffness: overrides.decorStiffness ?? cfg.decorStiffness ?? 0.55,
+  };
+  const bodies = buildDecorBodies(group);
+  settleBodies(bodies, settleCfg, { bx0, bx1, bz0, bz1 });
+  for (const b of bodies) b.baseY = b.mesh.position.y;
+}
+
+/**
  * @param {THREE.Group | null} group poolDecor
  * @returns {{ tick: (items: unknown[], dt: number, clawCtx?: { x: number, z: number, pushDecor?: boolean }) => void } | null}
  */
@@ -82,29 +140,14 @@ export function attachPoolDecorPhysics(group) {
   if (!group || !cfg?.enabled || cfg.physics === false) return null;
 
   const phys = typeof cfg.physics === 'object' ? cfg.physics : {};
-  const [bx0, bx1] = CONFIG.pool.boundsX;
-  const [bz0, bz1] = CONFIG.pool.boundsZ;
+  const { bx0, bx1, bz0, bz1 } = getDecorPoolBounds();
   const [hx, hz] = CONFIG.claw.holePos;
   const holeR = cfg.avoidHoleRadius ?? 0.5;
 
-  const bodies = [];
-  for (const mesh of group.children) {
-    if (!mesh.isMesh) continue;
-    const r = meshFootprintRadius(mesh);
-    bodies.push({
-      mesh,
-      x: mesh.position.x,
-      z: mesh.position.z,
-      baseY: mesh.position.y,
-      vx: 0,
-      vz: 0,
-      r,
-      mass: r * r,
-      sleeping: true,
-    });
-  }
-
-  settleBodies(bodies, { ...cfg, ...phys }, { bx0, bx1, bz0, bz1 });
+  let bodies = buildDecorBodies(group);
+  const settleCfg = { ...cfg, ...phys };
+  const bounds = { bx0, bx1, bz0, bz1 };
+  settleBodies(bodies, settleCfg, bounds);
 
   const prizePush = phys.prizePush ?? 0.72;
   const clawPush = phys.clawPush ?? 0.38;
@@ -119,6 +162,18 @@ export function attachPoolDecorPhysics(group) {
   const prizeMoveThresh = phys.prizeMoveThreshold ?? 0.004;
 
   return {
+    /** Tripo 换装后 Group 替换 Mesh，需重建碰撞体与 baseY */
+    rebuild(decorGroup) {
+      const g = decorGroup ?? group;
+      invalidateDecorRadii(g);
+      bodies = buildDecorBodies(g);
+      const post = {
+        ...settleCfg,
+        settleIterations: cfg.postUpgradeSettleIterations ?? settleCfg.settleIterations,
+        separateRest: cfg.postUpgradeSeparateRest ?? settleCfg.separateRest ?? 0.004,
+      };
+      settleBodies(bodies, post, bounds);
+    },
     tick(items, dt, clawCtx = null) {
       if (!bodies.length || dt <= 0) return;
 

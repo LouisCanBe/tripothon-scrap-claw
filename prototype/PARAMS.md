@@ -89,6 +89,9 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 | `tau` | 0.38 | 0.2–0.7 | 视角切换阻尼 |
 | `breathDeg` | 0.25 | 0–0.3 | 呼吸幅度，**outline 硬上限 0.3°** |
 | `acts.js 的 zoom` | 一幕 0.68 | 0.5–1.2 | **逐幕变焦**：机位 = look + (pos−look)×zoom。<1 贴近玻璃柜（一幕近景），缺省 1 = 看全整机。相机只对画幅可见区域取景（setViewOffset），画幅偏右时机器自动居中 |
+| `userZoomMin` | 0.55 | — | 滚轮/捏合 **最近**（有效 zoom 下限，越大越近） |
+| `userZoomMaxGameplay` | 1.28 | 0.85–1.6 | **三幕起**滚轮 **最远**（H「镜头·三幕滚轮最远」） |
+| `userZoomMax` | 1.6 | — | 一二幕滚轮最远上限 |
 
 ## 四·五、AI 分件爪（config.clawGLB）
 
@@ -116,7 +119,18 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 
 | 参数 | 默认 | 备注 |
 |---|---|---|
-| `k1 / k2` | 0.12 / 0.048 | **后处理桶形畸变**（`post.js`）；H 滑条上限约 0.65 / 0.45 仅为试调范围，非物理单位；枕形可试负 k1 |
+| `postLensGameplay.k1/k2` | 0.65 / 0.45 | 三幕起切幕写回 `CONFIG.post`；改这里即改玩法默认 |
+| `present.actPost` 1/2 | 0.12 / 0.048 | 一二幕较轻桶形 |
+
+## 奖池装饰 GLB（`pool.decor` + `decor-low`）
+
+| 参数 | 默认 | 备注 |
+|---|---|---|
+| `decor.glbEnabled` | true | 部分装饰换成 Tripo 小件 |
+| `decor.glbShare` | 0.36 | 替换比例（其余仍是毛绒灰盒） |
+| `decor.glbTargetSize` | 0.095 | 归一化最大边（米） |
+| 替换规则 | decorKind → 同形 GLB | ball/roll/disk/ribbon 各 good/junk 50%；脚底对齐防悬空 |
+| 资产 | 8× decor-low | `node tools/generate.mjs --set decor-low` |
 | `grain` | 0.055 | 胶片颗粒 |
 | `vignette` | 0.55 | 全画面径向暗角（shader；与 `#frameBorder` 内缘 CSS 暗角是两层） |
 | `vignetteSquare` | 0 | 暗角（square 时关；桶形 k1/k2 也关） |

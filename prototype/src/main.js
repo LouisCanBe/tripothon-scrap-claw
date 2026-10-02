@@ -10,8 +10,10 @@ import * as THREE from 'three';
 import GUI from 'three/addons/libs/lil-gui.module.min.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CONFIG } from './config.js';
-import { spawnPool, upgradeVisuals, tickUpgrades, enableShadows, resetAllPoolItems } from './prizePool.js';
-import { spawnPoolDecor } from './prizePoolDecor.js';
+import {
+  spawnPool, upgradeVisuals, tickUpgrades, enableShadows, resetAllPoolItems, groundIdlePrizesToFloor,
+} from './prizePool.js';
+import { spawnPoolDecor, upgradePoolDecor, restackPoolDecorWithPrizes } from './prizePoolDecor.js';
 import { attachPoolDecorPhysics } from './prizePoolDecorPhysics.js';
 import { attachPrizeItemPhysics } from './prizePoolItemPhysics.js';
 import { ClawMachine } from './clawMachine.js';
@@ -148,15 +150,22 @@ const machineShellBuilt = buildMachineShell(world);
 if (new URLSearchParams(location.search).get('machineShell') === 'proc') {
   CONFIG.machineShell.useTripo = false;
 }
-const poolDecor = spawnPoolDecor(world);
-const poolDecorSim = attachPoolDecorPhysics(poolDecor);
 const items = spawnPool(world);
+groundIdlePrizesToFloor(items, 0);
+const poolDecor = spawnPoolDecor(world, items);
+let poolDecorSim = attachPoolDecorPhysics(poolDecor);
+upgradePoolDecor(poolDecor, items)
+  .then(() => poolDecorSim?.rebuild?.(poolDecor))
+  .catch((e) => console.warn('[decor] upgrade', e));
 const prizeItemSim = attachPrizeItemPhysics(items);
 enableShadows(world);   // 机器壳+几何体奖品统一开阴影（玻璃罩透明自动跳过投影）
 // manifest 有 GLB 的：预编译后逐个弹出热替换；进度喂给加载画面
 const prizesReady = upgradeVisuals(world, items, renderer, camera, (d, t) => {
   prizeDone = d; prizeTotal = t; paintLoading();
 }).then(() => {
+  groundIdlePrizesToFloor(items, 0);
+  restackPoolDecorWithPrizes(poolDecor, items);
+  poolDecorSim?.rebuild?.(poolDecor);
   refreshPrizeComicFx(items, { renderer, key, scene }, poolDecor);
 });
 
@@ -478,6 +487,13 @@ const gui = new GUI({ title: '爪机手感调参' });
   c.add(CONFIG.camera, 'fov', 60, 100, 1);
   c.add(CONFIG.camera, 'tau', 0.1, 1, 0.01).name('切换tau');
   c.add(CONFIG.camera, 'breathDeg', 0, 0.6, 0.01);
+  c.add(CONFIG.camera, 'userZoomMin', 0.4, 1, 0.02).name('滚轮最近').onChange(() => rig.setUserZoom(rig.userZoom));
+  c.add(CONFIG.camera, 'userZoomMaxGameplay', 0.85, 1.6, 0.02)
+    .name('三幕滚轮最远')
+    .onChange(() => rig.applyUserZoomPolicy(getPresentActId()));
+  c.add(CONFIG.camera, 'userZoomMax', 1, 1.8, 0.02)
+    .name('一二幕滚轮最远')
+    .onChange(() => rig.applyUserZoomPolicy(getPresentActId()));
 
   const vf = gui.addFolder('视口缘');
   vf.add(CONFIG.frame, 'viewportEdge', { 鱼眼暗角: 'fisheye', 纯方框: 'square' })
