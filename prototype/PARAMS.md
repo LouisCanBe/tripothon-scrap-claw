@@ -116,13 +116,19 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 
 | 参数 | 默认 | 备注 |
 |---|---|---|
-| `k1 / k2` | 0.10 / 0.04 | 鱼眼系数（边缘≈10–15%）；**若看起来是枕形就取负** |
+| `k1 / k2` | 0.12 / 0.048 | **后处理桶形畸变**（`post.js`）；H 滑条上限约 0.65 / 0.45 仅为试调范围，非物理单位；枕形可试负 k1 |
 | `grain` | 0.055 | 胶片颗粒 |
-| `vignette` | 0.55 | 暗角（`viewportEdge=fisheye` 时） |
+| `vignette` | 0.55 | 全画面径向暗角（shader；与 `#frameBorder` 内缘 CSS 暗角是两层） |
 | `vignetteSquare` | 0 | 暗角（square 时关；桶形 k1/k2 也关） |
 | `frame.viewportEdge` | fisheye | **fisheye** = 椭圆内缘暗角+羽化压锯齿；**square** = 纯直角 clip |
 | `frame.viewportFeatherPx` | 14 | fisheye 叠层外扩 px（压 clip 锯齿） |
 | URL `?frameEdge=` | — | `fisheye` \| `square` 快速对比两版 |
+| `acts[].viewportShape` | — | `circle`：该幕圆形视口（默认一二幕） |
+| `frame.circleScale` | 0.94 | 圆直径相对布局矩形短边 |
+| 2→3 幕 | — | `inset(... round R)` 与 `transitionSec` 同步渐变（圆→方框+鱼眼缘） |
+| `fisheyeVigEllipseX/Y` | 1.58 / 1.42 | **视口内缘 CSS 暗角**椭圆（`#frameBorder`，H「视口缘」） |
+| `fisheyeVigInner` | 0.20 | 内缘透明区比例（越小暗角越贴边） |
+| `present.transition.interstitialDipAfter` | false | 闪回淡出后是否再黑场 |
 | `frame.fisheyeFadeOnWide` | true | 展开 16:9 时鱼眼消退（"梦醒了"），终幕语言 |
 
 ---

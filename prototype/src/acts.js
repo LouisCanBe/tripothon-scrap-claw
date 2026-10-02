@@ -3,6 +3,7 @@
 //
 // 每幕字段：
 //   label   幕标题卡          layout  画幅位 right/center/wide
+//   viewportShape  可选 circle（圆形 clip，一二幕试镜）
 //   control 输入权限           tuning  幕间爪力曲线（难度旋钮）
 //   quest   任务物品 id        hint    底部操作提示（null=隐藏）
 //   script  步骤序列：
@@ -14,7 +15,9 @@
 //     { wait: 事件名 }         等待事件：allViews / firstCollect / questComplete
 //     { synthesis }           四幕合成演出
 //     { glitch, image? }      终幕故障转场（可选概念撕裂图）
-//     { interstitial, image, dur? }  全屏概念图闪回
+//     { interstitial, image, dur?, fadeIn?, fadeOut?, dipBefore?, dipAfter? }
+//       实现 narrativeBg.showInterstitial；导演 #run 顺序执行 script
+//       闪回后旁白卡顿：多为淡出后再 _runDip（见 present.transition.interstitialDipAfter）
 //     { revealBeat, line, image?, dur? }
 //     { reveal }              露出实景（调 main 注入的 onReveal）
 //     { stinger }             终幕手写体收尾 + 八音盒彩蛋钩子
@@ -28,7 +31,7 @@ export const DEFAULT_HINT = '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/
 
 export const ACTS = [
   {
-    id: 1, label: '第一幕 · 引子', layout: 'right', backdrop: 'act1',
+    id: 1, label: '第一幕 · 引子', layout: 'right', backdrop: 'act1', viewportShape: 'circle',
     control: { move: false, drop: false, view: true },
     zoom: 0.95,   // 幕级变焦；near 模式再 ×0.7 → 有效 0.67，贴近玻璃柜的近景
     framing: 'near',   // 右布局必须 near（投影绑定画幅中心；far 不绑定会只露个边）
@@ -42,7 +45,7 @@ export const ACTS = [
     ],
   },
   {
-    id: 2, label: '第二幕 · 学会抓取', layout: 'center', backdrop: 'act2',
+    id: 2, label: '第二幕 · 学会抓取', layout: 'center', backdrop: 'act2', viewportShape: 'circle',
     control: { move: true, drop: true, view: true },
     framing: 'far',   // 中远景站远抓（首版构图）；V 键可切 near 凑近看
     tuning: { gripStrength: 1.0, baseSlipProb: 0 },   // 教学：首抓必成

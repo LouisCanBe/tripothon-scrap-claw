@@ -41,7 +41,7 @@ import { createSceneLights, applyRevealColdLighting, applyMemoryLighting } from 
 import { NarrativeBg } from './narrativeBg.js';
 import { applyNarrativeToConfig, preloadNarrativeImages } from './narrativeAssets.js';
 import { initPresent, applyPresentAct, getPresentActId } from './present.js';
-import { resolveViewportEdgeFromQuery, syncViewportEdgeToDom } from './frameEdge.js';
+import { resolveViewportEdgeFromQuery, syncViewportEdgeToDom, applyFisheyeEdgeToBorder } from './frameEdge.js';
 
 loadPoolDevOverrides();
 resolveViewportEdgeFromQuery();
@@ -217,7 +217,7 @@ const rig = new CameraRig(camera);
 document.documentElement.classList.add('game-booting');
 const mask = new FrameMask();
 initViewportChrome();
-mask.bootstrapLayout(ACTS[parseStartActIndex()]?.layout ?? 'right');
+mask.bootstrapFromAct(ACTS[parseStartActIndex()] ?? ACTS[0]);
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
 const input = new Input();
@@ -487,13 +487,18 @@ const gui = new GUI({ title: '爪机手感调参' });
       const act = ACTS.find((a) => a.id === getPresentActId()) ?? ACTS[0];
       applyPresentAct(act);
     });
-  vf.add(CONFIG.frame, 'viewportFeatherPx', 0, 14, 1)
+  vf.add(CONFIG.frame, 'viewportFeatherPx', 0, 20, 1)
     .name('羽化(px)')
     .onChange(() => mask.apply(false));
+  const refreshFisheyeVig = () => applyFisheyeEdgeToBorder();
+  vf.add(CONFIG.frame, 'fisheyeVigEllipseX', 1.0, 2.2, 0.02).name('内缘暗角椭圆X').onChange(refreshFisheyeVig);
+  vf.add(CONFIG.frame, 'fisheyeVigEllipseY', 1.0, 2.2, 0.02).name('内缘暗角椭圆Y').onChange(refreshFisheyeVig);
+  vf.add(CONFIG.frame, 'fisheyeVigInner', 0, 0.42, 0.01).name('内缘暗角透明区').onChange(refreshFisheyeVig);
+  vf.add(CONFIG.frame, 'fisheyeVigOpacity', 0, 1.2, 0.02).name('内缘暗角强度').onChange(refreshFisheyeVig);
 
-  const p = gui.addFolder('后处理');
-  p.add(CONFIG.post, 'k1', -0.2, 0.3, 0.005);
-  p.add(CONFIG.post, 'k2', 0, 0.2, 0.005);
+  const p = gui.addFolder('后处理（桶形畸变+颗粒+径向暗角）');
+  p.add(CONFIG.post, 'k1', -0.45, 0.65, 0.005).name('k1 桶形一阶');
+  p.add(CONFIG.post, 'k2', -0.15, 0.45, 0.005).name('k2 桶形二阶');
   p.add(CONFIG.post, 'grain', 0, 0.15, 0.005).listen();
   p.add(CONFIG.post, 'vignette', 0, 1, 0.05);
   p.add(CONFIG.post, 'bloom', 0, 1.2, 0.02);

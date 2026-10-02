@@ -4,7 +4,7 @@
 
 | DOM | 职责 |
 |-----|------|
-| `#stage` | `clip-path` = 矩形 **r** |
+| `#stage` | `clip-path` = 矩形 **r** 或 `circle()`（`acts.viewportShape`） |
 | `#narrativeViewportShade` | 盖住视口内概念底图；**位置只在 `FrameMask.apply()`**；显隐由 `narrativeBg.syncViewport` |
 | `#frameBorder` | `viewportEdge=fisheye` 时椭圆内缘暗角（可外扩 `viewportFeatherPx`）；`square` 时隐藏 |
 

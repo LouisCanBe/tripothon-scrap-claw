@@ -230,7 +230,9 @@ export class NarrativeBg {
     const tc = transitionCfg();
     const fadeIn = step.fadeIn ?? tc.interstitialFadeIn ?? 0.7;
     const fadeOut = step.fadeOut ?? tc.interstitialFadeOut ?? 0.85;
-    const useDip = step.dip !== false;
+    const dipOn = step.dip !== false;
+    const dipBefore = step.dipBefore ?? dipOn;
+    const dipAfter = step.dipAfter ?? tc.interstitialDipAfter ?? false;
 
     if (!this.inter || !this.interImg || !url) {
       await sleep(dur * 1000);
@@ -238,7 +240,7 @@ export class NarrativeBg {
     }
     const gen = ++this._interGen;
 
-    if (useDip) {
+    if (dipBefore) {
       await this._runDip(tc.interstitialDip ?? 0.55, fadeIn * 1000 * 0.55, fadeIn * 1000 * 0.35);
       if (gen !== this._interGen) return;
     }
@@ -270,7 +272,7 @@ export class NarrativeBg {
     await sleep(fadeOut * 1000);
     if (gen !== this._interGen) return;
 
-    if (useDip) {
+    if (dipAfter) {
       await this._runDip(tc.interstitialDip ?? 0.4, fadeOut * 500, fadeOut * 700);
     }
     if (gen !== this._interGen) return;

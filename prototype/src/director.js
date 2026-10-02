@@ -144,7 +144,7 @@ export class Director {
     this._viewsSeen = null;
     this.#syncQuestHud();
 
-    this.mask.setLayout(act.layout, i > 0);
+    this.mask.syncFromAct(act, i > 0);
     if (act.framing) this.mask.setViewMode(act.framing);
     this.rig?.setZoom(act.zoom ?? 1);
     this.claw.controlEnabled = !!(act.control.move || act.control.drop);

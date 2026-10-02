@@ -18,7 +18,7 @@
 // hardCut()  终幕降级：黑闪 + 无动画切 16:9
 // ============================================================
 import { CONFIG } from './config.js';
-import { getViewportEdge, viewportFeatherPx, syncViewportEdgeToDom } from './frameEdge.js';
+import { getViewportEdge, viewportFeatherPx, syncViewportEdgeToDom, applyFisheyeEdgeToBorder } from './frameEdge.js';
 
 export class FrameMask {
   constructor() {
@@ -27,12 +27,44 @@ export class FrameMask {
     this.flash = document.getElementById('flash');
     this.mode = 'center';
     this.viewMode = 'near';   // 取景：near=只取画幅区域（凑近）/ far=全窗取景画幅裁切（站远，首版构图）
+    this.viewportShape = 'rect';  // rect | circle（由 acts.viewportShape + 导演切幕）
     window.addEventListener('resize', () => this.apply(false));
+  }
+
+  /** @param {'rect'|'circle'|undefined} shape */
+  setViewportShape(shape) {
+    const s = shape === 'circle' ? 'circle' : 'rect';
+    if (this.viewportShape === s) return;
+    this.viewportShape = s;
+    this.apply(true);
+  }
+
+  /** 导演切幕：形状 + 布局一次写入，保证 2↔3 幕 clip-path 渐变只触发一次 */
+  syncFromAct(act, animate = true) {
+    const shape = act?.viewportShape === 'circle' ? 'circle' : 'rect';
+    const layout = act?.layout ?? 'center';
+    const changed = this.viewportShape !== shape || this.mode !== layout;
+    const layoutChanged = this.mode !== layout;
+    this.viewportShape = shape;
+    this.mode = layout;
+    if (changed) {
+      this.apply(animate);
+      if (layoutChanged) {
+        window.dispatchEvent(new CustomEvent('framechange', { detail: layout }));
+      }
+    }
   }
 
   /** 上货/首帧前按起始幕摆好视口，避免 center→right 带动画拖影 */
   bootstrapLayout(mode) {
     this.mode = mode;
+    this.apply(false);
+  }
+
+  /** 首屏：布局 + 圆形/矩形视口与当前幕一致 */
+  bootstrapFromAct(act) {
+    this.viewportShape = act?.viewportShape === 'circle' ? 'circle' : 'rect';
+    this.mode = act?.layout ?? 'center';
     this.apply(false);
   }
 
@@ -59,20 +91,65 @@ export class FrameMask {
   // 当前布局的目标矩形（px）—— 相机 setViewOffset / 鱼眼中心对齐用
   getRect() { return this.#rect(); }
 
+  /** 圆形 = 内接圆外接正方形的 inset+round；矩形 = round 0。便于 CSS 过渡 2↔3 幕 */
+  #clipState(r, w, h) {
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const top0 = r.y;
+    const right0 = w - r.x - r.w;
+    const bottom0 = h - r.y - r.h;
+    const left0 = r.x;
+    if (this.viewportShape === 'circle' && this.mode !== 'wide') {
+      const scale = CONFIG.frame.circleScale ?? 0.94;
+      const radius = (Math.min(r.w, r.h) / 2) * scale;
+      const d = radius * 2;
+      const left = cx - radius;
+      const top = cy - radius;
+      return {
+        top, right: w - left - d, bottom: h - top - d, left,
+        round: radius,
+        cx, cy, radius,
+        shape: 'circle',
+      };
+    }
+    return {
+      top: top0, right: right0, bottom: bottom0, left: left0,
+      round: 0,
+      cx, cy, radius: 0,
+      shape: 'rect',
+    };
+  }
+
+  #applyClipPath(r, w, h) {
+    const c = this.#clipState(r, w, h);
+    // 始终带 round，便于 2↔3 幕 inset 与圆角同步 CSS 过渡
+    this.stage.style.clipPath =
+      `inset(${c.top}px ${c.right}px ${c.bottom}px ${c.left}px round ${c.round}px)`;
+    return c;
+  }
+
   apply(animate = true) {
     syncViewportEdgeToDom();
     const w = innerWidth, h = innerHeight, r = this.#rect();
+    const clip = this.#applyClipPath(r, w, h);
+    const circular = clip.round > 0.5;
+    document.documentElement.classList.toggle('viewport-shape-circle', circular);
     const shade = document.getElementById('narrativeViewportShade');
     const chrome = document.getElementById('viewportChrome');
     for (const el of [this.stage, this.border, shade, chrome].filter(Boolean)) {
       el.classList.toggle('no-anim', !animate);
     }
-    this.stage.style.clipPath = `inset(${r.y}px ${w - r.x - r.w}px ${h - r.y - r.h}px ${r.x}px)`;
     const pad = CONFIG.frame.viewportCoverPad ?? 0;
-    const fx = r.x - pad;
-    const fy = r.y - pad;
-    const fw = r.w + pad * 2;
-    const fh = r.h + pad * 2;
+    let fx = r.x - pad;
+    let fy = r.y - pad;
+    let fw = r.w + pad * 2;
+    let fh = r.h + pad * 2;
+    if (circular) {
+      const d = clip.radius * 2;
+      fx = clip.cx - clip.radius - pad;
+      fy = clip.cy - clip.radius - pad;
+      fw = fh = d + pad * 2;
+    }
     if (this.border) {
       const f = CONFIG.frame;
       const edge = getViewportEdge();
@@ -83,17 +160,29 @@ export class FrameMask {
       this.border.classList.toggle('edge-square', edge === 'square');
       this.border.classList.toggle('edge-vignette', false);
       this.border.classList.toggle('photo-border', legacyBorder);
+      this.border.classList.toggle('edge-circle', circular);
       const feather = viewportFeatherPx();
       if (show) {
-        const bx = edge === 'fisheye' ? r.x - feather : r.x;
-        const by = edge === 'fisheye' ? r.y - feather : r.y;
-        const bw = edge === 'fisheye' ? r.w + feather * 2 : r.w;
-        const bh = edge === 'fisheye' ? r.h + feather * 2 : r.h;
+        let bx; let by; let bw; let bh;
+        if (circular) {
+          const { cx, cy, radius } = clip;
+          const padF = edge === 'fisheye' ? feather : 0;
+          const d = (radius + padF) * 2;
+          bx = cx - radius - padF;
+          by = cy - radius - padF;
+          bw = bh = d;
+        } else {
+          bx = edge === 'fisheye' ? r.x - feather : r.x;
+          by = edge === 'fisheye' ? r.y - feather : r.y;
+          bw = edge === 'fisheye' ? r.w + feather * 2 : r.w;
+          bh = edge === 'fisheye' ? r.h + feather * 2 : r.h;
+        }
         Object.assign(this.border.style, {
           left: `${bx}px`,
           top: `${by}px`,
           width: `${bw}px`,
           height: `${bh}px`,
+          borderRadius: circular ? '50%' : '0',
           '--edge-feather': `${feather}px`,
         });
         if (legacyBorder) {
@@ -112,6 +201,7 @@ export class FrameMask {
     if (shade) {
       Object.assign(shade.style, {
         left: fx + 'px', top: fy + 'px', width: fw + 'px', height: fh + 'px',
+        borderRadius: circular ? '50%' : '0',
       });
     }
     if (!animate) {
@@ -120,8 +210,14 @@ export class FrameMask {
         el.classList.remove('no-anim');
       }
     }
+    applyFisheyeEdgeToBorder();
+
     window.dispatchEvent(new CustomEvent('framemask:apply', {
-      detail: { x: r.x, y: r.y, w: r.w, h: r.h, mode: this.mode },
+      detail: {
+        x: r.x, y: r.y, w: r.w, h: r.h, mode: this.mode,
+        shape: clip.shape,
+        cx: clip.cx, cy: clip.cy, radius: clip.radius,
+      },
     }));
   }
 

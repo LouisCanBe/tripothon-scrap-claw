@@ -72,6 +72,7 @@ export const CONFIG = {
       interstitialFadeIn: 0.72,
       interstitialFadeOut: 0.9,
       interstitialDip: 0.52,
+      interstitialDipAfter: false, // 闪回图淡出后不再黑场顿挫（旁白紧接）
     },
     post: { warmth: 0.06, chroma: 0.32, saturation: 1.02 },
     actPost: {
@@ -179,8 +180,8 @@ export const CONFIG = {
   },
 
   post: {
-    k1: 0.10,                // 鱼眼一阶系数（边缘约 10% 畸变；若呈枕形把符号取反）
-    k2: 0.04,                // 鱼眼二阶系数
+    k1: 0.12,                // 鱼眼一阶（fisheye 视口缘；square 时由 frameEdge 关）
+    k2: 0.048,               // 鱼眼二阶系数
     grain: 0.02,            // 胶片颗粒强度
     vignette: 0.55,          // 暗角强度（fisheye 视口缘）
     vignetteSquare: 0,       // square：关径向暗角（与桶形畸变一起关）
@@ -242,6 +243,12 @@ export const CONFIG = {
     // 视口内缘：fisheye=椭圆暗角（偏鱼眼桶形）| square=纯直角 clip，无叠层暗角
     viewportEdge: 'fisheye', // URL ?frameEdge=fisheye|square 可覆盖
     viewportFeatherPx: 14,   // fisheye：#frameBorder 外扩 px，盖住 clip 锯齿（14 比 5 更顺）
+    circleScale: 0.94,       // 圆形视口：内接于布局矩形的直径比例（acts.viewportShape=circle）
+    // 视口内缘 CSS 暗角（#frameBorder，不是 post.k1 桶形畸变；H「视口缘」）
+    fisheyeVigEllipseX: 1.58,  // 椭圆水平 158%
+    fisheyeVigEllipseY: 1.42,  // 椭圆垂直 142%
+    fisheyeVigInner: 0.20,     // 透明区半径比例 0~0.5
+    fisheyeVigOpacity: 1.0,    // 叠层整体不透明度
     edgeVignette: true,      // 已废弃：false 等同 viewportEdge:'square'
     photoBorder: false,      // true = 旧照片白框（与 fisheye 叠层互斥）
     borderWidth: 6,
