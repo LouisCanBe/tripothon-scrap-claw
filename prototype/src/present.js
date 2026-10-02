@@ -3,6 +3,7 @@
 // —— 幕情绪、margin 暗角、颗粒、底图 Ken Burns、视口内渐变遮罩
 // ============================================================
 import { CONFIG } from './config.js';
+import { getViewportEdge, syncViewportEdgeToDom } from './frameEdge.js';
 
 let _actId = 1;
 
@@ -12,13 +13,9 @@ export function getPresentActId() {
 
 export function initPresent() {
   const g = document.getElementById('presentGrain');
-  const v = document.getElementById('presentMarginVig');
   const p = CONFIG.present ?? {};
   if (g) g.style.opacity = String(p.grainOpacity ?? 0.05);
-  const marginVig = (p.backdropInViewport && p.backdropAsSceneBackground)
-    ? 0
-    : (p.marginVignette ?? 0.5);
-  if (v) v.style.opacity = String(marginVig);
+  syncViewportEdgeToDom();
 }
 
 /**
@@ -41,7 +38,10 @@ export function applyPresentAct(act, layer = null) {
   const shade = document.getElementById('narrativeViewportShade');
   if (shade) {
     const key = mood.shade ?? 'default';
-    const grad = p.shadeGradients?.[key] ?? p.shadeGradients?.default;
+    const square = getViewportEdge() === 'square';
+    const grad = square
+      ? (p.shadeGradientsSquare?.[key] ?? p.shadeGradientsSquare?.default ?? 'transparent')
+      : (p.shadeGradients?.[key] ?? p.shadeGradients?.default);
     if (grad) shade.style.background = grad;
   }
   const root = document.getElementById('narrativeBg');

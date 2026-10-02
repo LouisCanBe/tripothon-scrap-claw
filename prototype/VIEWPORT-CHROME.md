@@ -6,9 +6,9 @@
 |-----|------|
 | `#stage` | `clip-path` = 矩形 **r** |
 | `#narrativeViewportShade` | 盖住视口内概念底图；**位置只在 `FrameMask.apply()`**；显隐由 `narrativeBg.syncViewport` |
-| `#frameBorder` | 白描边；与 shade **同一组** `fx,fy,fw,fh`（r 外扩 `viewportCoverPad`） |
+| `#frameBorder` | `viewportEdge=fisheye` 时椭圆内缘暗角（可外扩 `viewportFeatherPx`）；`square` 时隐藏 |
 
-调参：`config.js` → `frame.borderWidth`、`borderColor`、`viewportCoverPad`。
+调参：`config.js` → `frame.viewportEdge`（`fisheye` \| `square`）、`viewportFeatherPx`；URL `?frameEdge=`；H 面板「视口缘」。旧白描边：`borderWidth`、`borderColor`。
 
 首屏：`main.js` 在 loading 结束前 `mask.bootstrapLayout(起始幕 layout)`，避免 `center`→`right` 动画拖影。
 

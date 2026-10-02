@@ -118,7 +118,11 @@ p(滑落)   = baseSlipProb × (1 − gripStrength × item.gripFactor)   ← 抓�
 |---|---|---|
 | `k1 / k2` | 0.10 / 0.04 | 鱼眼系数（边缘≈10–15%）；**若看起来是枕形就取负** |
 | `grain` | 0.055 | 胶片颗粒 |
-| `vignette` | 0.55 | 暗角 |
+| `vignette` | 0.55 | 暗角（`viewportEdge=fisheye` 时） |
+| `vignetteSquare` | 0 | 暗角（square 时关；桶形 k1/k2 也关） |
+| `frame.viewportEdge` | fisheye | **fisheye** = 椭圆内缘暗角+羽化压锯齿；**square** = 纯直角 clip |
+| `frame.viewportFeatherPx` | 14 | fisheye 叠层外扩 px（压 clip 锯齿） |
+| URL `?frameEdge=` | — | `fisheye` \| `square` 快速对比两版 |
 | `frame.fisheyeFadeOnWide` | true | 展开 16:9 时鱼眼消退（"梦醒了"），终幕语言 |
 
 ---

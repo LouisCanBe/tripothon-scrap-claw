@@ -40,9 +40,12 @@ import { startCollectDisplayPairPanel } from './collectDisplayPairPanel.js';
 import { createSceneLights, applyRevealColdLighting, applyMemoryLighting } from './sceneLighting.js';
 import { NarrativeBg } from './narrativeBg.js';
 import { applyNarrativeToConfig, preloadNarrativeImages } from './narrativeAssets.js';
-import { initPresent } from './present.js';
+import { initPresent, applyPresentAct, getPresentActId } from './present.js';
+import { resolveViewportEdgeFromQuery, syncViewportEdgeToDom } from './frameEdge.js';
 
 loadPoolDevOverrides();
+resolveViewportEdgeFromQuery();
+syncViewportEdgeToDom();
 applyNarrativeToConfig();
 preloadNarrativeImages();
 initPresent();
@@ -475,6 +478,18 @@ const gui = new GUI({ title: '爪机手感调参' });
   c.add(CONFIG.camera, 'fov', 60, 100, 1);
   c.add(CONFIG.camera, 'tau', 0.1, 1, 0.01).name('切换tau');
   c.add(CONFIG.camera, 'breathDeg', 0, 0.6, 0.01);
+
+  const vf = gui.addFolder('视口缘');
+  vf.add(CONFIG.frame, 'viewportEdge', { 鱼眼暗角: 'fisheye', 纯方框: 'square' })
+    .onChange(() => {
+      syncViewportEdgeToDom();
+      mask.apply(false);
+      const act = ACTS.find((a) => a.id === getPresentActId()) ?? ACTS[0];
+      applyPresentAct(act);
+    });
+  vf.add(CONFIG.frame, 'viewportFeatherPx', 0, 14, 1)
+    .name('羽化(px)')
+    .onChange(() => mask.apply(false));
 
   const p = gui.addFolder('后处理');
   p.add(CONFIG.post, 'k1', -0.2, 0.3, 0.005);

@@ -58,6 +58,14 @@ export const CONFIG = {
       cold:
         'radial-gradient(ellipse 94% 90% at 50% 50%, transparent 36%, rgba(0,0,0,.52) 100%)',
     },
+    // viewportEdge=square 且概念图在视口内时：直角线性暗角，不用椭圆
+    shadeGradientsSquare: {
+      default: 'transparent',
+      memory: 'transparent',
+      harsh: 'transparent',
+      warm: 'transparent',
+      cold: 'transparent',
+    },
     transition: {
       backdropMs: 1100,
       backdropDip: 0.48,
@@ -174,7 +182,8 @@ export const CONFIG = {
     k1: 0.10,                // 鱼眼一阶系数（边缘约 10% 畸变；若呈枕形把符号取反）
     k2: 0.04,                // 鱼眼二阶系数
     grain: 0.02,            // 胶片颗粒强度
-    vignette: 0.55,          // 暗角强度
+    vignette: 0.55,          // 暗角强度（fisheye 视口缘）
+    vignetteSquare: 0,       // square：关径向暗角（与桶形畸变一起关）
     bloom: 0.32,             // 泛光强度（0=关；只让灯带/高光晕开，画面不糊）
     bloomThreshold: 0.8,     // 泛光亮度阈值：只有比它亮的才晕（0.72 时金属爪会晕开）
   },
@@ -230,8 +239,11 @@ export const CONFIG = {
     transitionSec: 1.15,     // 画幅展开时长（需与 index.html 的 CSS transition 一致）
     fisheyeFadeOnWide: true, // 展开 16:9 时鱼眼同步消退（"梦醒了"的镜头语言）
     nearZoom: 0.7,           // near 取景的变焦倍率（有效变焦 = 幕zoom × 此值；far=1）
-    edgeVignette: true,      // 视口内缘黑色渐变（替代白描边）
-    photoBorder: false,      // true = 旧照片白框（与 edgeVignette 互斥）
+    // 视口内缘：fisheye=椭圆暗角（偏鱼眼桶形）| square=纯直角 clip，无叠层暗角
+    viewportEdge: 'fisheye', // URL ?frameEdge=fisheye|square 可覆盖
+    viewportFeatherPx: 14,   // fisheye：#frameBorder 外扩 px，盖住 clip 锯齿（14 比 5 更顺）
+    edgeVignette: true,      // 已废弃：false 等同 viewportEdge:'square'
+    photoBorder: false,      // true = 旧照片白框（与 fisheye 叠层互斥）
     borderWidth: 6,
     borderColor: 'rgba(236,232,220,0.94)',
     centerWidthFrac: 0.56,   // 居中幕视口宽（高=满屏）

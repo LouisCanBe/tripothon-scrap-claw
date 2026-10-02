@@ -18,6 +18,7 @@
 // hardCut()  终幕降级：黑闪 + 无动画切 16:9
 // ============================================================
 import { CONFIG } from './config.js';
+import { getViewportEdge, viewportFeatherPx, syncViewportEdgeToDom } from './frameEdge.js';
 
 export class FrameMask {
   constructor() {
@@ -59,6 +60,7 @@ export class FrameMask {
   getRect() { return this.#rect(); }
 
   apply(animate = true) {
+    syncViewportEdgeToDom();
     const w = innerWidth, h = innerHeight, r = this.#rect();
     const shade = document.getElementById('narrativeViewportShade');
     const chrome = document.getElementById('viewportChrome');
@@ -73,18 +75,26 @@ export class FrameMask {
     const fh = r.h + pad * 2;
     if (this.border) {
       const f = CONFIG.frame;
-      const vignette = f.edgeVignette !== false;
-      const legacyBorder = f.photoBorder === true && !vignette;
-      const show = vignette || legacyBorder;
+      const edge = getViewportEdge();
+      const legacyBorder = f.photoBorder === true && edge !== 'fisheye';
+      const show = edge === 'fisheye' || legacyBorder;
       this.border.style.display = show ? 'block' : 'none';
-      this.border.classList.toggle('edge-vignette', vignette);
+      this.border.classList.toggle('edge-fisheye', edge === 'fisheye');
+      this.border.classList.toggle('edge-square', edge === 'square');
+      this.border.classList.toggle('edge-vignette', false);
       this.border.classList.toggle('photo-border', legacyBorder);
+      const feather = viewportFeatherPx();
       if (show) {
+        const bx = edge === 'fisheye' ? r.x - feather : r.x;
+        const by = edge === 'fisheye' ? r.y - feather : r.y;
+        const bw = edge === 'fisheye' ? r.w + feather * 2 : r.w;
+        const bh = edge === 'fisheye' ? r.h + feather * 2 : r.h;
         Object.assign(this.border.style, {
-          left: `${r.x}px`,
-          top: `${r.y}px`,
-          width: `${r.w}px`,
-          height: `${r.h}px`,
+          left: `${bx}px`,
+          top: `${by}px`,
+          width: `${bw}px`,
+          height: `${bh}px`,
+          '--edge-feather': `${feather}px`,
         });
         if (legacyBorder) {
           const bw = f.borderWidth ?? 4;

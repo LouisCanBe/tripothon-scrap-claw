@@ -11,6 +11,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CONFIG } from './config.js';
 import { presentPostCoeffs } from './present.js';
+import { postVignetteForViewportEdge, viewportEdgeLensScale } from './frameEdge.js';
 
 const GradeShader = {
   uniforms: {
@@ -111,15 +112,15 @@ export class Post {
     this.bloom.strength = p.bloom * this._bloomScale;   // H 面板实时可调（移动端锁 0）
     this.bloom.threshold = p.bloomThreshold;
     const u = this.pass.uniforms;
-    u.uK1.value = p.k1 * this.fisheyeFade;
-    u.uK2.value = p.k2 * this.fisheyeFade;
+    const lens = viewportEdgeLensScale() * this.fisheyeFade;
+    u.uK1.value = p.k1 * lens;
+    u.uK2.value = p.k2 * lens;
     u.uGrain.value = p.grain;
-    u.uVig.value = p.vignette;
+    u.uVig.value = postVignetteForViewportEdge();
     u.uTime.value = t;
     const pc = presentPostCoeffs();
-    const f = this.fisheyeFade;
-    u.uWarmth.value = pc.warmth * f;
-    u.uChroma.value = pc.chroma * f;
+    u.uWarmth.value = pc.warmth * this.fisheyeFade;
+    u.uChroma.value = pc.chroma * lens;
     u.uSat.value = pc.sat;
     this.composer.render();
   }
