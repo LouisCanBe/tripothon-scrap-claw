@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { GLB_MANIFEST_DECOR } from './assets.manifest-decor.js';
-import { enableShadows } from './prizePool.js';
+import { capTextures, enableShadows } from './prizePool.js';
 import {
   buildPrizeSupporters,
   computeSupportFootY,
@@ -18,13 +18,24 @@ import {
 
 const DECOR_KINDS = ['ball', 'roll', 'disk', 'ribbon'];
 
-/** 灰盒 kind → GLB id（好 / 坏 各一，随机其一） */
+/** 灰盒 kind → 默认可选 GLB（manifest 里同前缀的 id 也会自动并入） */
 const KIND_GLB = {
-  ball: ['ball_good', 'ball_junk'],
-  roll: ['roll_good', 'roll_junk'],
-  disk: ['disk_good', 'disk_junk'],
-  ribbon: ['ribbon_good', 'ribbon_junk'],
+  ball: ['ball_good', 'ball_junk', 'ball_yarn', 'ball_pingpong', 'ball_lint'],
+  roll: ['roll_good', 'roll_junk', 'roll_foam', 'roll_tapecore', 'roll_bubble'],
+  disk: ['disk_good', 'disk_junk', 'disk_washer', 'disk_token', 'disk_cork'],
+  ribbon: ['ribbon_good', 'ribbon_junk', 'ribbon_lace', 'ribbon_string', 'ribbon_tape'],
 };
+
+function decorKindFromId(id) {
+  return id.split('_')[0];
+}
+
+function glbPoolForKind(kind) {
+  const manifest = GLB_MANIFEST_DECOR ?? {};
+  const listed = KIND_GLB[kind] ?? [];
+  const discovered = Object.keys(manifest).filter((id) => decorKindFromId(id) === kind);
+  return [...new Set([...listed, ...discovered])];
+}
 
 const PLUSH_COLORS = [
   0x8a8478, 0x7a756c, 0x6e7568, 0x8f857a, 0x736a62, 0x7d8488,
@@ -44,19 +55,29 @@ export function pickRandomDecorColor() {
 }
 
 function applyDecorTint(root, hex, junk = false) {
+  const cfg = CONFIG.pool?.decor ?? {};
+  const keepMaps = cfg.decorKeepTripoMaps !== false;
+  const strength = cfg.decorTintStrength ?? 0.36;
   const tint = new THREE.Color(hex);
+  const mul = new THREE.Color(0xffffff).lerp(tint, strength);
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     const src = Array.isArray(o.material) ? o.material : [o.material];
     const next = src.map((m) => {
       const cm = m.clone();
-      cm.map = null;
-      cm.emissiveMap = null;
-      cm.normalMap = null;
-      cm.aoMap = null;
-      cm.color.copy(tint);
-      cm.roughness = THREE.MathUtils.clamp(cm.roughness ?? 0.86, 0.72, 0.94);
-      cm.metalness = junk ? 0.14 : 0.05;
+      const hasMap = keepMaps && !!cm.map;
+      if (!hasMap) {
+        cm.map = null;
+        cm.emissiveMap = null;
+        cm.normalMap = null;
+        cm.aoMap = null;
+        cm.color.copy(tint);
+      } else {
+        cm.emissiveMap = null;
+        cm.color.copy(mul);
+      }
+      cm.roughness = THREE.MathUtils.clamp(cm.roughness ?? 0.86, 0.68, 0.94);
+      cm.metalness = junk ? 0.12 : (hasMap ? 0.04 : 0.05);
       return cm;
     });
     o.material = next.length === 1 ? next[0] : next;
@@ -418,7 +439,7 @@ export function makeDecorProto(id, scale = 1) {
     if (junk) mesh.rotation.z = 0.25;
   }
   mesh.scale.multiplyScalar(scale);
-  return finalizeDecorMesh(mesh, id.replace(/_(good|junk)$/, ''));
+  return finalizeDecorMesh(mesh, decorKindFromId(id));
 }
 
 function finalizeDecorMesh(mesh, kind) {
@@ -517,7 +538,7 @@ async function loadDecorCatalog() {
   const loader = new GLTFLoader();
   const loadOne = async (id) => {
     const url = manifest[id]?.replace?.(/^\.\//, '');
-    const kind = id.replace(/_(good|junk)$/, '');
+    const kind = decorKindFromId(id);
     if (!url) {
       catalog.set(id, makeDecorProtoGroup(id, kind));
       return;
@@ -525,6 +546,7 @@ async function loadDecorCatalog() {
     try {
       const gltf = await loader.loadAsync(url);
       const root = normalizeDecorRoot(gltf.scene, decorGlbNormalizeTarget(kind), kind);
+      capTextures(root, CONFIG.pool?.decor?.textureMaxSize ?? 512);
       enableShadows(root);
       root.traverse((o) => { if (o.isMesh) o.userData.poolDecor = true; });
       root.userData.decorGlbId = id;
@@ -553,9 +575,9 @@ function makeDecorProtoGroup(id, kind) {
 }
 
 function pickGlbIdForKind(kind) {
-  const pair = KIND_GLB[kind];
-  if (!pair) return null;
-  return pair[Math.random() < 0.5 ? 0 : 1];
+  const pool = glbPoolForKind(kind);
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function cloneDecorTemplate(template, scaleMul, tintHex, junk) {

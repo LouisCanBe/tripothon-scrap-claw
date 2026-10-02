@@ -294,6 +294,9 @@ export const CONFIG = {
       glbTargetSize: 0.095,    // 归一化基准（米）
       glbTargetSizeByKind: { disk: 0.62, ribbon: 0.9 }, // 瓶盖更小
       decorDiskScaleCap: 1.08, // 换装时瓶盖相对灰盒的缩放上限
+      decorKeepTripoMaps: true,  // Tripo 贴图保留，decorTintStrength 做色相微调
+      decorTintStrength: 0.34,
+      textureMaxSize: 512,       // 装饰贴图上限（件多、单件小）
       count: 54,                 // 主撒点目标（摆不满会继续用 fill 补）
       rimCount: 26,
       fillCount: 22,             // 小号补缝（scale 更小、间隙略紧）

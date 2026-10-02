@@ -1,38 +1,74 @@
 {
-  "_note": "与 prizePoolDecor 四类灰盒一一对应（好/坏）。生成：node tools/generate.mjs --set decor-low",
+  "_note": "20 件装饰变体（四类灰盒），带轻量贴图。生成：node tools/generate.mjs --set decor-low --force --parallel 2",
   "_defaults": {
     "model": "P2-20260801",
-    "face_limit": 1600,
-    "texture": false,
-    "pbr": false,
+    "face_limit": 1800,
+    "texture": true,
+    "pbr": true,
     "smart_low_poly": true
   },
-  "_style": "ultra low poly gray clay mockup, tiny claw-machine pit clutter, single object only, bottom flat on ground, no scene no pedestal, game-ready",
+  "_style": "stylized claw machine pit clutter, single object only, bottom flat on ground, simple readable color texture, soft lighting, no scene no pedestal, game-ready low poly",
 
   "items": {
     "ball_good": {
-      "prompt": "small round plush pom pom ball toy, fluffy sphere, intact clean"
+      "prompt": "small fluffy plush pom pom ball, clean pastel fabric, intact toy"
     },
     "ball_junk": {
-      "prompt": "deflated crushed plush lump, squashed dirty fabric ball scrap"
+      "prompt": "deflated dirty fabric ball scrap, squashed worn plush lump"
+    },
+    "ball_yarn": {
+      "prompt": "small yarn wool ball craft supply, knitted texture, intact"
+    },
+    "ball_pingpong": {
+      "prompt": "small matte ping pong ball, white plastic sphere, clean"
+    },
+    "ball_lint": {
+      "prompt": "dust lint clump ball, grey fuzzy scrap, worn junk"
     },
     "roll_good": {
-      "prompt": "clean foam cylinder roll, short plush log shape, intact"
+      "prompt": "short clean foam cylinder roll, soft plush log, intact"
     },
     "roll_junk": {
-      "prompt": "crushed bent cardboard tube scrap, collapsed cylinder junk"
+      "prompt": "crushed bent cardboard tube scrap, collapsed dirty cylinder"
+    },
+    "roll_foam": {
+      "prompt": "mini pool noodle foam roll segment, bright soft cylinder"
+    },
+    "roll_tapecore": {
+      "prompt": "empty tape roll cardboard core cylinder, brown craft tube"
+    },
+    "roll_bubble": {
+      "prompt": "crumpled bubble wrap roll scrap, transparent plastic junk cylinder"
     },
     "disk_good": {
-      "prompt": "flat round plastic bottle cap disc, clean intact, low height"
+      "prompt": "plastic soda bottle cap lying flat, clean red cap, low height"
     },
     "disk_junk": {
-      "prompt": "bent rusty metal cap scrap, dented flat disc junk"
+      "prompt": "bent rusty metal bottle cap scrap, dented junk disc"
+    },
+    "disk_washer": {
+      "prompt": "flat metal washer ring disc, steel hardware, small"
+    },
+    "disk_token": {
+      "prompt": "arcade plastic token coin disc, embossed circle, clean"
+    },
+    "disk_cork": {
+      "prompt": "wine cork slice disc, brown cork texture, flat round"
     },
     "ribbon_good": {
-      "prompt": "clean folded fabric ribbon strip, soft cloth sash, intact"
+      "prompt": "clean satin gift ribbon strip, folded cloth sash, intact"
     },
     "ribbon_junk": {
-      "prompt": "torn dirty rag strip, frayed fabric scrap piece"
+      "prompt": "torn dirty rag strip, frayed brown fabric scrap"
+    },
+    "ribbon_lace": {
+      "prompt": "delicate white lace ribbon strip, soft fabric band"
+    },
+    "ribbon_string": {
+      "prompt": "coiled twine string bundle strip, hemp rope scrap"
+    },
+    "ribbon_tape": {
+      "prompt": "crumpled masking tape strip piece, beige adhesive fabric scrap"
     }
   }
 }
