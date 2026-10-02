@@ -67,13 +67,59 @@ const ONLY = onlyIdx >= 0 ? args[onlyIdx + 1].split(',').map(s => s.trim()).filt
 const CLAW_TEST = args[0] === 'claw';
 const setIdx = args.indexOf('--set');
 const PRIZE_SET = setIdx >= 0 ? args[setIdx + 1] : 'default';
-const OUT_PRIZES = PRIZE_SET === 'good'
-  ? path.join(ROOT, 'prototype', 'assets', 'prizes-good')
-  : path.join(ROOT, 'prototype', 'assets', 'prizes');
-const MANIFEST = PRIZE_SET === 'good'
-  ? path.join(ROOT, 'prototype', 'src', 'assets.manifest-good.js')
-  : path.join(ROOT, 'prototype', 'src', 'assets.manifest.js');
-const PROMPTS_FILE = PRIZE_SET === 'good' ? 'prompts-good.json' : 'prompts.json';
+const parIdx = args.indexOf('--parallel');
+const PARALLEL = parIdx >= 0 ? Math.max(1, Math.min(6, +(args[parIdx + 1] ?? 3) || 3)) : 1;
+
+const PRIZE_SET_CFG = {
+  default: {
+    relDir: 'prizes',
+    manifest: 'assets.manifest.js',
+    exportName: 'GLB_MANIFEST',
+    prompts: 'prompts.json',
+    header: `// 【自动生成，勿手改】由 tools/generate.mjs 维护
+// 键 = 奖品 id（对应 prizePool.js 数据表），值 = GLB 路径
+// 无条目的物品保持几何体显示 —— 灰盒与 Tripo 资产可混用`,
+  },
+  good: {
+    relDir: 'prizes-good',
+    manifest: 'assets.manifest-good.js',
+    exportName: 'GLB_MANIFEST_GOOD',
+    prompts: 'prompts-good.json',
+    header: '// 【自动生成，勿手改】由 tools/generate.mjs --set good 维护',
+  },
+  'good-p2': {
+    relDir: 'prizes-good-p2',
+    manifest: 'assets.manifest-good-p2.js',
+    exportName: 'GLB_MANIFEST_GOOD_P2',
+    prompts: 'prompts-good-p2.json',
+    header: '// 【自动生成，勿手改】由 tools/generate.mjs --set good-p2 维护',
+  },
+  machine: {
+    relDir: 'machine',
+    manifest: 'assets.manifest-machine.js',
+    exportName: 'GLB_MANIFEST_MACHINE',
+    prompts: 'prompts-machine.json',
+    header: '// 【自动生成，勿手改】由 tools/generate.mjs --set machine 维护\n// 键 = 分件 id，由 machineShellTripo.js 按槽位拼装',
+  },
+  'machine-img': {
+    relDir: 'machine',
+    manifest: 'assets.manifest-machine.js',
+    exportName: 'GLB_MANIFEST_MACHINE',
+    prompts: 'prompts-machine-img.json',
+    header: '// 【自动生成，勿手改】由 tools/generate.mjs --set machine-img 维护（图生 P2）',
+  },
+  'machine-mv': {
+    relDir: 'machine',
+    manifest: 'assets.manifest-machine.js',
+    exportName: 'GLB_MANIFEST_MACHINE',
+    prompts: 'prompts-machine-mv.json',
+    header: '// 【自动生成，勿手改】由 tools/generate.mjs --set machine-mv 维护（四视图 P2）',
+  },
+};
+const SET_META = PRIZE_SET_CFG[PRIZE_SET] ?? PRIZE_SET_CFG.default;
+const OUT_PRIZES = path.join(ROOT, 'prototype', 'assets', SET_META.relDir);
+const MANIFEST = path.join(ROOT, 'prototype', 'src', SET_META.manifest);
+const PROMPTS_FILE = SET_META.prompts;
 
 const loadKey = () => process.env.TRIPO_API_KEY?.trim() ?? null;
 
@@ -98,14 +144,17 @@ async function submit(key, endpoint, body) {
   return json.data.task_id;
 }
 
-async function poll(key, taskId, label) {
+async function poll(key, taskId, label, quiet = false) {
   const t0 = Date.now();
   while (Date.now() - t0 < TIMEOUT_MS) {
     await new Promise(r => setTimeout(r, POLL_MS));
     const res = await req(`${API}/tasks/${taskId}`, { headers: headers(key) });
     const d = (await res.json()).data ?? {};
-    process.stdout.write(`\r  [${label}] ${d.status ?? '?'} ${d.progress ?? 0}%   `);
-    if (d.status === 'success') { process.stdout.write('\n'); return d.output.model_url; }
+    if (!quiet) process.stdout.write(`\r  [${label}] ${d.status ?? '?'} ${d.progress ?? 0}%   `);
+    if (d.status === 'success') {
+      if (!quiet) process.stdout.write('\n');
+      return d.output.model_url;
+    }
     if (d.status === 'failed' || d.status === 'cancelled')
       throw new Error(`任务 ${d.status}：${JSON.stringify(d.error ?? d)}`);
   }
@@ -123,15 +172,9 @@ async function download(url, dest) {
 // manifest 永远反映 OUT_PRIZES 目录实况：有文件才登记
 function rebuildManifest() {
   if (!fs.existsSync(OUT_PRIZES)) return;
-  const relDir = PRIZE_SET === 'good' ? 'prizes-good' : 'prizes';
-  const exportName = PRIZE_SET === 'good' ? 'GLB_MANIFEST_GOOD' : 'GLB_MANIFEST';
+  const { relDir, exportName, header } = SET_META;
   const ids = fs.readdirSync(OUT_PRIZES).filter(f => f.endsWith('.glb')).map(f => f.slice(0, -4)).sort();
   const lines = ids.map(id => `  ${JSON.stringify(id)}: './assets/${relDir}/${id}.glb',`).join('\n');
-  const header = PRIZE_SET === 'good'
-    ? `// 【自动生成，勿手改】由 tools/generate.mjs --set good 维护`
-    : `// 【自动生成，勿手改】由 tools/generate.mjs 维护
-// 键 = 奖品 id（对应 prizePool.js 数据表），值 = GLB 路径
-// 无条目的物品保持几何体显示 —— 灰盒与 Tripo 资产可混用`;
   fs.writeFileSync(MANIFEST, `${header}
 export const ${exportName} = {
 ${lines}
@@ -140,21 +183,61 @@ ${lines}
   console.log(`manifest 已更新（${ids.length} 件, set=${PRIZE_SET})→ ${path.relative(ROOT, MANIFEST)}`);
 }
 
+const MV_VIEWS = ['front', 'left', 'back', 'right'];
+
 // def.prompt 经 _style 统一风格后缀；def 里带 "image" 字段则走 image-to-model
 function buildRequest(cfg, def) {
-  const { image, ...overrides } = def;
+  const { image, multiview, prompt, ...overrides } = def;
   const base = { ...cfg._defaults, ...overrides };
-  delete base.prompt;
+  if (multiview) {
+    const inputs = MV_VIEWS.filter((v) => multiview[v]).map((v) => ({ [v]: multiview[v] }));
+    if (!inputs.length) throw new Error('multiview 至少一张视图');
+    return { endpoint: 'multiview-to-model', body: { inputs, ...base } };
+  }
   if (image) return { endpoint: 'image-to-model', body: { input: image, ...base } };
-  return { endpoint: 'text-to-model', body: { prompt: `${def.prompt}, ${cfg._style}`, ...base } };
+  return { endpoint: 'text-to-model', body: { prompt: `${prompt}, ${cfg._style}`, ...base } };
 }
 
-async function runOne(key, endpoint, body, label, dest) {
+async function resolveImageInput(key, input) {
+  if (!input || typeof input !== 'string') return input;
+  if (/^https?:\/\//i.test(input)) return input;
+  const rel = input.replace(/^\.\//, '');
+  const p = path.join(ROOT, rel);
+  if (!fs.existsSync(p)) throw new Error(`图片不存在: ${rel}`);
+  try {
+    const { TripoClient } = await import('./tripo.mjs');
+    const client = new TripoClient();
+    const token = await client.uploadFile(p);
+    console.log(`  ↑ 已上传 ${path.basename(p)}`);
+    return token;
+  } catch (e) {
+    const msg = e.message ?? String(e);
+    throw new Error(`上传参考图失败（${path.basename(p)}）：${msg}\n    排查：.env.local 的 TRIPO_API_KEY / TRIPO_API_BASE / HTTPS_PROXY，或先 node tools/tripo.mjs balance`);
+  }
+}
+
+async function preparePayload(key, body) {
+  const payload = { ...body };
+  if (DRY) return payload;
+  if (payload.input) payload.input = await resolveImageInput(key, payload.input);
+  if (payload.inputs) {
+    payload.inputs = await Promise.all(
+      payload.inputs.map(async (entry) => {
+        const view = Object.keys(entry)[0];
+        return { [view]: await resolveImageInput(key, entry[view]) };
+      }),
+    );
+  }
+  return payload;
+}
+
+async function runOne(key, endpoint, body, label, dest, { quietPoll = false } = {}) {
   if (!FORCE && fs.existsSync(dest)) { console.log(`跳过 ${label}（已存在，--force 可重生）`); return; }
-  if (DRY) { console.log(`[dry] ${label} → POST /generation/${endpoint}\n${JSON.stringify(body, null, 2)}\n`); return; }
+  const payload = await preparePayload(key, body);
+  if (DRY) { console.log(`[dry] ${label} → POST /generation/${endpoint}\n${JSON.stringify(payload, null, 2)}\n`); return; }
   console.log(`生成 ${label} …`);
-  const taskId = await submit(key, endpoint, body);
-  const url = await poll(key, taskId, label);
+  const taskId = await submit(key, endpoint, payload);
+  const url = await poll(key, taskId, label, quietPoll);
   const size = await download(url, dest);
   console.log(`  ✓ ${label} → ${path.relative(ROOT, dest)}（${size}）`);
 }
@@ -180,15 +263,24 @@ async function main() {
     return;
   }
 
-  for (const [id, def] of Object.entries(cfg.items)) {
-    if (ONLY && !ONLY.includes(id)) continue;
-    const { endpoint, body } = buildRequest(cfg, def);
-    try {
-      await runOne(key, endpoint, body, id, path.join(OUT_PRIZES, `${id}.glb`));
-    } catch (e) {
-      console.error(`\n✗ ${id} 失败：${e.message}（继续下一件）`);
+  const jobs = Object.entries(cfg.items).filter(([id]) => !ONLY || ONLY.includes(id));
+  let next = 0;
+  const worker = async () => {
+    while (next < jobs.length) {
+      const i = next++;
+      const [id, def] = jobs[i];
+      const { endpoint, body } = buildRequest(cfg, def);
+      try {
+        await runOne(key, endpoint, body, id, path.join(OUT_PRIZES, `${id}.glb`), {
+          quietPoll: PARALLEL > 1,
+        });
+      } catch (e) {
+        console.error(`\n✗ ${id} 失败：${e.message}（继续下一件）`);
+      }
     }
-  }
+  };
+  if (!DRY && PARALLEL > 1) console.log(`并行 ${PARALLEL} 路（Tripo 任务同时跑，注意积分/限流）`);
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, jobs.length) }, worker));
   if (!DRY) rebuildManifest();
   console.log('完成。刷新页面即可看到替换效果（GLB 热替换几何体，抓取判定不变）。');
 }

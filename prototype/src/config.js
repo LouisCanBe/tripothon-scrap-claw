@@ -120,6 +120,14 @@ export const CONFIG = {
   // —— AI 生成爪（Tripo 分件模型）——
   // 判定/状态机不变，只替换视觉；加载失败自动回退 procedural 爪。
   // 分件归属用浏览器染色法确认：staticParts 不动；prongGroups 同组共享一个开合关节。
+  machineShell: {
+    useTripo: true,          // 全套 Cursor 四视图 + P1 multiview。灰盒 ?machineShell=proc
+    // 缺文件时自动跳过，保留 machineShell 灰盒；URL ?machineShell=proc 强制灰盒
+    // Blender 里已经摆好的外壳（含挖过的底座）。有这个文件就按原位装入，不再套槽位缩放。
+    placedShell: 'assets/machine/placed/shell.glb',
+    partIds: ['machine_base', 'machine_frame', 'machine_top', 'machine_panel'],
+  },
+
   clawGLB: {
     useTripoGLB: true,       // 仓库 8 分件版（part_0..7）；失败回退灰盒三爪
     requireProngCount: 3,
@@ -227,7 +235,7 @@ export const CONFIG = {
     boundsZ: [-0.85, 0.85],
     boundsWallMargin: 0.06,  // 按娃娃足迹 clamp 时额外留白（防穿模）
     // 奖品视觉体量：槽位尺寸来自 prizePool PRIZE_TABLE[].collider，再乘此系数（GLB 走 normalizeGLB 同倍率）
-    glbSet: 'good',          // good | legacy；URL ?models=legacy 回退旧 prizes/
+    glbSet: 'good-p2',       // good-p2 | good | legacy；manifest 空时自动回退下一套
     visualScale: 2.5,
     // Tripo 娃娃若横躺：绕 X 额外旋转（弧度），与 Hub 预览里手动摆正同理，默认 0 等你验证后再调
     glbExtraRotX: 0,
@@ -288,14 +296,18 @@ export const CONFIG = {
     frame: {
       path: '/display-frame.html',
       // 示例校准。上这台相框前改成机背标签的 Pitch / Offset，Tan 保持 10。
-      // 地址可临时覆盖：?pitch= &offset= &tan= ；笔记本检查用 ?mode=2d
+      // 地址可临时覆盖：?pitch= &offset= &tan= ；现场用 /frame-calibrate.html 从电脑推送
+      // 笔记本检查用 ?mode=2d
       pitch: 0.27777,
       tan: 10,
       offset: 2,
-      views: 3,
-      viewWidth: 640,
-      viewSpacing: 0.04,
+      views: 30,               // 停稳后的清晰档。下落和拖拽会临时降到 9 眼
+      viewWidth: 1200,         // 停稳后每一眼拉满。运动时临时用 640
+      viewSpacing: 0.02,       // 立体强度。想接近 APK 再调到 0.04
       focusDistance: 2.5,
+      spin: 0,                 // 0 不自转，在相框上左右拖动旋转
+      fit: 0.7,                // 相对竖屏可视宽度。1 会贴到左右边
+      room: '/assets/frame/WhiteSpace_Portrait_1200x1920.glb',
     },
     // 跨设备：devServer SSE（见 tools/collectDisplayHub.mjs）
     transport: 'auto',         // 'local' 仅同机 | 'lan' 副屏必走 SSE | 'auto' 主屏 publish + display 订阅

@@ -82,7 +82,18 @@
   #animBar { position: absolute; right: 12px; top: 10px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap;
              justify-content: flex-end; }
   #dropHint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-              color: #3a3a42; font-size: 13px; letter-spacing: 2px; pointer-events: none; text-align: center; }
+              color: #3a3a42; font-size: 13px; letter-spacing: 1px; pointer-events: none; text-align: center;
+              padding: 0 12%; line-height: 1.5; }
+  #viewerTools { position: absolute; left: 12px; top: 42px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px;
+                 max-width: 88%; align-items: center; }
+  #placeBar { position: absolute; right: 12px; bottom: 48px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px;
+              align-items: center; justify-content: flex-end; max-width: 55%; font-size: 11px; }
+  #placeBar select { max-width: 140px; padding: 3px 6px; font-size: 11px; }
+  #placeReadout { font-size: 10px; color: var(--dim); max-width: 100%; text-align: right; }
+  #machineQuick { border: 1px solid #2c2c33; border-radius: 8px; padding: 10px 12px; margin-top: 10px;
+                  background: #101014; }
+  #machineQuick .mq-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  #machineQuick p { font-size: 11px; color: var(--dim); margin: 0; line-height: 1.45; }
   /* —— toast —— */
   #toasts { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 50;
             display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
@@ -116,6 +127,14 @@
       <option value="retarget">套预设动画</option>
     </select>
     <div id="fields"></div>
+    <div id="machineQuick">
+      <h2 style="margin:0 0 4px">机柜分件（快捷）</h2>
+      <p>读 <code>prompts-machine.json</code>：点分件填入左侧（P2 + 减面）；<b>右键分件</b> = 填入并立刻提交。批量本地生成用下方 CLI。</p>
+      <div class="mq-btns" id="machinePartBtns"></div>
+      <div class="mq-btns" style="margin-top:6px">
+        <button type="button" class="ghost" id="machineCliCopy" title="本地批量仍用 PowerShell">复制 CLI 批量命令</button>
+      </div>
+    </div>
     <h2>请求预览 <button class="ghost" id="copyReq" style="float:right">复制</button></h2>
     <div id="reqPreview"></div>
     <div style="margin-top:12px; display:flex; gap:10px">
@@ -129,10 +148,31 @@
     <div id="tasks"></div>
     <div id="viewerWrap">
       <div id="viewer"></div>
-      <div id="dropHint">下载任务产物后自动预览<br/>也可以直接把 .glb 文件拖进来<br/><br/>左键旋转 · 右键/Shift+拖 平移 · 滚轮缩放 · 双击复位</div>
+      <div id="dropHint">任务完成后自动预览 · 或拖入 <b>.glb / .obj</b><br/>左键旋转 · 右键平移 · 滚轮缩放 · 双击复位</div>
       <div id="viewFxBar">
         <label title="赛璐璐阶梯色 + 描边，适合娃娃/玩偶测试"><input type="checkbox" id="comicFx" checked /> 漫画渲染</label>
         <span id="comicFxHint">Toon + 描边</span>
+      </div>
+      <div id="viewerTools">
+        <button type="button" class="ghost" id="pickLocalModel">打开本地模型…</button>
+        <button type="button" class="ghost" id="loadGrayboxRef">灰盒 OBJ</button>
+        <label title="米制 + 灰盒线框"><input type="checkbox" id="workspaceMeters" /> 机柜工作区</label>
+        <input type="file" id="localModelInput" accept=".glb,.gltf,.obj" hidden />
+      </div>
+      <div id="placeBar">
+        <select id="machineSlotPick" title="与游戏 machineShellSlots 一致">
+          <option value="">— 槽位 —</option>
+          <option value="machine_base">base</option>
+          <option value="machine_frame">frame</option>
+          <option value="machine_top">top</option>
+          <option value="machine_back">back</option>
+          <option value="machine_panel">panel</option>
+        </select>
+        <button type="button" class="ghost" id="applyMachineSlot">套入槽位</button>
+        <label title="左键拖模型（水平）；Shift+滚轮升降"><input type="checkbox" id="movePartMode" /> 拖移</label>
+        <button type="button" class="ghost" data-nudge="y" data-d="0.02">Y+</button>
+        <button type="button" class="ghost" data-nudge="y" data-d="-0.02">Y−</button>
+        <span id="placeReadout"></span>
       </div>
       <div id="animBar"></div>
       <div id="viewerInfo"></div>
@@ -147,7 +187,9 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { applyComicStyle, suggestComicForAsset } from '/comic-render.mjs';
+import { MACHINE_SHELL_SLOTS, fitMeshToSlot, guessMachinePartId } from '/src/machineShellSlots.js';
 
 // ================= toast =================
 function toast(text, isErr = false) {
@@ -163,6 +205,7 @@ function toast(text, isErr = false) {
 // ================= 表单定义 =================
 // P 系列 = 低面干净拓扑（游戏资产）；v3.x = 高精度扫描感
 const MODELS_GEN = [
+  { v: 'P2-20260801',   l: 'P2 · 轻量（奖品/机柜推荐）' },
   { v: 'P1-20260311',   l: 'P1 · 低面干净（游戏向）' },
   { v: 'v3.1-20260211', l: 'v3.1 · 高精度' },
   { v: 'v3.0-20250812', l: 'v3.0 · 稳定' },
@@ -236,7 +279,10 @@ function taskFile(t) { return `${t.name}-${t.id.slice(0, 8)}.glb`; }
 function fileName(p) { return String(p || '').replace(/\\/g, '/').split('/').pop(); }
 function taskLabel(t) {
   const time = new Date(t.ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-  return `${TYPE_NAME[t.name] || t.name} · ${time} · ${t.id.slice(0, 8)}`;
+  const kind = t.name?.startsWith('machine:')
+    ? `机柜·${t.name.slice(8)}`
+    : (TYPE_NAME[t.name] || t.name);
+  return `${kind} · ${time} · ${t.id.slice(0, 8)}`;
 }
 
 function renderFields() {
@@ -359,6 +405,77 @@ function renderPreview() {
 }
 typeEl.addEventListener('change', renderFields);
 
+function applyFormValues(vals) {
+  if (vals.type) typeEl.value = vals.type;
+  renderFields();
+  for (const [k, v] of Object.entries(vals)) {
+    if (k === 'type') continue;
+    const el = fieldsEl.querySelector(`[data-k="${k}"]`);
+    if (!el) continue;
+    if (el.type === 'checkbox') el.checked = !!v;
+    else el.value = v ?? '';
+  }
+  saveForm();
+  renderPreview();
+}
+
+let machinePromptsCache = null;
+async function loadMachinePrompts() {
+  if (machinePromptsCache) return machinePromptsCache;
+  const r = await fetch('/prompts-machine.json');
+  if (!r.ok) throw new Error('无法读取 prompts-machine.json');
+  machinePromptsCache = await r.json();
+  return machinePromptsCache;
+}
+
+function fillMachinePart(id, cfg) {
+  const def = cfg.items[id];
+  if (!def) return;
+  const d = cfg._defaults ?? {};
+  const prompt = `${def.prompt}, ${cfg._style ?? ''}`.trim();
+  applyFormValues({
+    type: 'textToModel',
+    prompt,
+    model: d.model ?? 'P2-20260801',
+    face_limit: d.face_limit ?? 6500,
+    texture_quality: d.texture_quality ?? 'standard',
+    texture: d.texture !== false,
+    pbr: d.pbr !== false,
+    generate_parts: false,
+    smart_low_poly: false,
+  });
+  window.__pendingMachinePart = id;
+  toast(`已填入：${id}（左侧可改 prompt 再提交）`);
+}
+
+async function initMachineQuick() {
+  const box = document.getElementById('machinePartBtns');
+  try {
+    const cfg = await loadMachinePrompts();
+    for (const id of Object.keys(cfg.items)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ghost';
+      b.textContent = id.replace('machine_', '');
+      b.title = id;
+      b.addEventListener('click', () => fillMachinePart(id, cfg));
+      b.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        fillMachinePart(id, cfg);
+        submitTask();
+      });
+      box.appendChild(b);
+    }
+  } catch (e) {
+    box.innerHTML = `<span style="color:#c66;font-size:11px">${e.message}</span>`;
+  }
+  document.getElementById('machineCliCopy')?.addEventListener('click', () => {
+    const cmd = '.\\tools\\run-generate-machine.ps1 -Force -Parallel 3';
+    navigator.clipboard.writeText(cmd).then(() => toast('已复制：' + cmd));
+  });
+}
+initMachineQuick();
+
 document.getElementById('copyReq').onclick = () => {
   navigator.clipboard.writeText(previewEl.textContent).then(() => toast('请求体已复制'));
 };
@@ -419,7 +536,15 @@ async function submitTask() {
     }).then(r => r.json());
     if (r.error) throw new Error(r.error);
     if (!r.task_id) throw new Error('响应里没有 task_id：' + JSON.stringify(r).slice(0, 200));
-    const t = { id: r.task_id, name: typeEl.value, ts: Date.now(), status: 'running', saved: null };
+    const part = window.__pendingMachinePart;
+    const t = {
+      id: r.task_id,
+      name: part ? `machine:${part}` : typeEl.value,
+      ts: Date.now(),
+      status: 'running',
+      saved: null,
+    };
+    window.__pendingMachinePart = null;
     upsertStored(t);
     addTaskCard(t, true);
     toast('任务已提交');
@@ -538,7 +663,7 @@ async function pullAndPreview(t, ui, { preview = true } = {}) {
     if (preview) {
       ui.st.textContent = '载入预览…（大模型可能要几秒）';
       toast('正在载入预览…');
-      await loadGLB('/files/' + fileName(t.saved));
+      await loadModel('/files/' + fileName(t.saved));
       ui.st.textContent = '✓ 预览中';
     } else {
       ui.st.textContent = '✓ 已存 ' + fileName(t.saved);
@@ -643,20 +768,65 @@ const target = new THREE.Vector3(0, 0.4, 0);
 const homeTarget = new THREE.Vector3(0, 0.4, 0);
 const _right = new THREE.Vector3(), _up = new THREE.Vector3(), _fwd = new THREE.Vector3();
 let dragging = false, panning = false, px = 0, py = 0;
+const raycaster = new THREE.Raycaster();
+const _planeHit = new THREE.Vector3();
+const _dragOffset = new THREE.Vector3();
+let modelDragging = false;
 
 function resetCam() {
   theta = CAM_HOME.theta; phi = CAM_HOME.phi; dist = CAM_HOME.dist;
   target.copy(homeTarget);
 }
 
+function ndcFromEvent(e) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  return {
+    x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    y: -((e.clientY - rect.top) / rect.height) * 2 + 1,
+  };
+}
+
+function hitCurrentModel(e) {
+  if (!current) return false;
+  const ndc = ndcFromEvent(e);
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObject(current, true);
+  return hits.length > 0 ? hits[0] : null;
+}
+
+function dragModelOnPlane(e) {
+  if (!current) return;
+  const ndc = ndcFromEvent(e);
+  raycaster.setFromCamera(ndc, camera);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -current.position.y);
+  if (!raycaster.ray.intersectPlane(plane, _planeHit)) return;
+  current.position.set(_planeHit.x - _dragOffset.x, current.position.y, _planeHit.z - _dragOffset.z);
+  updatePlaceReadout();
+}
+
 renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 renderer.domElement.addEventListener('pointerdown', e => {
+  const moveMode = document.getElementById('movePartMode')?.checked;
+  if (moveMode && e.button === 0 && current) {
+    const hit = hitCurrentModel(e);
+    if (hit) {
+      modelDragging = true;
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -current.position.y);
+      raycaster.setFromCamera(ndcFromEvent(e), camera);
+      if (raycaster.ray.intersectPlane(plane, _planeHit)) {
+        _dragOffset.set(_planeHit.x - current.position.x, 0, _planeHit.z - current.position.z);
+      }
+      renderer.domElement.setPointerCapture?.(e.pointerId);
+      return;
+    }
+  }
   dragging = true; panning = e.button === 2 || e.shiftKey;
   px = e.clientX; py = e.clientY;
   renderer.domElement.setPointerCapture?.(e.pointerId);
 });
-window.addEventListener('pointerup', () => { dragging = false; panning = false; });
+window.addEventListener('pointerup', () => { dragging = false; panning = false; modelDragging = false; });
 window.addEventListener('pointermove', e => {
+  if (modelDragging) { dragModelOnPlane(e); return; }
   if (!dragging) return;
   const dx = e.clientX - px, dy = e.clientY - py;
   px = e.clientX; py = e.clientY;
@@ -675,6 +845,11 @@ window.addEventListener('pointermove', e => {
 });
 renderer.domElement.addEventListener('wheel', e => {
   e.preventDefault();
+  if (e.shiftKey && current && document.getElementById('movePartMode')?.checked) {
+    current.position.y = Math.max(-0.5, Math.min(3, current.position.y - e.deltaY * 0.002));
+    updatePlaceReadout();
+    return;
+  }
   dist = Math.min(20, Math.max(0.3, dist * Math.exp(e.deltaY * 0.001)));
 }, { passive: false });
 renderer.domElement.addEventListener('dblclick', resetCam);
@@ -700,11 +875,7 @@ comicFxEl?.addEventListener('change', () => {
   refreshComicFx();
 });
 
-async function loadGLB(url) {
-  const gltf = await new GLTFLoader().loadAsync(url);
-  if (current) { scene.remove(current); current = null; }
-  mixer = null; animBar.innerHTML = ''; currentParts = [];
-  const root = gltf.scene;
+function frameRootToViewer(root) {
   const box = new THREE.Box3().setFromObject(root);
   const size = box.getSize(new THREE.Vector3());
   const s = 1.4 / Math.max(size.x, size.y, size.z, 1e-6);
@@ -712,8 +883,44 @@ async function loadGLB(url) {
   root.updateMatrixWorld(true);
   const box2 = new THREE.Box3().setFromObject(root);
   const c = box2.getCenter(new THREE.Vector3());
-  // 底面贴网格（y=0），水平居中 —— 网格是地面，不再从腰部切开
   root.position.set(root.position.x - c.x, root.position.y - box2.min.y, root.position.z - c.z);
+  return box2;
+}
+
+/** 与游戏灰盒同单位：池底 y=0、水平居中（叠放对照用） */
+function frameMetersOnFloor(root) {
+  root.scale.setScalar(1);
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  root.position.set(-c.x, -box.min.y, -c.z);
+  return new THREE.Box3().setFromObject(root);
+}
+
+function useMeterFraming() {
+  return document.getElementById('workspaceMeters')?.checked;
+}
+
+function updatePlaceReadout() {
+  const el = document.getElementById('placeReadout');
+  if (!el || !current) { if (el) el.textContent = ''; return; }
+  const p = current.position;
+  const s = current.scale;
+  el.textContent = `pos ${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)} · scale ${s.x.toFixed(3)}, ${s.y.toFixed(3)}, ${s.z.toFixed(3)}`;
+}
+
+async function enableWorkspace() {
+  const ws = document.getElementById('workspaceMeters');
+  if (ws && !ws.checked) {
+    ws.checked = true;
+    await setWorkspaceMeters(true);
+  }
+}
+
+function presentLoadedRoot(root, url, { animations = [] } = {}) {
+  if (current) { scene.remove(current); current = null; }
+  mixer = null; animBar.innerHTML = ''; currentParts = [];
+  const box2 = useMeterFraming() ? frameMetersOnFloor(root) : frameRootToViewer(root);
   scene.add(root); current = root;
   const fname = url.split('/').pop()?.split('?')[0] || '';
   if (suggestComicForAsset(fname)) {
@@ -727,10 +934,13 @@ async function loadGLB(url) {
   homeTarget.set(0, h / 2, 0);
   resetCam();
   dropHint.style.display = 'none';
-  // 分件名单（填 config.clawGLB 用；>12 件截断显示，完整名单用复制按钮）
+  const guess = guessMachinePartId(fname);
+  const slotPick = document.getElementById('machineSlotPick');
+  if (guess && slotPick) slotPick.value = guess;
+  updatePlaceReadout();
   root.traverse(o => { if (o.isMesh && o.name) currentParts.push(o.name); });
   const shown = currentParts.slice(0, 12).join(', ') + (currentParts.length > 12 ? ' …' : '');
-  infoEl.textContent = `${url.split('/').pop()}  ·  网格 ${currentParts.length} 件` +
+  infoEl.textContent = `${fname}  ·  网格 ${currentParts.length} 件` +
     (currentParts.length ? `\n${shown}` : '');
   if (currentParts.length) {
     const cp = document.createElement('button');
@@ -738,10 +948,9 @@ async function loadGLB(url) {
     cp.onclick = () => navigator.clipboard.writeText(JSON.stringify(currentParts)).then(() => toast(`已复制 ${currentParts.length} 件名单`));
     animBar.appendChild(cp);
   }
-  // 动画（rig/retarget 产物）
-  if (gltf.animations?.length) {
+  if (animations.length) {
     mixer = new THREE.AnimationMixer(root);
-    for (const clip of gltf.animations) {
+    for (const clip of animations) {
       const b = document.createElement('button');
       b.className = 'ghost'; b.textContent = '▶ ' + clip.name;
       b.onclick = () => { mixer.stopAllAction(); mixer.clipAction(clip).play(); };
@@ -749,16 +958,144 @@ async function loadGLB(url) {
     }
   }
 }
-window.__loadGLB = loadGLB;   // 调试钩子
 
-// 拖放本地 .glb 预览（dragover 高亮）
+async function loadGLB(url) {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  presentLoadedRoot(gltf.scene, url, { animations: gltf.animations ?? [] });
+}
+
+async function loadOBJ(url) {
+  const root = await new OBJLoader().loadAsync(url);
+  root.traverse((o) => {
+    if (o.isMesh && !o.material) {
+      o.material = new THREE.MeshStandardMaterial({ color: 0x8a9098, roughness: 0.65, metalness: 0.35 });
+    }
+  });
+  presentLoadedRoot(root, url);
+}
+
+function modelKindFrom(url, fileName = '') {
+  const u = url.split('?')[0].toLowerCase();
+  const n = (fileName || '').toLowerCase();
+  if (u.endsWith('.obj') || n.endsWith('.obj')) return 'obj';
+  if (u.endsWith('.glb') || u.endsWith('.gltf') || n.endsWith('.glb') || n.endsWith('.gltf')) return 'glb';
+  return null;
+}
+
+async function loadModel(url, fileName = '') {
+  const kind = modelKindFrom(url, fileName);
+  if (kind === 'obj') return loadOBJ(url);
+  if (kind === 'glb') return loadGLB(url);
+  throw new Error('不支持的格式（仅 .glb / .gltf / .obj）');
+}
+
+window.__loadGLB = loadGLB;
+window.__loadModel = loadModel;
+
+let grayboxOverlayRoot = null;
+const GRAYBOX_OBJ = '/design/machine-shell-ref/machine_shell_graybox_reference.obj';
+
+async function ensureGrayboxOverlay() {
+  if (grayboxOverlayRoot) return grayboxOverlayRoot;
+  const root = await new OBJLoader().loadAsync(GRAYBOX_OBJ);
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = new THREE.MeshStandardMaterial({
+      color: 0x3dcc88,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+    });
+  });
+  frameMetersOnFloor(root);
+  grayboxOverlayRoot = root;
+  scene.add(root);
+  return root;
+}
+
+function reframeCurrent() {
+  if (!current) return;
+  if (useMeterFraming()) frameMetersOnFloor(current);
+  else frameRootToViewer(current);
+  resetCam();
+}
+
+async function setGrayboxOverlay(on) {
+  const root = await ensureGrayboxOverlay();
+  root.visible = on;
+  reframeCurrent();
+  if (on) toast('灰盒线框已显示');
+}
+
+async function setWorkspaceMeters(on) {
+  if (on) {
+    await setGrayboxOverlay(true);
+    homeTarget.set(0, 1.05, 0);
+    dist = Math.max(dist, 4.5);
+    if (current) frameMetersOnFloor(current);
+    else await ensureGrayboxOverlay();
+    resetCam();
+    toast('机柜工作区：套入槽位 / 拖移分件');
+  } else {
+    if (grayboxOverlayRoot) grayboxOverlayRoot.visible = false;
+    if (current) frameRootToViewer(current);
+    resetCam();
+  }
+  reframeCurrent();
+}
+
+document.getElementById('workspaceMeters')?.addEventListener('change', (e) => {
+  setWorkspaceMeters(e.target.checked).catch((err) => toast(err.message, true));
+});
+
+document.getElementById('applyMachineSlot')?.addEventListener('click', async () => {
+  const id = document.getElementById('machineSlotPick')?.value;
+  if (!current) { toast('请先载入 GLB 分件', true); return; }
+  if (!id || !MACHINE_SHELL_SLOTS[id]) { toast('请选择槽位', true); return; }
+  await enableWorkspace();
+  const moveEl = document.getElementById('movePartMode');
+  if (moveEl) moveEl.checked = true;
+  fitMeshToSlot(current, MACHINE_SHELL_SLOTS[id]);
+  updatePlaceReadout();
+  toast(`已套入 ${id}（可拖移微调，Shift+滚轮调 Y）`);
+});
+
+document.getElementById('placeBar')?.querySelectorAll('[data-nudge]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (!current) return;
+    const axis = btn.dataset.nudge;
+    const d = +btn.dataset.d;
+    if (axis === 'y') current.position.y += d;
+    updatePlaceReadout();
+  });
+});
+
+document.getElementById('loadGrayboxRef')?.addEventListener('click', () => {
+  loadModel(GRAYBOX_OBJ).catch((e) => toast(e.message, true));
+});
+
+const localInput = document.getElementById('localModelInput');
+document.getElementById('pickLocalModel')?.addEventListener('click', () => localInput?.click());
+localInput?.addEventListener('change', () => {
+  const f = localInput.files?.[0];
+  if (!f) return;
+  const blobUrl = URL.createObjectURL(f);
+  loadModel(blobUrl, f.name).catch((e) => toast(e.message, true));
+  localInput.value = '';
+});
+
 wrap.addEventListener('dragover', e => { e.preventDefault(); wrap.classList.add('dragging'); });
 wrap.addEventListener('dragleave', () => wrap.classList.remove('dragging'));
 wrap.addEventListener('drop', e => {
   e.preventDefault(); wrap.classList.remove('dragging');
   const f = e.dataTransfer.files?.[0];
-  if (f?.name.endsWith('.glb')) loadGLB(URL.createObjectURL(f));
-  else if (f) toast('只支持 .glb 文件', true);
+  if (!f) return;
+  const n = f.name.toLowerCase();
+  if (n.endsWith('.glb') || n.endsWith('.gltf') || n.endsWith('.obj')) {
+    const blobUrl = URL.createObjectURL(f);
+    loadModel(blobUrl, f.name).catch((err) => toast(err.message, true));
+  } else toast('只支持 .glb / .gltf / .obj', true);
 });
 
 function resize() {

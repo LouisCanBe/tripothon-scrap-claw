@@ -20,6 +20,7 @@ import { PointerControls } from './pointerControls.js';
 import { OnscreenButtons } from './onscreenButtons.js';
 import { DesignOverlay } from './designOverlay.js';
 import { buildMachineShell } from './machineShell.js';
+import { upgradeMachineShellTripo } from './machineShellTripo.js';
 import { Director } from './director.js';
 import { ACTS, DEFAULT_HINT } from './acts.js';
 import { unlockAudio } from './gameAudio.js';
@@ -100,7 +101,10 @@ scene.add(world);
 const revealRoot = new THREE.Group();
 scene.add(revealRoot);
 let revealImmersive = null;
-buildMachineShell(world);
+const machineShellBuilt = buildMachineShell(world);
+if (new URLSearchParams(location.search).get('machineShell') === 'proc') {
+  CONFIG.machineShell.useTripo = false;
+}
 const items = spawnPool(world);
 enableShadows(world);   // 机器壳+几何体奖品统一开阴影（玻璃罩透明自动跳过投影）
 // manifest 有 GLB 的：预编译后逐个弹出热替换；进度喂给加载画面
@@ -145,12 +149,22 @@ const claw = new ClawMachine(world, items, {
   onHoleDrop: (item) => publishHoleDrop(item),
   onVended: (item) => publishVended(item),
 });
-const clawReady = claw.upgradeClawVisual(renderer, camera)
-  .then(() => {
-    refreshClawComicFx(claw);
-    clawLoaded = true;
-    paintLoading();
-  });
+const shellReady = upgradeMachineShellTripo(
+  machineShellBuilt.shell,
+  machineShellBuilt.procedural,
+  renderer,
+  camera,
+).then((n) => {
+  shellLoaded = true;
+  shellTripoCount = n;
+  paintLoading();
+});
+
+const clawReady = Promise.all([shellReady, claw.upgradeClawVisual(renderer, camera)]).then(() => {
+  refreshClawComicFx(claw);
+  clawLoaded = true;
+  paintLoading();
+});
 
 // —— 镜头 / 画幅 / 后处理 / 输入 ——
 const rig = new CameraRig(camera);
@@ -557,9 +571,9 @@ applyViewRect();
 const loadingEl = document.getElementById('loading');
 const loadFill = document.getElementById('loadFill');
 const loadPct = document.getElementById('loadPct');
-let prizeDone = 0, prizeTotal = 1, clawLoaded = false;
+let prizeDone = 0, prizeTotal = 1, clawLoaded = false, shellLoaded = false, shellTripoCount = 0;
 const paintLoading = () => {
-  const frac = (prizeDone + (clawLoaded ? 1 : 0)) / (prizeTotal + 1);
+  const frac = (prizeDone + (clawLoaded ? 1 : 0) + (shellLoaded ? 1 : 0)) / (prizeTotal + 2);
   loadFill.style.width = (frac * 100 | 0) + '%';
   loadPct.textContent = (frac * 100 | 0) + '%';
 };

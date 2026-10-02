@@ -1,0 +1,27 @@
+{
+  "_note": "图生模：先 node tools/gen-machine-part-images.mjs，再 node tools/generate.mjs --set machine-img --force",
+  "_defaults": {
+    "model": "P2-20260801",
+    "face_limit": 6500,
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "standard"
+  },
+  "items": {
+    "machine_base": {
+      "image": "prototype/design/machine-parts/machine_base-ref.png"
+    },
+    "machine_frame": {
+      "image": "prototype/design/machine-parts/machine_frame-ref.png"
+    },
+    "machine_top": {
+      "image": "prototype/design/machine-parts/machine_top-ref.png"
+    },
+    "machine_back": {
+      "image": "prototype/design/machine-parts/machine_back-ref.png"
+    },
+    "machine_panel": {
+      "image": "prototype/design/machine-parts/machine_panel-ref.png"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "_note": "灰盒正交蒙版（masks/）→ 同比例出图 .jpg → generate.mjs --set machine-mv --force。比例靠画面，不写米制。",
+  "_defaults": {
+    "model": "P1-20260311",
+    "face_limit": 6500,
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "standard"
+  },
+  "items": {
+    "machine_base": {
+      "multiview": {
+        "front": "prototype/design/machine-parts/machine_base-front.jpg",
+        "left": "prototype/design/machine-parts/machine_base-left.jpg",
+        "back": "prototype/design/machine-parts/machine_base-back.jpg",
+        "right": "prototype/design/machine-parts/machine_base-right.jpg"
+      }
+    },
+    "machine_frame": {
+      "multiview": {
+        "front": "prototype/design/machine-parts/machine_frame-front.jpg",
+        "left": "prototype/design/machine-parts/machine_frame-left.jpg",
+        "back": "prototype/design/machine-parts/machine_frame-back.jpg",
+        "right": "prototype/design/machine-parts/machine_frame-right.jpg"
+      }
+    },
+    "machine_top": {
+      "multiview": {
+        "front": "prototype/design/machine-parts/machine_top-front.jpg",
+        "left": "prototype/design/machine-parts/machine_top-left.jpg",
+        "back": "prototype/design/machine-parts/machine_top-back.jpg",
+        "right": "prototype/design/machine-parts/machine_top-right.jpg"
+      }
+    },
+    "machine_back": {
+      "multiview": {
+        "front": "prototype/design/machine-parts/machine_back-front.jpg",
+        "left": "prototype/design/machine-parts/machine_back-left.jpg",
+        "back": "prototype/design/machine-parts/machine_back-back.jpg",
+        "right": "prototype/design/machine-parts/machine_back-right.jpg"
+      }
+    },
+    "machine_panel": {
+      "multiview": {
+        "front": "prototype/design/machine-parts/machine_panel-front.jpg",
+        "left": "prototype/design/machine-parts/machine_panel-left.jpg",
+        "back": "prototype/design/machine-parts/machine_panel-back.jpg",
+        "right": "prototype/design/machine-parts/machine_panel-right.jpg"
+      }
+    }
+  }
+}

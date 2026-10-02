@@ -1,0 +1,29 @@
+{
+  "_note": "娃娃机外壳分件（P2 轻量）。生成：node tools/generate.mjs --set machine --parallel 3 --force",
+  "_defaults": {
+    "model": "P2-20260801",
+    "face_limit": 6500,
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "standard"
+  },
+  "_style": "stylized low-poly arcade claw machine cabinet part, worn painted metal, muted hand-painted PBR, single solid mesh, no interior prizes, no claw, no glass, no full cabinet assembly, plain dark gray studio background, game-ready modular prop",
+
+  "items": {
+    "machine_base": {
+      "prompt": "heavy rectangular arcade claw machine pedestal base only, wide flat top surface, four short feet, empty top ready for cabinet, no posts no roof"
+    },
+    "machine_frame": {
+      "prompt": "open rectangular arcade claw machine outer frame only, four vertical corner posts and thin top rail, hollow empty center, no glass no back wall no base pedestal"
+    },
+    "machine_top": {
+      "prompt": "one thin flat rectangular metal roof slab only, uniform low profile like a lid, shallow thickness under 5cm, slight beveled edges, optional small vent slits on top surface, NO vertical walls NO corner posts NO sides NO base, isolated part floating"
+    },
+    "machine_back": {
+      "prompt": "one single flat vertical metal sheet only, paper-thin back wall plate, large rectangle taller than wide, NO depth NO room interior NO shelves NO frame posts NO floor, just one planar panel with subtle rivet bumps"
+    },
+    "machine_panel": {
+      "prompt": "one small shallow front fascia box only, compact control panel module, coin slot recess and joystick dome on front face, depth under 10cm, NO full cabinet NO glass NO prize chamber NO tall sides, isolated small rectangle part"
+    }
+  }
+}

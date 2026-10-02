@@ -16,7 +16,7 @@ Marble / PixVerse 在 Hub 里下载的自动命名文件（如 `world-<id>-pano.
 
 | 服务 | 用途 | 工具 | 状态 |
 |---|---|---|---|
-| **Tripo3D** | 道具/爪子模型生成（text/image/multiview → GLB） | `tools/tripo.mjs` + `tripo.serve.mjs` + `tools/ui.html` | ✅ 已实测跑通 |
+| **Tripo3D** | 道具/爪子模型生成（text/image/multiview → GLB）；Hub 预览另支持拖入 **.obj**（如灰盒对照） | `tools/tripo.mjs` + `tripo.serve.mjs` + `tools/ui.html` | ✅ 已实测跑通 |
 | **Marble（World Labs）** | 3D 世界/场景生成（text/image/pano → GLB mesh / SPZ 点云 / 全景图） | `tools/marble.mjs` + `marble.serve.mjs` + `tools/world.html` | ✅ 已实测跑通（draft 档 32s 出世界） |
 | **PixVerse** | 分镜/幕间视频（官方 CLI + Skill，或 OpenAPI 封装） | 根目录 `npm install` → `npm run pixverse:login`；可选 `tools/pixverse.mjs` + serve | ✅ CLI/Skill 已装；需本机 `auth login` |
 | **TapTap** | 游戏包体上传发布 | 官方 TapRails CLI / APK 上传 API | 📋 待开发者凭证 |
@@ -71,6 +71,8 @@ npm run game:lan                      # 内网可访问（终端会打印局域�
 静态资源：`/design/*` → `prototype/design/`，`/assets/*` → `prototype/assets/`（定帧 #13 走 `assets/images/reveal-truth-hand-can.png`）。
 
 **Tripo 预览器**：左侧「漫画渲染」= 实时 Toon + 描边（`tools/comic-render.mjs`，后续可接到游戏里娃娃奖品）。
+
+**娃娃机外壳分件**：`tools/prompts-machine.json` → `.\tools\run-generate-machine.ps1 -Force` → `prototype/assets/machine/*.glb`；再生前备用：`.\tools\backup-machine-glb.ps1` → `prototype/assets/machine/archive/`；游戏内 `machineShellTripo.js` 按槽位拼装，洞口仍用灰盒。对比灰盒：`?machineShell=proc`。尺寸与 **OBJ 对照模型**：`node tools/export-machine-shell-ref.mjs` → `prototype/design/machine-shell-ref/`。
 
 ## 后续整合路线（按需做，不提前过度设计）
 
