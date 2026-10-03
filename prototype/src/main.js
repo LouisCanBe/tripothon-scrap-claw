@@ -31,7 +31,8 @@ import { Director } from './director.js';
 import { ACTS, DEFAULT_HINT } from './acts.js';
 import { unlockAudio } from './gameAudio.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
-import { applyRevealWorld, REVEAL_WORLDS } from './revealWorlds.js';
+import { applyRevealWorld, REVEAL_WORLDS, walkBoxFromBounds } from './revealWorlds.js';
+import { buildWalkSpace } from './revealWalkSpace.js';
 import { mountMarbleImmersive } from './revealMarble.js';
 import { createRevealDissolveTransition } from './revealTransition.js';
 import { createModelFade } from './modelFade.js';
@@ -266,6 +267,11 @@ let revealPanoTex = null;
 let revealPanoUrl = '';
 let revealMarbleLoad = null;
 const revealSpawnGui = [];
+const revealWalkGui = [];
+const revealWalkFallbackGui = [];
+const _revealSpawnPos = new THREE.Vector3();
+const _revealSpawnCenter = new THREE.Vector3();
+const _revealSpawnSize = new THREE.Vector3();
 
 function loadRevealPanoTexture() {
   const url = CONFIG.reveal.pano;
@@ -496,30 +502,117 @@ async function ensureRevealStill() {
   return revealStillRT.texture;
 }
 
-function applyMarbleRevealSpawn(immersive) {
+function revealSpawnOrigin(immersive, out = _revealSpawnPos) {
   const { bounds } = immersive;
-  const center = bounds.getCenter(new THREE.Vector3());
-  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(_revealSpawnCenter);
+  const size = bounds.getSize(_revealSpawnSize);
   const spawn = CONFIG.reveal.spawn;
   // yaw 0 朝 −Z。offsetZFrac 为正是往 +Z，也就是身后，不是视线前方。
-  revealCtl.yaw = (spawn?.yaw ?? 0) + (CONFIG.reveal.yawOffset ?? 0);
-  revealCtl.pitch = spawn?.pitch ?? 0;
-  revealCtl.pos.set(
+  return out.set(
     center.x + (spawn?.offsetX ?? 0),
     bounds.min.y + (spawn?.eyeHeight ?? 1.55),
     center.z + size.z * (spawn?.offsetZFrac ?? 0),
   );
-  revealCtl.setBounds(bounds, CONFIG.reveal.boundsMargin ?? 0.3);
-  if (CONFIG.reveal.mode === 'immersive') {
-    revealCtl.setColliderMeshes(
-      immersive.colliderMeshes,
-      CONFIG.reveal.collisionSkin ?? 0.35,
-    );
-    syncRevealWalkFeel();
-  } else {
-    revealCtl.setColliderMeshes(null);
-  }
+}
+
+function applyMarbleRevealSpawn(immersive) {
+  const spawn = CONFIG.reveal.spawn;
+  revealCtl.yaw = (spawn?.yaw ?? 0) + (CONFIG.reveal.yawOffset ?? 0);
+  revealCtl.pitch = spawn?.pitch ?? 0;
+  revealCtl.pos.copy(revealSpawnOrigin(immersive));
+  applyRevealWalkBounds(immersive);
   revealCtl.apply();
+}
+
+function syncWalkFallbackGui() {
+  const meshOn = CONFIG.reveal.walk?.useMesh !== false && !!revealCtl.walkSpace;
+  for (const c of revealWalkFallbackGui) {
+    if (meshOn) c.disable();
+    else c.enable();
+  }
+}
+
+function applyRevealWalkBounds(immersive) {
+  if (!immersive) {
+    revealCtl.setBounds(null);
+    revealCtl.setWalkSpace(null);
+    revealCtl.setColliderMeshes(null);
+    syncRevealWalkHelper(null);
+    syncWalkFallbackGui();
+    return;
+  }
+  const walk = CONFIG.reveal.walk ?? {};
+  let space = null;
+  if (walk.useMesh !== false && immersive.colliderMeshes?.length) {
+    space = buildWalkSpace(immersive.colliderMeshes, revealSpawnOrigin(immersive), {
+      meshInset: walk.meshInset ?? 0.16,
+      sealMeters: walk.sealMeters ?? 0.6,
+      grid: walk.grid ?? 96,
+      wallY0: walk.wallY0 ?? 1,
+      wallY1: walk.wallY1 ?? 2.35,
+    });
+  }
+  revealCtl.setWalkSpace(space);
+  if (space) {
+    revealCtl.setBounds(null);
+    console.info(`[reveal walk] GLB ${space.source} ${space.cells} cells / ${space.polygon.length} pts`);
+  } else {
+    const walkBox = walkBoxFromBounds(
+      immersive.bounds,
+      walk,
+      CONFIG.reveal.boundsMargin ?? 0.55,
+    );
+    revealCtl.setBounds(walkBox, 0);
+    console.info('[reveal walk] 网格抽边失败，回退偏转盒');
+  }
+  revealCtl.setColliderMeshes(
+    walk.meshClip ? immersive.colliderMeshes : null,
+    CONFIG.reveal.collisionSkin ?? 0.2,
+  );
+  syncRevealWalkHelper(space ?? revealCtl.walkBox);
+  syncWalkFallbackGui();
+}
+
+let revealWalkHelper = null;
+
+function syncRevealWalkHelper(space) {
+  if (revealWalkHelper) {
+    revealWalkHelper.removeFromParent();
+    revealWalkHelper.geometry?.dispose();
+    revealWalkHelper.material?.dispose?.();
+    revealWalkHelper = null;
+  }
+  if (!space || !CONFIG.reveal.showWalkHelper) return;
+  let pts = null;
+  const y = (space.minY ?? 0) + 0.08;
+  if (space.kind === 'mesh' && space.polygon?.length >= 3) {
+    pts = space.polygon.map((p) => new THREE.Vector3(p.x, y, p.z));
+    pts.push(pts[0].clone());
+  } else if (space.kind !== 'mesh' && space.minX != null) {
+    const { yaw, cx, cz, minX, maxX, minZ, maxZ } = space;
+    const c = Math.cos(yaw);
+    const s = Math.sin(yaw);
+    const toWorld = (lx, lz) => new THREE.Vector3(cx + lx * c - lz * s, y, cz + lx * s + lz * c);
+    pts = [
+      toWorld(minX, minZ),
+      toWorld(maxX, minZ),
+      toWorld(maxX, maxZ),
+      toWorld(minX, maxZ),
+      toWorld(minX, minZ),
+    ];
+  }
+  if (!pts) return;
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const color = space.kind === 'mesh' ? 0x9eefc2 : 0x88c8ff;
+  revealWalkHelper = new THREE.Line(geo, new THREE.LineBasicMaterial({
+    color,
+    depthTest: false,
+    transparent: true,
+    opacity: 0.95,
+  }));
+  revealWalkHelper.renderOrder = 12;
+  revealWalkHelper.name = 'revealWalkHelper';
+  revealRoot.add(revealWalkHelper);
 }
 
 function applyRevealPano(tex) {
@@ -636,12 +729,7 @@ function unlockRevealWalk() {
   revealWalkUnlocked = true;
   revealWalkAfterOrbit = false;
   applyRevealFeatures();
-  if (revealImmersive) {
-    revealCtl.setColliderMeshes(
-      revealImmersive.colliderMeshes,
-      CONFIG.reveal.collisionSkin ?? 0.35,
-    );
-  }
+  if (revealImmersive) applyRevealWalkBounds(revealImmersive);
   if (revealControlsOn && elHint) {
     elHint.textContent = '按住拖拽环视 · WASD 走动 · 滚轮缩放视野';
   }
@@ -692,14 +780,19 @@ async function teardownRevealAssets() {
     revealMarbleLoad = null;
   }
   revealRoot.visible = false;
+  syncRevealWalkHelper(null);
   revealRoot.clear();
   revealCtl.setColliderMeshes(null);
+  revealCtl.setWalkSpace(null);
   revealCtl.setBounds(null);
 }
 
 function rememberRevealWorldSpawn() {
   const profile = REVEAL_WORLDS[CONFIG.reveal.world];
   if (profile?.spawn && CONFIG.reveal.spawn) Object.assign(profile.spawn, CONFIG.reveal.spawn);
+  if (profile && CONFIG.reveal.walk) {
+    profile.walk = { ...(profile.walk ?? {}), ...CONFIG.reveal.walk };
+  }
 }
 
 /** 换终幕世界：点云、全景、碰撞和出生点一起换。已经在终幕里就当场重载。 */
@@ -717,6 +810,7 @@ async function setRevealWorld(id) {
   }
   if (revealImmersive) await teardownRevealAssets();
   for (const c of revealSpawnGui) c.updateDisplay();
+  for (const c of revealWalkGui) c.updateDisplay();
   if (!showing) {
     startRevealMarblePreload();
     return CONFIG.reveal.world;
@@ -1164,6 +1258,35 @@ const gui = new GUI({ title: '爪机手感调参' });
     sf.add(spawn, 'offsetX', -3, 3, 0.05).name('左右').onChange(pushSpawn),
     sf.add(spawn, 'offsetZFrac', -0.45, 0.45, 0.01).name('进深').onChange(pushSpawn),
   );
+  const walk = CONFIG.reveal.walk;
+  const pushWalkMesh = () => {
+    rememberRevealWorldSpawn();
+    if (revealImmersive) applyRevealWalkBounds(revealImmersive);
+  };
+  const pushWalkFallback = () => {
+    rememberRevealWorldSpawn();
+    if (walk.useMesh !== false && revealCtl.walkSpace) return;
+    if (revealImmersive) applyRevealWalkBounds(revealImmersive);
+  };
+  revealWalkGui.push(
+    sf.add(walk, 'useMesh').name('碰撞网格边界').onChange(pushWalkMesh),
+    sf.add(walk, 'meshInset', 0, 1.2, 0.02).name('网格内缩').onChange(pushWalkMesh),
+    sf.add(walk, 'sealMeters', 0, 1.4, 0.05).name('缺口闭合').onChange(pushWalkMesh),
+    sf.add(walk, 'wallY0', 0.2, 2.2, 0.05).name('墙带底').onChange(pushWalkMesh),
+    sf.add(walk, 'wallY1', 0.8, 3.2, 0.05).name('墙带顶').onChange(pushWalkMesh),
+  );
+  revealWalkFallbackGui.push(
+    sf.add(walk, 'yaw', -Math.PI, Math.PI, 0.01).name('回退盒偏转').onChange(pushWalkFallback),
+    sf.add(walk, 'insetMinX', 0, 2.4, 0.05).name('回退左墙').onChange(pushWalkFallback),
+    sf.add(walk, 'insetMaxX', 0, 2.4, 0.05).name('回退右墙').onChange(pushWalkFallback),
+    sf.add(walk, 'insetMinZ', 0, 2.4, 0.05).name('回退前墙').onChange(pushWalkFallback),
+    sf.add(walk, 'insetMaxZ', 0, 2.4, 0.05).name('回退后墙').onChange(pushWalkFallback),
+  );
+  revealWalkGui.push(...revealWalkFallbackGui);
+  sf.add(CONFIG.reveal, 'showWalkHelper').name('显示行走范围').onChange(() => {
+    syncRevealWalkHelper(revealCtl.walkSpace ?? revealCtl.walkBox);
+  });
+  syncWalkFallbackGui();
   sf.add(CONFIG.reveal, 'moveSpeed', 0.2, 4, 0.05).name('走速').onChange(syncRevealWalkFeel);
   sf.add(CONFIG.reveal, 'moveAccel', 0, 12, 0.1).name('加速').onChange(syncRevealWalkFeel);
   sf.add(CONFIG.reveal, 'moveDecel', 0, 16, 0.1).name('减速').onChange(syncRevealWalkFeel);
@@ -1239,7 +1362,7 @@ input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
 // —— 调试钩子（控制台/自动化用）——
 window.__debug = {
   claw, rig, director, mask, items, CONFIG, toast, world, modelFade,
-  revealCtl, enableRevealControls, revealPreview, onReveal, setRevealWorld,
+  revealCtl, enableRevealControls, revealPreview, onReveal, setRevealWorld, unlockRevealWalk,
   get revealImmersive() { return revealImmersive; },
   openCollectDisplay: openCollectDisplayWindow,
 };

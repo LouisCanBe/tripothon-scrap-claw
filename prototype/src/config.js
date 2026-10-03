@@ -409,9 +409,10 @@ export const CONFIG = {
     pano: '',
     colliderGlb: '',
     spz: '',
-    boundsMargin: 0.45,        // AABB 内缩（越大越不容易贴到盒边）
-    collisionSkin: 0.35,       // 沿 collider 网格射线阻挡的留白（米）
+    boundsMargin: 0.45,        // 无 collider 网格时 AABB 内缩
+    collisionSkin: 0.2,        // meshClip 射线留白（米）；主边界改走网格内缩
     showBoundsHelper: false,   // true：显示 collider 包围盒线框，核对是否贴 SPZ
+    showWalkHelper: true,      // 终幕画出可行走范围（GLB 多边形，失败则偏转盒）
     moveSpeed: 0.9,            // 环视结束后 WASD 目标速度（米/秒）
     moveAccel: 1.5,            // 从静止加速到目标速度（米/秒²）
     moveDecel: 4.2,            // 松手后减速（米/秒²）
@@ -424,6 +425,10 @@ export const CONFIG = {
     yawOffset: 0,              // 全景与机位朝向对不齐时微调（弧度）
     // 与 Marble 默认出生点一致时可微调朝向（弧度）
     spawn: { yaw: 0, pitch: 0, eyeHeight: 1.55, offsetZFrac: 0, offsetX: 0 },
+    walk: {
+      yaw: 0, insetMinX: 0.55, insetMaxX: 0.55, insetMinZ: 0.55, insetMaxZ: 0.55,
+      useMesh: true, meshInset: 0.16, sealMeters: 0.6, grid: 96, wallY0: 1, wallY1: 2.35,
+    },
     lookSensitivity: 0.005,    // 与 Marble 工具台默认一致
     keyLookSpeed: 1.8,         // 仅 keyboardLook:true 时生效
     pitchMin: -1.45,

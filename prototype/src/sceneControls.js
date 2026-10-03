@@ -134,11 +134,15 @@ export class SceneControls {
 
     this.enabled = false;
     this.bounds = null;
+    this.walkBox = null;
+    this.walkSpace = null;
     this._boundsMargin = 0.3;
     this.colliderMeshes = null;
     this.collisionSkin = opts.collisionSkin ?? 0.35;
     this._raycaster = new THREE.Raycaster();
-    this._ray = new THREE.Ray();
+    this._clipDir = new THREE.Vector3();
+    this._clipX = new THREE.Vector3();
+    this._clipZ = new THREE.Vector3();
 
     this._drag = null;
     this._lookClock = 0;
@@ -165,9 +169,44 @@ export class SceneControls {
   }
 
   setBounds(box, margin = 0.3) {
-    if (!box) { this.bounds = null; return; }
+    if (!box) { this.bounds = null; this.walkBox = null; return; }
     this._boundsMargin = margin;
+    if (box.minX != null) {
+      this.walkBox = box;
+      this.bounds = null;
+      return;
+    }
+    this.walkBox = null;
     this.bounds = box.clone().expandByScalar(-margin);
+  }
+
+  setWalkSpace(space) {
+    this.walkSpace = space || null;
+  }
+
+  _clampWalkXZ(pos, from = null) {
+    if (this.walkSpace) {
+      this.walkSpace.clip(pos, from);
+      return;
+    }
+    if (this.walkBox) {
+      const { yaw, cx, cz, minX, maxX, minZ, maxZ } = this.walkBox;
+      const c = Math.cos(yaw);
+      const s = Math.sin(yaw);
+      const dx = pos.x - cx;
+      const dz = pos.z - cz;
+      let lx = dx * c + dz * s;
+      let lz = -dx * s + dz * c;
+      lx = THREE.MathUtils.clamp(lx, minX, maxX);
+      lz = THREE.MathUtils.clamp(lz, minZ, maxZ);
+      pos.x = cx + lx * c - lz * s;
+      pos.z = cz + lx * s + lz * c;
+      return;
+    }
+    if (this.bounds) {
+      pos.x = THREE.MathUtils.clamp(pos.x, this.bounds.min.x, this.bounds.max.x);
+      pos.z = THREE.MathUtils.clamp(pos.z, this.bounds.min.z, this.bounds.max.z);
+    }
   }
 
   setColliderMeshes(meshes, skin) {
@@ -175,20 +214,36 @@ export class SceneControls {
     if (skin != null) this.collisionSkin = skin;
   }
 
-  /** 水平移动沿 collider 三角网格阻挡（比纯 AABB 贴墙） */
-  _clipAgainstMeshes(from, to) {
-    const delta = to.clone().sub(from);
-    const len = delta.length();
+  _castMove(from, to) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dz = to.z - from.z;
+    const len = Math.hypot(dx, dy, dz);
     if (len < 1e-5) return to;
-    const dir = delta.normalize();
-    this._ray.origin.copy(from);
-    this._ray.direction.copy(dir);
+    const inv = 1 / len;
+    this._clipDir.set(dx * inv, dy * inv, dz * inv);
+    this._raycaster.set(from, this._clipDir);
+    this._raycaster.far = len + this.collisionSkin;
     const hits = this._raycaster.intersectObjects(this.colliderMeshes, true);
+    this._raycaster.far = Infinity;
     if (hits.length && hits[0].distance < len + this.collisionSkin) {
       const stop = Math.max(0, hits[0].distance - this.collisionSkin);
-      return from.clone().add(dir.multiplyScalar(stop));
+      return from.clone().addScaledVector(this._clipDir, stop);
     }
-    return to;
+    return to.clone();
+  }
+
+  /** 水平移动沿 collider 三角网格阻挡；撞上后按轴滑墙。 */
+  _clipAgainstMeshes(from, to) {
+    const full = this._castMove(from, to);
+    if (full.distanceToSquared(to) < 1e-10) return full;
+    this._clipX.copy(to);
+    this._clipX.z = from.z;
+    this._clipZ.copy(to);
+    this._clipZ.x = from.x;
+    const sx = this._castMove(from, this._clipX);
+    const sz = this._castMove(from, this._clipZ);
+    return from.clone().set(sx.x, from.y, sz.z);
   }
 
   _wishFromInput(fwd, right, axis, keys) {
@@ -233,8 +288,11 @@ export class SceneControls {
     } else {
       this._vel.set(0, 0, 0);
     }
-    if (moved && this.colliderMeshes?.length && obj === this.pos) {
-      this.pos.copy(this._clipAgainstMeshes(prev, this.pos));
+    if (moved && obj === this.pos) {
+      if (this.colliderMeshes?.length) {
+        this.pos.copy(this._clipAgainstMeshes(prev, this.pos));
+      }
+      this._clampWalkXZ(this.pos, prev);
       this._vel.copy(this.pos).sub(prev).multiplyScalar(1 / Math.max(dt, 1e-4));
       this._vel.y = 0;
     }
@@ -395,12 +453,13 @@ export class SceneControls {
 
   apply() {
     if (this.mode === 'fps') {
-      if (this.bounds) {
-        this.pos.clamp(this.bounds.min, this.bounds.max);
-        if (this.colliderMeshes?.length) {
-          const minY = this.bounds.min.y + 0.45;
-          const maxY = this.bounds.max.y - 0.15;
-          this.pos.y = THREE.MathUtils.clamp(this.pos.y, minY, maxY);
+      this._clampWalkXZ(this.pos);
+      const yBox = this.walkSpace ?? this.walkBox ?? this.bounds;
+      if (yBox) {
+        const minY = (yBox.minY ?? yBox.min?.y);
+        const maxY = (yBox.maxY ?? yBox.max?.y);
+        if (minY != null && maxY != null && minY + 0.45 < maxY - 0.15) {
+          this.pos.y = THREE.MathUtils.clamp(this.pos.y, minY + 0.45, maxY - 0.15);
         }
       }
       this.camera.position.copy(this.pos);

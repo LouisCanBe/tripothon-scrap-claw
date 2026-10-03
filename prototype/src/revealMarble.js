@@ -33,6 +33,13 @@ export async function loadMarbleCollider(url, parent) {
   const box = new THREE.Box3().setFromObject(group);
   group.position.y -= box.min.y;
   group.visible = false;
+  group.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const mat of mats) {
+      if (mat) mat.side = THREE.DoubleSide;
+    }
+  });
   return { group };
 }
 
