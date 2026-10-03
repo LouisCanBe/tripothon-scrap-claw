@@ -362,13 +362,19 @@ export const CONFIG = {
   reveal: {
     mode: 'pano',
     transition: {
-      duration: 2.35,
-      handoffAt: 0.38,
-      count: 1200,
-      pointSize: 0.032,
-      color: 0x9a9086,
+      duration: 3.2,
+      dissolveSoft: 0.28,
+      // 溶解噪声格子密度（越大格子越小、越密；原约 80×45）
+      dissolveCellsX: 120,
+      dissolveCellsY: 68,
+      brightenDuration: 2.8,
+      panoIntensityStart: 0.12,
+      dissolveLiftEnd: 0.38,
     },
-    pano: 'design/concepts/reveal-ruins-wide-scrapyard-cursor-photo-16x9.png',
+    endingOrbitDelay: 7,
+    endingOrbitTurns: 1,
+    endingOrbitSeconds: 14,
+    pano: 'assets/worlds/reveal-draft-pano.png',
     colliderGlb: 'assets/worlds/reveal-draft-collider.glb',
     spz: 'assets/worlds/reveal-draft-100k.spz',
     boundsMargin: 0.45,        // AABB 内缩（越大越不容易贴到盒边）

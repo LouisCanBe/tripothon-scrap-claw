@@ -106,10 +106,10 @@ export class Post {
   // 画幅中心的 UV 坐标（y 注意翻转）
   setCenter(cx, cy) { this.pass.uniforms.uCenter.value.set(cx, cy); }
 
-  render(dt, t) {
+  _syncUniforms(dt, t) {
     const p = CONFIG.post;
     this.fisheyeFade += (this.fisheyeFadeTarget - this.fisheyeFade) * (1 - Math.exp(-dt / 0.6));
-    this.bloom.strength = p.bloom * this._bloomScale;   // H 面板实时可调（移动端锁 0）
+    this.bloom.strength = p.bloom * this._bloomScale;
     this.bloom.threshold = p.bloomThreshold;
     const u = this.pass.uniforms;
     const lens = viewportEdgeLensScale() * this.fisheyeFade;
@@ -122,6 +122,26 @@ export class Post {
     u.uWarmth.value = pc.warmth * this.fisheyeFade;
     u.uChroma.value = pc.chroma * lens;
     u.uSat.value = pc.sat;
+  }
+
+  /** 终幕溶解：把当前后处理链渲到 RT（含鱼眼/颗粒） */
+  renderToTarget(target, dt, t) {
+    this._syncUniforms(dt, t);
+    const c = this.composer;
+    const renderer = c.renderer;
+    const prevTarget = renderer.getRenderTarget();
+    const prevToScreen = c.renderToScreen;
+    c.renderToScreen = false;
+    c.render(dt);
+    const srcTex = c.writeBuffer.texture;
+    c.copyPass.renderToScreen = false;
+    c.copyPass.render(renderer, target, { texture: srcTex }, dt);
+    renderer.setRenderTarget(prevTarget);
+    c.renderToScreen = prevToScreen;
+  }
+
+  render(dt, t) {
+    this._syncUniforms(dt, t);
     this.composer.render();
   }
 }

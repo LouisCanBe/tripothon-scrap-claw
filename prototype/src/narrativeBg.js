@@ -135,6 +135,26 @@ export class NarrativeBg {
     this.setBackdrop('ambient', { immediate: true });
   }
 
+  /** 只藏 HTML 叙事层，不动 three scene.background（定格娃娃机后再切全景） */
+  hideDomOnly() {
+    this.hideInterstitial();
+    if (this.root) this.root.classList.remove('on', 'in-viewport');
+    document.documentElement.classList.remove('narrative-backdrop');
+  }
+
+  clearSceneBackdrop() {
+    this._backdropGen += 1;
+    document.documentElement.classList.remove('narrative-scene-bg');
+    window.dispatchEvent(new CustomEvent('narrative:scene-bg', {
+      detail: { url: null, immediate: true },
+    }));
+  }
+
+  hideForReveal() {
+    this.hideDomOnly();
+    this.clearSceneBackdrop();
+  }
+
   /**
    * @param {import('./acts.js').ACTS[number]} act
    * @param {{ immediate?: boolean }} opts

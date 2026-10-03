@@ -32,7 +32,7 @@ import { ACTS, DEFAULT_HINT } from './acts.js';
 import { unlockAudio } from './gameAudio.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
 import { mountMarbleImmersive } from './revealMarble.js';
-import { createRevealDustTransition } from './revealTransition.js';
+import { createRevealDissolveTransition } from './revealTransition.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
 import { refreshClawComicFx } from './clawComicFx.js';
 import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
@@ -257,6 +257,23 @@ function applyRevealPano(tex) {
   scene.backgroundIntensity = CONFIG.reveal.backgroundIntensity ?? 1;
 }
 
+/** 终幕全景渐亮：0=冷暗，1=配置终值（溶解后缓慢拉起，避免硬切） */
+function setRevealPanoLift(k) {
+  const tr = CONFIG.reveal?.transition ?? {};
+  const start = tr.panoIntensityStart ?? 0.12;
+  const end = CONFIG.reveal.backgroundIntensity ?? 1;
+  const lift = Math.max(0, Math.min(1, k));
+  scene.backgroundIntensity = start + (end - start) * lift;
+  const cold = CONFIG.lights.revealCold;
+  const envBase = CONFIG.render.envIntensity ?? 1;
+  const coldMul = cold.envMul ?? 0.35;
+  scene.environmentIntensity = envBase * (coldMul + (1 - coldMul) * lift);
+  const exp = CONFIG.render.exposure ?? 1.18;
+  if (!CONFIG.pool.comicFx.enabled) {
+    renderer.toneMappingExposure = exp * (0.52 + 0.48 * lift);
+  }
+}
+
 function onRevealColdLighting() {
   scene.fog = null;
   applyRevealColdLighting({ key, fill, glow, hemi, ambient }, scene);
@@ -337,6 +354,8 @@ function disableRevealControls() {
 }
 
 async function onGameplayRestart() {
+  revealDissolve?.dispose();
+  revealDissolve = null;
   disableRevealControls();
   await teardownRevealAssets();
   globalGrabCount = 0;
@@ -354,36 +373,31 @@ async function onGameplayRestart() {
   narrativeBg.hideInterstitial();
 }
 
-let revealDust = null;
+let revealDissolve = null;
 
 async function onRevealTransition() {
-  const elFlash = document.getElementById('flash');
-  if (elFlash) {
-    elFlash.style.transition = 'opacity 0.4s ease';
-    elFlash.style.background = '#000';
-    elFlash.style.opacity = '0.55';
-  }
+  narrativeBg.hideDomOnly();
+  post.setFisheyeFade(0);
   await new Promise((resolve) => {
-    revealDust = createRevealDustTransition({
-      scene,
-      camera,
-      world,
-      onHandoff: () => {
-        onReveal();
-        if (elFlash) {
-          elFlash.style.transition = 'opacity 1.1s ease';
-          elFlash.style.opacity = '0';
-        }
+    revealDissolve = createRevealDissolveTransition({
+      renderer,
+      post,
+      revealCtl,
+      applyLift: setRevealPanoLift,
+      onHandoff: async () => {
+        narrativeBg.clearSceneBackdrop();
+        await onReveal({ deferControls: true });
       },
       onComplete: () => {
-        revealDust = null;
+        enableRevealControls({ recapture: CONFIG.reveal.mode !== 'immersive' });
+        revealDissolve = null;
         resolve();
       },
     });
   });
 }
 
-async function onReveal() {
+async function onReveal({ deferControls = false } = {}) {
   world.visible = false;
   onRevealColdLighting();
   await teardownRevealAssets();
@@ -416,19 +430,34 @@ async function onReveal() {
       toast('沉浸式加载失败，回退全景', true);
       CONFIG.reveal.mode = 'pano';
       applyRevealFeatures();
-      if (revealPanoTex) applyRevealPano(revealPanoTex);
+      if (revealPanoTex) {
+        applyRevealPano(revealPanoTex);
+        setRevealPanoLift(0);
+      }
     }
   } else if (revealPanoTex) {
     applyRevealPano(revealPanoTex);
+    setRevealPanoLift(0);
   } else {
-    panoLoader.load(CONFIG.reveal.pano, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.mapping = THREE.EquirectangularReflectionMapping;
-      revealPanoTex = tex;
-      applyRevealPano(tex);
+    await new Promise((resolve, reject) => {
+      panoLoader.load(
+        CONFIG.reveal.pano,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.mapping = THREE.EquirectangularReflectionMapping;
+          revealPanoTex = tex;
+          applyRevealPano(tex);
+          setRevealPanoLift(0);
+          resolve();
+        },
+        undefined,
+        reject,
+      );
     });
   }
-  enableRevealControls({ recapture: CONFIG.reveal.mode !== 'immersive' });
+  if (!deferControls) {
+    enableRevealControls({ recapture: CONFIG.reveal.mode !== 'immersive' });
+  }
 }
 
 /** 控制台：await __debug.revealPreview('immersive') */
@@ -451,7 +480,13 @@ director = new Director({
     onLightsCold: onRevealColdLighting,
     onRestart: onGameplayRestart,
     onEndingOrbit: () => {
-      if (revealControlsOn) revealCtl.beginOrbitSweep(1, 10);
+      const r = CONFIG.reveal ?? {};
+      const delay = (r.endingOrbitDelay ?? 7) * 1000;
+      const turns = r.endingOrbitTurns ?? 1;
+      const sec = r.endingOrbitSeconds ?? 14;
+      setTimeout(() => {
+        if (revealControlsOn) revealCtl.beginOrbitSweep(turns, sec);
+      }, delay);
     },
   },
 });
@@ -743,11 +778,14 @@ function tick() {
     rig.update(dt, t);
   }
   claw.update(dt, t);
-  revealDust?.update(dt);
   prizeItemSim?.tick(dt);
   poolDecorSim?.tick(items, dt, claw.getPoolPhysicsContext());
   tickUpgrades(dt);
-  post.render(dt, t);
+  if (revealDissolve) {
+    revealDissolve.update(dt, t);
+  } else {
+    post.render(dt, t);
+  }
 }
 tick();
 
@@ -756,6 +794,7 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   post.setSize(innerWidth, innerHeight);
+  revealDissolve?.setSize();
   Object.assign(viewRect, mask.getRect());   // 窗口变化时直接对齐，不做阻尼
   modeBlend = mask.viewMode === 'near' ? 1 : 0;
   // 画幅遮罩在 frameMask 内自行监听 resize
