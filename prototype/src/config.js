@@ -16,7 +16,7 @@ export const CONFIG = {
     grainOpacity: 0.052,
     marginVignette: 0.58,
     narrativeKenBurns: true,
-    // 前几幕：概念图只在方框视口内；方框外黑底。16:9 概念图直接作 scene.background（见 main.js）
+    // 前几幕：一幕一张 16:9 概念图，平铺满画面（平面，不随镜头转）。方框外由遮罩盖黑。
     backdropInViewport: true,
     backdropAsSceneBackground: true,
     sceneBackgroundIntensity: 0.92,
@@ -67,8 +67,8 @@ export const CONFIG = {
       cold: 'transparent',
     },
     transition: {
-      backdropMs: 1100,
-      backdropDip: 0.48,
+      backdropMs: 1400,
+      backdropDip: 0.28,
       interstitialFadeIn: 0.72,
       interstitialFadeOut: 0.9,
       interstitialDip: 0.52,
@@ -228,6 +228,15 @@ export const CONFIG = {
       fillMul: 0.35,
       envMul: 0.35,
     },
+    // 终幕渐亮目标（偏中性 daylight，避免一下子拉到暖黄 memory key）
+    revealNeutral: {
+      keyColor: 0xdce6f2,
+      keyIntensity: 0.52,
+      hemiIntensity: 0.4,
+      ambientIntensity: 0.22,
+      fillIntensity: 0.36,
+      envMul: 0.78,
+    },
   },
 
   // —— 渲染质感（阴影 / 色调映射 / 环境光）——
@@ -361,15 +370,34 @@ export const CONFIG = {
   // 终幕 Marble：mode 'pano' = 仅全景（与工具台 PNG 一致）；'immersive' = SPZ + collider 边界 + WASD
   reveal: {
     mode: 'pano',
+    // true：溶解/环视用同一套 Marble SPZ（与 tools/world.html 一致）；PNG 仅作加载失败回退
+    linkMarbleScene: true,
+    cinemaAspect: 2.39,
+    cinemaWidthFrac: 1,
+    /** 溶解+渐亮结束后保持 16:9 的秒数，再开始拉宽银幕 */
+    cinemaHoldSeconds: 2,
+    /** 环视总时长（秒）；拉宽不等这一整段结束 */
+    cinemaWidenSeconds: 12,
+    cinemaWidenOrbitTurns: 0.65,
+    /** 拉宽在转到约 1/4 圈时完成，环视继续 */
+    cinemaWidenAtTurns: 0.25,
     transition: {
-      duration: 3.2,
-      dissolveSoft: 0.28,
-      // 溶解噪声格子密度（越大格子越小、越密；原约 80×45）
-      dissolveCellsX: 120,
-      dissolveCellsY: 68,
-      brightenDuration: 2.8,
+      duration: 5.8,
+      dissolveSoft: 0.32,
+      /** 后半全局溶向 Marble，减轻两帧构图差造成的「绕点」感 */
+      dissolveWash: 0.26,
+      // 溶解噪声格子密度（越大格子越小；全屏中性投影下做均匀渐隐）
+      dissolveCellsX: 300,
+      dissolveCellsY: 169,
+      brightenDuration: 4.8,
       panoIntensityStart: 0.12,
-      dissolveLiftEnd: 0.38,
+      /** handoff 后首帧 Marble 亮度（勿用 0，否则混溶解前会闪黑） */
+      dissolveLiftStart: 0.36,
+      /** 溶解+渐亮段最高亮度；尾段在 16:9 停留时再拉到 1 */
+      liftCapEnd: 0.78,
+      liftTailSeconds: 3.6,
+      /** 溶解渐亮结束后：从定格合成淡出到实时 Marble（秒） */
+      exitBlendMs: 2400,
     },
     endingOrbitDelay: 7,
     endingOrbitTurns: 1,
@@ -383,6 +411,8 @@ export const CONFIG = {
     moveSpeed: 4,              // immersive 行走速度（sceneControls.moveSpeed）
     backgroundIntensity: 1.0,
     yawOffset: 0,              // 全景与机位朝向对不齐时微调（弧度）
+    // 与 Marble 默认出生点一致时可微调朝向（弧度）
+    spawn: { yaw: 0, pitch: 0, eyeHeight: 1.55, offsetZFrac: 0.15, offsetX: 0 },
     lookSensitivity: 0.005,    // 与 Marble 工具台默认一致
     keyLookSpeed: 1.8,         // 仅 keyboardLook:true 时生效
     pitchMin: -1.45,

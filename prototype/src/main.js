@@ -33,6 +33,7 @@ import { unlockAudio } from './gameAudio.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
 import { mountMarbleImmersive } from './revealMarble.js';
 import { createRevealDissolveTransition } from './revealTransition.js';
+import { createNarrativeSceneBgDome } from './narrativeSceneBgDome.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
 import { refreshClawComicFx } from './clawComicFx.js';
 import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
@@ -40,7 +41,12 @@ import {
   publishHoleDrop, publishVended, openCollectDisplayWindow, startCollectGamePing,
 } from './collectDisplayBus.js';
 import { startCollectDisplayPairPanel } from './collectDisplayPairPanel.js';
-import { createSceneLights, applyRevealColdLighting, applyMemoryLighting } from './sceneLighting.js';
+import {
+  createSceneLights,
+  applyRevealColdLighting,
+  applyRevealLightingForLift,
+  applyMemoryLighting,
+} from './sceneLighting.js';
 import { NarrativeBg } from './narrativeBg.js';
 import { applyNarrativeToConfig, preloadNarrativeImages } from './narrativeAssets.js';
 import { initPresent, applyPresentAct, getPresentActId } from './present.js';
@@ -91,39 +97,52 @@ document.getElementById('stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = GAMEPLAY_SCENE_BG;
+const narrativeSceneDome = createNarrativeSceneBgDome(renderer);
 
-async function applyNarrativeSceneBackground(url, { immediate = true, actId = null } = {}) {
+async function loadNarrativeSceneTex(url) {
+  let tex = narrativeSceneBgCache.get(url);
+  if (!tex) {
+    tex = await narrativeBgLoader.loadAsync(url);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.mapping = THREE.UVMapping;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    narrativeSceneBgCache.set(url, tex);
+  }
+  return tex;
+}
+
+function narrativeSceneIntensity(actId) {
+  const p = CONFIG.present ?? {};
+  const actCfg = actId != null ? p.acts?.[actId] : null;
+  return actCfg?.sceneBackgroundIntensity ?? p.sceneBackgroundIntensity ?? 0.92;
+}
+
+async function applyNarrativeSceneBackground(url, { immediate = true, actId = null, fadeMs = 1400 } = {}) {
   const p = CONFIG.present ?? {};
   if (!p.backdropAsSceneBackground || !url) {
-    scene.background = GAMEPLAY_SCENE_BG;
+    narrativeSceneDome.hide(scene, GAMEPLAY_SCENE_BG);
     scene.backgroundIntensity = CONFIG.render.envIntensity ?? 1;
     document.documentElement.classList.remove('narrative-scene-bg');
     return;
   }
-  let tex = narrativeSceneBgCache.get(url);
-  if (!tex) {
-    try {
-      tex = await narrativeBgLoader.loadAsync(url);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      narrativeSceneBgCache.set(url, tex);
-    } catch (e) {
-      console.warn('[narrative] scene.background 加载失败', url, e);
-      return;
+  try {
+    const tex = await loadNarrativeSceneTex(url);
+    const intensity = narrativeSceneIntensity(actId);
+    if (immediate || !narrativeSceneDome.isActive()) {
+      narrativeSceneDome.setImmediate(tex, scene, intensity);
+    } else {
+      await narrativeSceneDome.crossfadeTo(tex, fadeMs, scene, intensity);
     }
+    document.documentElement.classList.add('narrative-scene-bg');
+  } catch (e) {
+    console.warn('[narrative] scene.background 加载失败', url, e);
   }
-  scene.background = tex;
-  const actCfg = actId != null ? p.acts?.[actId] : null;
-  scene.backgroundIntensity = actCfg?.sceneBackgroundIntensity
-    ?? p.sceneBackgroundIntensity
-    ?? 0.92;
-  document.documentElement.classList.add('narrative-scene-bg');
 }
 
 window.addEventListener('narrative:scene-bg', (e) => {
   applyNarrativeSceneBackground(e.detail?.url, e.detail ?? {});
 });
-
-narrativeBg.showAmbient();
 
 // IBL：RoomEnvironment 给 PBR 材质环境反射与补光（无需外部 HDR 文件）
 {
@@ -145,6 +164,7 @@ const { ambient, hemi, key, fill, glow } = createSceneLights(scene, {
 const world = new THREE.Group();
 scene.add(world);
 const revealRoot = new THREE.Group();
+revealRoot.visible = false;
 scene.add(revealRoot);
 let revealImmersive = null;
 const machineShellBuilt = buildMachineShell(world);
@@ -241,16 +261,73 @@ window.addEventListener('framechange', (e) => {
 // —— 终幕 Marble 全景（预加载，reveal 时切背景）——
 const panoLoader = new THREE.TextureLoader();
 let revealPanoTex = null;
-panoLoader.load(
-  CONFIG.reveal.pano,
-  (tex) => {
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.mapping = THREE.EquirectangularReflectionMapping;
-    revealPanoTex = tex;
-  },
-  undefined,
-  (err) => console.warn('[reveal] 全景加载失败', CONFIG.reveal.pano, err),
-);
+let revealPanoUrl = '';
+let revealMarbleLoad = null;
+
+function loadRevealPanoTexture() {
+  const url = CONFIG.reveal.pano;
+  if (revealPanoTex && revealPanoUrl === url) return Promise.resolve(revealPanoTex);
+  revealPanoUrl = url;
+  return new Promise((resolve, reject) => {
+    panoLoader.load(
+      url,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.mapping = THREE.EquirectangularReflectionMapping;
+        revealPanoTex = tex;
+        resolve(tex);
+      },
+      undefined,
+      (err) => {
+        console.warn('[reveal] 全景加载失败', url, err);
+        reject(err);
+      },
+    );
+  });
+}
+loadRevealPanoTexture().catch(() => {});
+
+function shouldLinkMarbleScene() {
+  return CONFIG.reveal.linkMarbleScene !== false;
+}
+
+function startRevealMarblePreload() {
+  if (!shouldLinkMarbleScene()) return;
+  if (revealMarbleLoad) return;
+  revealMarbleLoad = mountMarbleImmersive(revealRoot, {
+    colliderUrl: CONFIG.reveal.colliderGlb,
+    spzUrl: CONFIG.reveal.spz,
+    showBoundsHelper: !!CONFIG.reveal.showBoundsHelper,
+  }).catch((e) => {
+    revealMarbleLoad = null;
+    throw e;
+  });
+}
+
+function applyMarbleRevealSpawn(immersive) {
+  const { bounds } = immersive;
+  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new THREE.Vector3());
+  const spawn = CONFIG.reveal.spawn;
+  revealCtl.yaw = (spawn?.yaw ?? 0) + (CONFIG.reveal.yawOffset ?? 0);
+  revealCtl.pitch = spawn?.pitch ?? 0;
+  revealCtl.pos.set(
+    center.x + (spawn?.offsetX ?? 0),
+    bounds.min.y + (spawn?.eyeHeight ?? 1.55),
+    center.z + size.z * (spawn?.offsetZFrac ?? 0.15),
+  );
+  revealCtl.setBounds(bounds, CONFIG.reveal.boundsMargin ?? 0.3);
+  if (CONFIG.reveal.mode === 'immersive') {
+    revealCtl.setColliderMeshes(
+      immersive.colliderMeshes,
+      CONFIG.reveal.collisionSkin ?? 0.35,
+    );
+    if (CONFIG.reveal.moveSpeed) revealCtl.moveSpeed = CONFIG.reveal.moveSpeed;
+  } else {
+    revealCtl.setColliderMeshes(null);
+  }
+  revealCtl.apply();
+}
 
 function applyRevealPano(tex) {
   scene.background = tex;
@@ -264,13 +341,12 @@ function setRevealPanoLift(k) {
   const end = CONFIG.reveal.backgroundIntensity ?? 1;
   const lift = Math.max(0, Math.min(1, k));
   scene.backgroundIntensity = start + (end - start) * lift;
-  const cold = CONFIG.lights.revealCold;
-  const envBase = CONFIG.render.envIntensity ?? 1;
-  const coldMul = cold.envMul ?? 0.35;
-  scene.environmentIntensity = envBase * (coldMul + (1 - coldMul) * lift);
+  applyRevealLightingForLift(lift, { key, fill, glow, hemi, ambient }, scene);
   const exp = CONFIG.render.exposure ?? 1.18;
   if (!CONFIG.pool.comicFx.enabled) {
-    renderer.toneMappingExposure = exp * (0.52 + 0.48 * lift);
+    // 末段放缓，避免溶解一结束曝光顶满发白
+    const expK = 1 - (1 - lift) ** 2.4;
+    renderer.toneMappingExposure = exp * (0.56 + 0.4 * expK);
   }
 }
 
@@ -330,8 +406,12 @@ function enableRevealControls({ recapture = true } = {}) {
 }
 
 async function teardownRevealAssets() {
-  revealImmersive?.dispose();
-  revealImmersive = null;
+  if (revealImmersive) {
+    revealImmersive.dispose();
+    revealImmersive = null;
+    revealMarbleLoad = null;
+  }
+  revealRoot.visible = false;
   revealRoot.clear();
   revealCtl.setColliderMeshes(null);
   revealCtl.setBounds(null);
@@ -366,6 +446,10 @@ async function onGameplayRestart() {
   rig.setView('front');
   rig.setZoom(1);
   mask.setLayout('right', false);
+  mask.resetWideViewport();
+  revealMarbleLoad = null;
+  revealRoot.visible = false;
+  stopCinemaWidenSequence();
   document.getElementById('revealBeat')?.classList.remove('show');
   const rb = document.getElementById('revealBeat');
   if (rb) rb.hidden = true;
@@ -374,86 +458,150 @@ async function onGameplayRestart() {
 }
 
 let revealDissolve = null;
+/** @type {{ phase: 'hold'|'widen', elapsed: number, hold: number, widenSec: number, turns: number } | null} */
+let cinemaWidenAnim = null;
+/** @type {{ elapsed: number, dur: number, from: number, to: number } | null} */
+let revealLiftTail = null;
+
+function easeInOutCubicReveal(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+function stopCinemaWidenSequence() {
+  cinemaWidenAnim = null;
+  revealLiftTail = null;
+  revealCtl.stopOrbitSweep();
+}
+
+function tickRevealLiftTail(dt) {
+  const tail = revealLiftTail;
+  if (!tail) return;
+  tail.elapsed += dt;
+  const raw = Math.min(tail.elapsed / tail.dur, 1);
+  const k = 1 - (1 - raw) ** 3.2;
+  setRevealPanoLift(tail.from + (tail.to - tail.from) * k);
+  if (raw >= 1) revealLiftTail = null;
+}
+
+function startCinemaWidenSequence() {
+  const r = CONFIG.reveal ?? {};
+  const tr = r.transition ?? {};
+  stopCinemaWidenSequence();
+  mask.resetWideViewport();
+  mask.setCinemaLetterboxProgress(0);
+  Object.assign(viewRect, mask.getRect());
+  const liftFrom = tr.liftCapEnd ?? 0.78;
+  setRevealPanoLift(liftFrom);
+  revealLiftTail = {
+    elapsed: 0,
+    dur: tr.liftTailSeconds ?? 3.6,
+    from: liftFrom,
+    to: 1,
+  };
+  const orbitTurns = r.cinemaWidenOrbitTurns ?? 0.65;
+  const orbitSec = r.cinemaWidenSeconds ?? 12;
+  const atTurns = Math.min(r.cinemaWidenAtTurns ?? 0.25, orbitTurns);
+  cinemaWidenAnim = {
+    phase: 'hold',
+    elapsed: 0,
+    hold: r.cinemaHoldSeconds ?? 2,
+    widenSec: orbitSec * (atTurns / Math.max(orbitTurns, 0.01)),
+    orbitSec,
+    turns: orbitTurns,
+  };
+}
+
+function tickCinemaWidenSequence(dt) {
+  const a = cinemaWidenAnim;
+  if (!a || !revealControlsOn) return;
+  a.elapsed += dt;
+  if (a.phase === 'hold') {
+    mask.setCinemaLetterboxProgress(0);
+    if (a.elapsed < a.hold) return;
+    a.phase = 'widen';
+    a.elapsed = 0;
+    if (a.turns > 0) revealCtl.beginOrbitSweep(a.turns, a.orbitSec);
+    return;
+  }
+  const raw = Math.min(a.elapsed / a.widenSec, 1);
+  mask.setCinemaLetterboxProgress(easeInOutCubicReveal(raw));
+  Object.assign(viewRect, mask.getRect());
+  if (raw >= 1) cinemaWidenAnim = null;
+}
 
 async function onRevealTransition() {
   narrativeBg.hideDomOnly();
   post.setFisheyeFade(0);
+  mask.setCinemaLetterboxProgress(0);
+  if (shouldLinkMarbleScene() && !revealMarbleLoad) startRevealMarblePreload();
   await new Promise((resolve) => {
     revealDissolve = createRevealDissolveTransition({
       renderer,
       post,
       revealCtl,
       applyLift: setRevealPanoLift,
+      onPrepareFrame: applyDissolveNeutralView,
       onHandoff: async () => {
         narrativeBg.clearSceneBackdrop();
         await onReveal({ deferControls: true });
       },
       onComplete: () => {
-        enableRevealControls({ recapture: CONFIG.reveal.mode !== 'immersive' });
+        mask.resetWideViewport();
+        mask.setCinemaLetterboxProgress(0);
+        Object.assign(viewRect, mask.getRect());
+        enableRevealControls({ recapture: !shouldLinkMarbleScene() });
+        startCinemaWidenSequence();
         revealDissolve = null;
         resolve();
       },
     });
+    applyDissolveNeutralView();
+    revealDissolve.prime(0, performance.now() * 0.001);
   });
+}
+
+async function applyRevealPanoFallback() {
+  try {
+    const tex = await loadRevealPanoTexture();
+    applyRevealPano(tex);
+    setRevealPanoLift(0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function onReveal({ deferControls = false } = {}) {
   world.visible = false;
   onRevealColdLighting();
-  await teardownRevealAssets();
+  if (revealImmersive) await teardownRevealAssets();
+  else if (!revealMarbleLoad) revealRoot.clear();
   applyRevealFeatures();
 
-  if (CONFIG.reveal.mode === 'immersive') {
+  const wantImmersive = CONFIG.reveal.mode === 'immersive';
+  const wantMarble = shouldLinkMarbleScene() || wantImmersive;
+
+  if (wantMarble) {
     scene.background = null;
+    revealRoot.visible = true;
     try {
-      revealImmersive = await mountMarbleImmersive(revealRoot, {
-        colliderUrl: CONFIG.reveal.colliderGlb,
-        spzUrl: CONFIG.reveal.spz,
-        showBoundsHelper: !!CONFIG.reveal.showBoundsHelper,
-      });
-      const { bounds } = revealImmersive;
-      const center = bounds.getCenter(new THREE.Vector3());
-      const size = bounds.getSize(new THREE.Vector3());
-      revealCtl.yaw = 0;
-      revealCtl.pitch = 0;
-      revealCtl.pos.set(center.x, bounds.min.y + 1.55, center.z + size.z * 0.15);
-      revealCtl.setBounds(bounds, CONFIG.reveal.boundsMargin ?? 0.3);
-      revealCtl.setColliderMeshes(
-        revealImmersive.colliderMeshes,
-        CONFIG.reveal.collisionSkin ?? 0.35,
-      );
-      if (CONFIG.reveal.moveSpeed) revealCtl.moveSpeed = CONFIG.reveal.moveSpeed;
-      revealCtl.apply();
+      if (!revealMarbleLoad) startRevealMarblePreload();
+      revealImmersive = await revealMarbleLoad;
+      applyMarbleRevealSpawn(revealImmersive);
       applyRevealFeatures();
     } catch (e) {
-      console.error('[reveal immersive]', e);
-      toast('沉浸式加载失败，回退全景', true);
-      CONFIG.reveal.mode = 'pano';
-      applyRevealFeatures();
-      if (revealPanoTex) {
-        applyRevealPano(revealPanoTex);
-        setRevealPanoLift(0);
+      console.error('[reveal marble]', e);
+      revealImmersive = null;
+      revealMarbleLoad = null;
+      if (wantImmersive) {
+        toast('沉浸式加载失败，回退全景图', true);
+        CONFIG.reveal.mode = 'pano';
+        applyRevealFeatures();
       }
+      if (!(await applyRevealPanoFallback())) toast('Marble 与全景均未加载', true);
     }
-  } else if (revealPanoTex) {
-    applyRevealPano(revealPanoTex);
-    setRevealPanoLift(0);
-  } else {
-    await new Promise((resolve, reject) => {
-      panoLoader.load(
-        CONFIG.reveal.pano,
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          tex.mapping = THREE.EquirectangularReflectionMapping;
-          revealPanoTex = tex;
-          applyRevealPano(tex);
-          setRevealPanoLift(0);
-          resolve();
-        },
-        undefined,
-        reject,
-      );
-    });
+  } else if (!(await applyRevealPanoFallback())) {
+    toast('全景加载失败', true);
   }
   if (!deferControls) {
     enableRevealControls({ recapture: CONFIG.reveal.mode !== 'immersive' });
@@ -464,7 +612,12 @@ async function onReveal({ deferControls = false } = {}) {
 async function revealPreview(mode) {
   if (mode === 'pano' || mode === 'immersive') CONFIG.reveal.mode = mode;
   director?.mask?.setLayout('wide', false);
+  director?.mask?.resetWideViewport();
   await onReveal();
+  enableRevealControls({ recapture: !shouldLinkMarbleScene() });
+  stopCinemaWidenSequence();
+  mask.setCinemaLetterboxProgress(1);
+  Object.assign(viewRect, mask.getRect());
   return `mode=${CONFIG.reveal.mode} moveWalk=${revealCtl.features.moveWalk} pos=${revealCtl.pos.toArray().map(n => n.toFixed(2)).join(',')}`;
 }
 
@@ -478,16 +631,11 @@ director = new Director({
     onReveal,
     onRevealTransition,
     onLightsCold: onRevealColdLighting,
-    onRestart: onGameplayRestart,
-    onEndingOrbit: () => {
-      const r = CONFIG.reveal ?? {};
-      const delay = (r.endingOrbitDelay ?? 7) * 1000;
-      const turns = r.endingOrbitTurns ?? 1;
-      const sec = r.endingOrbitSeconds ?? 14;
-      setTimeout(() => {
-        if (revealControlsOn) revealCtl.beginOrbitSweep(turns, sec);
-      }, delay);
+    setFisheyeFade: (v) => post.setFisheyeFade(v),
+    onActEnter: (act) => {
+      if ((act?.id ?? 0) >= 4) startRevealMarblePreload();
     },
+    onRestart: onGameplayRestart,
   },
 });
 startCollectDisplayPairPanel(director);
@@ -712,6 +860,18 @@ function applyViewRect() {
   post.setCenter((viewRect.x + viewRect.w / 2) / innerWidth, 1 - (viewRect.y + viewRect.h / 2) / innerHeight);
   rig.setModeZoom(1 + (CONFIG.frame.nearZoom - 1) * modeBlend);
 }
+
+/** 溶解定格/混帧：取消移轴与鱼眼中心偏移，避免两帧 UV 错位像绕某点旋 */
+function applyDissolveNeutralView() {
+  camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+  post.setCenter(0.5, 0.5);
+  post.setFisheyeFade(0);
+  rig.setModeZoom(1);
+  rig.applyUserZoomPolicy(5);
+  rig.setZoom(1);
+}
+
 applyViewRect();
 
 // —— 加载闸门：GLB 全部就位后才开演（线上 48MB 走网络，避免演到一半"变装"）——
@@ -760,20 +920,35 @@ function tick() {
     viewDots.forEach(d => d.classList.toggle('on', d.dataset.v === rig.cur));
   }
 
-  // 画幅位/取景模式阻尼跟踪（转场与近远切换过程中逐帧收敛）
-  const cur = mask.getRect();
-  const a = 1 - Math.exp(-dt / 0.28);
-  viewRect.x += (cur.x - viewRect.x) * a;
-  viewRect.y += (cur.y - viewRect.y) * a;
-  viewRect.w += (cur.w - viewRect.w) * a;
-  viewRect.h += (cur.h - viewRect.h) * a;
-  modeBlend += ((mask.viewMode === 'near' ? 1 : 0) - modeBlend) * a;
-  applyViewRect();
-
   const ax = input.axis();
   if (revealControlsOn) {
-    revealCtl.tick(dt, { axis: ax, keys: input.keys });   // moveWalk 走 axis；Q/E 走 keys
+    tickRevealLiftTail(dt);
+    tickCinemaWidenSequence(dt);
+  }
+
+  narrativeSceneDome.tick(dt);
+
+  const inRevealDissolve = !!revealDissolve;
+  const cur = mask.getRect();
+  if (inRevealDissolve || cinemaWidenAnim) {
+    Object.assign(viewRect, cur);
+    modeBlend = 0;
+    if (inRevealDissolve && !revealDissolve.exitBlending) applyDissolveNeutralView();
   } else {
+    const a = 1 - Math.exp(-dt / 0.28);
+    viewRect.x += (cur.x - viewRect.x) * a;
+    viewRect.y += (cur.y - viewRect.y) * a;
+    viewRect.w += (cur.w - viewRect.w) * a;
+    viewRect.h += (cur.h - viewRect.h) * a;
+    modeBlend += ((mask.viewMode === 'near' ? 1 : 0) - modeBlend) * a;
+  }
+  if (!revealDissolve?.exitBlending) applyViewRect();
+
+  if (revealControlsOn) {
+    revealCtl.tick(dt, { axis: ax, keys: input.keys });   // moveWalk 走 axis；Q/E 走 keys
+  } else if (revealDissolve?.revealViewReady) {
+    revealCtl.apply();
+  } else if (world.visible) {
     claw.move(ax.x, ax.z, dt);
     rig.update(dt, t);
   }
@@ -795,6 +970,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
   post.setSize(innerWidth, innerHeight);
   revealDissolve?.setSize();
+  narrativeSceneDome.refit();
   Object.assign(viewRect, mask.getRect());   // 窗口变化时直接对齐，不做阻尼
   modeBlend = mask.viewMode === 'near' ? 1 : 0;
   // 画幅遮罩在 frameMask 内自行监听 resize

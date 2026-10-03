@@ -91,7 +91,7 @@ export const ACTS = [
     ],
   },
   {
-    id: 5, label: '', layout: 'wide', backdrop: 'ambient',
+    id: 5, label: '', layout: 'center', backdrop: 'ambient', backdropAfter: 'glitch',
     control: { move: false, drop: false, view: false },
     framing: 'far',
     hint: null,

@@ -121,12 +121,17 @@ export class NarrativeBg {
     el.hidden = false;
   }
 
-  _emitSceneBackground(url, immediate, act = null) {
+  _emitSceneBackground(url, immediate, act = null, fadeMs = null) {
     const p = CONFIG.present ?? {};
     if (!p.backdropAsSceneBackground || !url) return;
-    document.documentElement.classList.add('narrative-scene-bg');
+    const tc = transitionCfg();
     window.dispatchEvent(new CustomEvent('narrative:scene-bg', {
-      detail: { url, immediate, actId: act?.id ?? null },
+      detail: {
+        url,
+        immediate,
+        actId: act?.id ?? null,
+        fadeMs: fadeMs ?? tc.backdropMs ?? 1100,
+      },
     }));
   }
 
@@ -159,7 +164,7 @@ export class NarrativeBg {
    * @param {import('./acts.js').ACTS[number]} act
    * @param {{ immediate?: boolean }} opts
    */
-  async applyAct(act, { immediate = false } = {}) {
+  async applyAct(act, { immediate = false, skipBackdrop = false } = {}) {
     this.hideInterstitial();
     if (!act) return;
     const hud = document.getElementById('hud');
@@ -174,7 +179,7 @@ export class NarrativeBg {
       }
     }
     applyPresentAct(act, this._activeLayer());
-    if (act.backdrop) {
+    if (act.backdrop && !skipBackdrop) {
       await this.setBackdrop(act.backdrop, { immediate, dip: !immediate, act });
     }
     applyPresentAct(act, this._activeLayer());
@@ -204,7 +209,7 @@ export class NarrativeBg {
       this.root.classList.add('on');
       document.documentElement.classList.add('narrative-backdrop');
       if (this._viewport) this.syncViewport(this._viewport);
-      this._emitSceneBackground(url, true, act);
+      this._emitSceneBackground(url, true, act, 0);
       return;
     }
 
@@ -229,7 +234,7 @@ export class NarrativeBg {
     if (gen !== this._backdropGen) return;
     inEl.style.opacity = '1';
     outEl.style.opacity = '0';
-    this._emitSceneBackground(url, false, act);
+    this._emitSceneBackground(url, false, act, ms);
 
     await Promise.all([sleep(ms), dipTask]);
     if (gen !== this._backdropGen) return;
@@ -242,7 +247,6 @@ export class NarrativeBg {
     this.root.classList.add('on');
     document.documentElement.classList.add('narrative-backdrop');
     if (this._viewport) this.syncViewport(this._viewport);
-    if (!dip) this._emitSceneBackground(url, false, act);
   }
 
   async showInterstitial(keyOrUrl, dur = 2.5, step = {}) {

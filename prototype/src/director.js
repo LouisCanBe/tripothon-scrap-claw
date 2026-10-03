@@ -4,7 +4,16 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { ACTS, DEFAULT_HINT } from './acts.js';
-import { playGlitchTick, playRevealDrone, playMusicBoxStinger, unlockAudio } from './gameAudio.js';
+import {
+  playGlitchTick,
+  playRevealDrone,
+  playMusicBoxStinger,
+  unlockAudio,
+  startGlitchBed,
+  setGlitchBedMorph,
+  playGlitchBlackout,
+  endGlitchAudio,
+} from './gameAudio.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -157,7 +166,10 @@ export class Director {
     }
 
     this.hooks.onActEnter?.(act, i);
-    const bgTask = this.narrativeBg?.applyAct(act, { immediate: i === 0 }) ?? Promise.resolve();
+    const bgTask = this.narrativeBg?.applyAct(act, {
+      immediate: i === 0,
+      skipBackdrop: act.backdropAfter === 'glitch',
+    }) ?? Promise.resolve();
 
     this.elHud.style.display = act.quest ? 'block' : 'none';
     if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = (act.id ?? 0) < 3;
@@ -330,11 +342,22 @@ export class Director {
       : Promise.resolve();
     const grain0 = CONFIG.post.grain;
     CONFIG.post.grain = 0.13;
-    await sleep(1400);
+    const morphMs = step.morphMs ?? 2800;
+    const glitchMs = step.glitchMs ?? 2200;
+    const holdBefore = step.holdBefore ?? 520;
+    this.mask.beginLayoutMorph('wide');
+    this.mask.resetWideViewport();
+    startGlitchBed({ morphMs, glitchMs });
+    await sleep(holdBefore);
 
     const t0 = Date.now();
-    while (Date.now() - t0 < 2000) {
-      playGlitchTick();
+    while (Date.now() - t0 < glitchMs) {
+      const elapsed = Date.now() - t0;
+      const morphT = Math.min(1, elapsed / morphMs);
+      this.mask.setLayoutMorphProgress(morphT);
+      this.hooks.setFisheyeFade?.(1 - morphT);
+      setGlitchBedMorph(morphT);
+      playGlitchTick({ intensity: 0.35 + morphT * 0.75 });
       this.elStage.style.transform = `translate(${rand(-16, 16)}px, ${rand(-9, 9)}px)`;
       this.elStage.style.filter = `hue-rotate(${rand(-40, 40)}deg) contrast(${rand(1, 1.7)})`;
       this.elFlash.style.transition = 'none';
@@ -345,18 +368,28 @@ export class Director {
     }
     this.elStage.style.transform = '';
     this.elStage.style.filter = '';
+    this.mask.finishLayoutMorph();
+    this.hooks.setFisheyeFade?.(0);
     CONFIG.post.grain = grain0 * 0.4;
 
     this.elFlash.style.background = '#000';
     this.elFlash.style.opacity = '1';
+    playGlitchBlackout();
+    if (this.act?.backdropAfter === 'glitch' && this.act.backdrop) {
+      await this.narrativeBg?.setBackdrop(this.act.backdrop, {
+        immediate: true,
+        dip: false,
+        act: this.act,
+      });
+    }
     await sleep(280);
-    this.mask.setLayout('wide', false);
     this.hooks.onLightsCold?.();
     await sleep(700);
     this.elFlash.style.transition = 'opacity 1.4s';
     this.elFlash.style.opacity = '0';
     await sleep(1400);
     this.elFlash.style.transition = '';
+    endGlitchAudio();
     await glitchOverlay;
   }
 
@@ -399,7 +432,6 @@ export class Director {
     this.elMsg.style.opacity = '1';
     this.elHint.style.opacity = '1';
     this.elHint.textContent = '按住拖拽，自己再看一圈。';
-    this.hooks.onEndingOrbit?.();
     this.#hideReplayCue();
     this._replayTimer = setTimeout(() => {
       if (this.idx !== ACTS.length - 1) return;

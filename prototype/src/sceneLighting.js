@@ -51,12 +51,30 @@ export function applyMemoryLighting({ key, fill, glow, hemi, ambient }) {
 }
 
 export function applyRevealColdLighting({ key, fill, glow, hemi, ambient }, scene) {
+  applyRevealLightingForLift(0, { key, fill, glow, hemi, ambient }, scene);
+}
+
+const _coldKey = new THREE.Color();
+const _neutralKey = new THREE.Color();
+
+/** lift 0=冷调终幕 / 1=中性实景（勿直接切 memory 暖黄） */
+export function applyRevealLightingForLift(lift, { key, fill, glow, hemi, ambient }, scene) {
+  const k = Math.max(0, Math.min(1, lift));
   const c = CONFIG.lights.revealCold;
-  key.color.set(c.keyColor);
-  key.intensity = c.keyIntensity;
-  fill.intensity = (c.fillIntensity ?? 0) * (c.fillMul ?? 0.4);
-  hemi.intensity = c.hemiIntensity;
-  ambient.intensity = c.ambientIntensity ?? 0.08;
+  const n = CONFIG.lights.revealNeutral ?? CONFIG.lights;
+  _coldKey.set(c.keyColor);
+  _neutralKey.set(n.keyColor ?? CONFIG.lights.key.color);
+  key.color.lerpColors(_coldKey, _neutralKey, k);
+  key.intensity = c.keyIntensity + ((n.keyIntensity ?? CONFIG.lights.key.intensity) - c.keyIntensity) * k;
+  fill.intensity = (c.fillIntensity ?? 0) * (c.fillMul ?? 0.4)
+    + ((n.fillIntensity ?? CONFIG.lights.fill.intensity) - (c.fillIntensity ?? 0) * (c.fillMul ?? 0.4)) * k;
+  hemi.intensity = c.hemiIntensity + ((n.hemiIntensity ?? CONFIG.lights.hemi.intensity) - c.hemiIntensity) * k;
+  ambient.intensity = (c.ambientIntensity ?? 0.08)
+    + ((n.ambientIntensity ?? CONFIG.lights.ambient.intensity) - (c.ambientIntensity ?? 0.08)) * k;
   glow.visible = false;
-  if (scene) scene.environmentIntensity = CONFIG.render.envIntensity * (c.envMul ?? 0.35);
+  if (scene) {
+    const envBase = CONFIG.render.envIntensity ?? 1;
+    const envMul = (c.envMul ?? 0.35) + ((n.envMul ?? 0.78) - (c.envMul ?? 0.35)) * k;
+    scene.environmentIntensity = envBase * envMul;
+  }
 }

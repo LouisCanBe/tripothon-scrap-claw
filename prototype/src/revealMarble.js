@@ -51,6 +51,7 @@ export async function mountMarbleImmersive(root, { colliderUrl, spzUrl, showBoun
   frame.add(dropIn);
   await dropIn.addSplatScene(spzUrl, {
     progressiveLoad: false,
+    showLoadingUI: false,
     rotation: [0, 0, 0, 0],
   });
 

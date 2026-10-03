@@ -28,6 +28,13 @@ export class FrameMask {
     this.mode = 'center';
     this.viewMode = 'near';   // 取景：near=只取画幅区域（凑近）/ far=全窗取景画幅裁切（站远，首版构图）
     this.viewportShape = 'rect';  // rect | circle（由 acts.viewportShape + 导演切幕）
+    /** @type {number|null} 宽银幕宽高比；null = 16:9 */
+    this.wideAspect = null;
+    /** @type {number|null} 覆盖 config.frame.wideFill（终幕 2.39 常用 1） */
+    this.wideWidthFrac = null;
+    this._morphFromRect = null;
+    this._morphToMode = 'wide';
+    this._layoutMorph = 0;
     window.addEventListener('resize', () => this.apply(false));
   }
 
@@ -71,21 +78,98 @@ export class FrameMask {
   setViewMode(m) { if (m === 'near' || m === 'far') this.viewMode = m; }
   toggleViewMode() { this.setViewMode(this.viewMode === 'near' ? 'far' : 'near'); }
 
-  #rect() {
+  #lerpRect(a, b, t) {
+    return {
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      w: a.w + (b.w - a.w) * t,
+      h: a.h + (b.h - a.h) * t,
+    };
+  }
+
+  #rectForMode(mode) {
     const w = innerWidth, h = innerHeight, f = CONFIG.frame;
     const vh = h;
-    if (this.mode === 'right') {
+    if (mode === 'right') {
       const margin = w * (f.rightMargin ?? 0.03);
       const vw = Math.min(vh, w * (f.rightWidthFrac ?? 0.58));
       return { x: w - margin - vw, y: 0, w: vw, h: vh };
     }
-    if (this.mode === 'wide') {
-      const ww = w * f.wideFill;
-      const hh = Math.min(ww * 9 / 16, h * 0.98);
+    if (mode === 'wide') {
+      const aspect = this.wideAspect ?? (16 / 9);
+      const fill = this.wideWidthFrac ?? f.wideFill;
+      const ww = w * fill;
+      let hh = ww / aspect;
+      if (aspect >= 16 / 9 - 0.01) hh = Math.min(hh, h * 0.98);
+      else hh = Math.min(hh, h);
       return { x: (w - ww) / 2, y: (h - hh) / 2, w: ww, h: hh };
     }
     const vw = Math.min(vh, w * (f.centerWidthFrac ?? 0.56));
     return { x: (w - vw) / 2, y: 0, w: vw, h: vh };
+  }
+
+  #rect() {
+    if (this._layoutMorph > 0 && this._morphFromRect) {
+      const to = this.#rectForMode(this._morphToMode);
+      const t = Math.min(1, Math.max(0, this._layoutMorph));
+      return this.#lerpRect(this._morphFromRect, to, t);
+    }
+    return this.#rectForMode(this.mode);
+  }
+
+  beginLayoutMorph(toMode = 'wide') {
+    this._morphFromRect = { ...this.#rectForMode(this.mode) };
+    this._morphToMode = toMode;
+    this._layoutMorph = 0;
+    for (const el of [this.stage, this.border, document.getElementById('narrativeViewportShade'), document.getElementById('viewportChrome')].filter(Boolean)) {
+      el.classList.add('no-anim');
+    }
+  }
+
+  setLayoutMorphProgress(t) {
+    this._layoutMorph = Math.min(1, Math.max(0, t));
+    this.apply(false);
+  }
+
+  finishLayoutMorph() {
+    const target = this._morphToMode || 'wide';
+    this.mode = target;
+    this._layoutMorph = 0;
+    this._morphFromRect = null;
+    this.apply(true);
+    window.dispatchEvent(new CustomEvent('framechange', { detail: target }));
+  }
+
+  /** 终幕 Marble 环视：2.39:1 宽银幕，以窗宽为基准上下留黑 */
+  enterCinemaViewport({ aspect, widthFrac } = {}) {
+    const r = CONFIG.reveal ?? {};
+    this.wideAspect = aspect ?? r.cinemaAspect ?? 2.39;
+    this.wideWidthFrac = widthFrac ?? r.cinemaWidthFrac ?? 1;
+    if (this.mode !== 'wide') this.mode = 'wide';
+    this.apply(true);
+    window.dispatchEvent(new CustomEvent('framechange', { detail: 'wide' }));
+  }
+
+  resetWideViewport() {
+    this.wideAspect = null;
+    this.wideWidthFrac = null;
+  }
+
+  /** 溶解阶段：16:9 → 宽银幕，上下压出黑边（t 0~1） */
+  setCinemaLetterboxProgress(t) {
+    const r = CONFIG.reveal ?? {};
+    const f = CONFIG.frame;
+    const k = Math.min(1, Math.max(0, t));
+    const a0 = 16 / 9;
+    const a1 = r.cinemaAspect ?? 2.39;
+    const fill0 = f.wideFill ?? 0.94;
+    const fill1 = r.cinemaWidthFrac ?? 1;
+    this.mode = 'wide';
+    this.wideAspect = a0 + (a1 - a0) * k;
+    this.wideWidthFrac = fill0 + (fill1 - fill0) * k;
+    this._layoutMorph = 0;
+    this._morphFromRect = null;
+    this.apply(false);
   }
 
   // 当前布局的目标矩形（px）—— 相机 setViewOffset / 鱼眼中心对齐用
@@ -222,7 +306,9 @@ export class FrameMask {
   }
 
   setLayout(mode, animate = true) {
-    if (this.mode === mode) return;
+    if (this.mode === mode && this._layoutMorph <= 0) return;
+    this._layoutMorph = 0;
+    this._morphFromRect = null;
     this.mode = mode;
     this.apply(animate);
     window.dispatchEvent(new CustomEvent('framechange', { detail: mode }));
