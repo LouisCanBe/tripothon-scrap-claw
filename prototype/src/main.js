@@ -203,7 +203,7 @@ function toast(text) {
   setTimeout(() => el.remove(), 1900);
 }
 
-// —— 本局入洞总次数（全幕累计；UI 第三幕起由 director 显示）——
+// —— 全幕累计入洞数；界面留到终幕收束才显示（「今天收集了 N 个物资」）——
 let globalGrabCount = 0;
 const elGlobalGrabCount = () => document.getElementById('globalGrabCount');
 function bumpGlobalGrabCount() {

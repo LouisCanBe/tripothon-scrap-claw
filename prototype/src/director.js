@@ -207,7 +207,7 @@ export class Director {
     }) ?? Promise.resolve();
 
     this.elHud.style.display = act.quest ? 'block' : 'none';
-    if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = (act.id ?? 0) < 3;
+    if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = true;
     if (act.quest) for (const id of act.quest) document.getElementById('q-' + id)?.classList.remove('done');
 
     this.elHint.style.opacity = act.hint === null ? '0' : '1';
@@ -466,6 +466,7 @@ export class Director {
   }
 
   #stinger(text) {
+    if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = false;
     playMusicBoxStinger();
     this.elMsg.classList.add('stinger');
     this.elMsg.textContent = text;
