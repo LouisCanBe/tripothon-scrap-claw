@@ -113,6 +113,9 @@ export const ACTS = [
     script: [
       { type: 'glitch' },
       { type: 'revealBeat', dur: 3.4, line: '手心里只有一罐。' },
+      // 记忆里的机器先消失，破碎房间单独露出来，再进入房间本身的溶解。dir:'in' 可反向出现。
+      { type: 'fadeMachine', dur: 2.6 },
+      { type: 'pause', dur: 1.2 },
       { type: 'reveal' },
       { type: 'wait', event: 'cinemaWidened' },
       { type: 'pause', dur: 1.5 },

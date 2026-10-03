@@ -250,6 +250,10 @@ export class Director {
           break;
         case 'glitch': await this.#glitch(step); break;
         case 'revealBeat': await this.#revealBeat(step); break;
+        case 'fadeMachine':
+          // dur 秒。dir 缺省消失；dir:'in' 从看不见出现。根节点由钩子决定，换 GLB 不用改剧本。
+          await this.hooks.onFadeMemoryMachine?.(step);
+          break;
         case 'reveal':
           if (this.hooks.onRevealTransition) await this.hooks.onRevealTransition();
           else await this.hooks.onReveal?.();

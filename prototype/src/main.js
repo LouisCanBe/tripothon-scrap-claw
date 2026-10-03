@@ -33,6 +33,7 @@ import { unlockAudio } from './gameAudio.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
 import { mountMarbleImmersive } from './revealMarble.js';
 import { createRevealDissolveTransition } from './revealTransition.js';
+import { createModelFade } from './modelFade.js';
 import { createNarrativeSceneBgDome } from './narrativeSceneBgDome.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
 import { refreshClawComicFx } from './clawComicFx.js';
@@ -418,6 +419,9 @@ async function teardownRevealAssets() {
   revealCtl.setBounds(null);
 }
 
+// 整组模型淡入淡出。终幕用来让娃娃机消失；换 GLB 后同一接口还能用，dir:'in' 是反向出现。
+const modelFade = createModelFade();
+
 function disableRevealControls() {
   revealCtl.stopOrbitSweep();
   revealCtl.setEnabled(false);
@@ -430,6 +434,7 @@ function disableRevealControls() {
   scene.fog = null;
   applyMemoryLighting({ key, fill, glow, hemi, ambient });
   document.documentElement.classList.remove('narrative-scene-bg');
+  modelFade.restore();
   world.visible = true;
   CONFIG.post.grain = POST_GRAIN_DEFAULT;
 }
@@ -577,6 +582,7 @@ async function applyRevealPanoFallback() {
 
 async function onReveal({ deferControls = false } = {}) {
   world.visible = false;
+  modelFade.release();
   onRevealColdLighting();
   if (revealImmersive) await teardownRevealAssets();
   else if (!revealMarbleLoad) revealRoot.clear();
@@ -635,6 +641,10 @@ director = new Director({
     onReveal,
     onRevealTransition,
     onLightsCold: onRevealColdLighting,
+    onFadeMemoryMachine: (step) => {
+      const dur = step?.dur ?? 2.6;
+      return step?.dir === 'in' ? modelFade.in(world, { dur }) : modelFade.out(world, { dur });
+    },
     setFisheyeFade: (v) => post.setFisheyeFade(v),
     onActEnter: (act) => {
       if (act?.restockPool) resetAllPoolItems(items.filter(it => it.state === 'collected'));
@@ -847,7 +857,7 @@ input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
 
 // —— 调试钩子（控制台/自动化用）——
 window.__debug = {
-  claw, rig, director, mask, items, CONFIG, toast,
+  claw, rig, director, mask, items, CONFIG, toast, world, modelFade,
   revealCtl, enableRevealControls, revealPreview, onReveal,
   openCollectDisplay: openCollectDisplayWindow,
 };
@@ -932,6 +942,7 @@ function tick() {
   }
 
   narrativeSceneDome.tick(dt);
+  modelFade.tick(dt);
 
   const inRevealDissolve = !!revealDissolve;
   const cur = mask.getRect();
