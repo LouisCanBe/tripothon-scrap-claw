@@ -605,6 +605,7 @@ function syncRevealWalkFeel() {
   revealCtl.walkBob = r.walkBob !== false && revealWalkUnlocked;
   revealCtl.walkBobAmount = r.walkBobAmount ?? 0.014;
   revealCtl.walkBobHz = r.walkBobHz ?? 0.6;
+  revealCtl.lookSpeedMax = r.lookSpeedMax ?? 3.4;
 }
 
 function applyRevealFeatures() {
@@ -1169,6 +1170,8 @@ const gui = new GUI({ title: '爪机手感调参' });
   sf.add(CONFIG.reveal, 'walkBob').name('晃动').onChange(syncRevealWalkFeel);
   sf.add(CONFIG.reveal, 'walkBobAmount', 0, 0.08, 0.002).name('晃动幅度').onChange(syncRevealWalkFeel);
   sf.add(CONFIG.reveal, 'walkBobHz', 0.4, 2.4, 0.05).name('晃动频率').onChange(syncRevealWalkFeel);
+  sf.add(CONFIG.reveal, 'lookSpeedMax', 0, 8, 0.05).name('转头上限').onChange(syncRevealWalkFeel);
+  sf.add(CONFIG.reveal, 'splatKeepSorted').name('跟手排序');
 
   const rf = gui.addFolder('渲染质感');
   rf.add(CONFIG.render, 'exposure', 0.4, 2, 0.02).name('ACES曝光').onChange(v => {
@@ -1356,6 +1359,11 @@ function tick() {
   poolDecorSim?.tick(items, dt, claw.getPoolPhysicsContext());
   tickUpgrades(dt);
   applySplatPresentation();
+  if (CONFIG.reveal.splatKeepSorted !== false && splatLookActive()) {
+    for (const v of splatViewers()) {
+      if (!v.sortRunning) v.runSplatSort(true);
+    }
+  }
   if (revealDissolve) {
     revealDissolve.update(dt, t);
   } else {

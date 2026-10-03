@@ -418,6 +418,8 @@ export const CONFIG = {
     walkBob: true,             // 走动时镜头轻微起伏
     walkBobAmount: 0.014,      // 起伏幅度（米）
     walkBobHz: 0.6,            // 步伐频率（Hz）
+    lookSpeedMax: 3.4,         // 拖拽转头上限（弧度/秒）。0 = 不限
+    splatKeepSorted: true,     // 终幕排序一空就再排，不等转满 8° / 走出 1 米
     backgroundIntensity: 1.0,
     yawOffset: 0,              // 全景与机位朝向对不齐时微调（弧度）
     // 与 Marble 默认出生点一致时可微调朝向（弧度）

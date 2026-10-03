@@ -111,6 +111,7 @@ export class SceneControls {
     this.mode = opts.mode ?? 'fps';
     this.features = { ...DEFAULT_FEATURES, ...opts.features };
     this.lookSensitivity = opts.lookSensitivity ?? 0.005;
+    this.lookSpeedMax = opts.lookSpeedMax ?? 0;
     this.moveSpeed = opts.moveSpeed ?? 3;
     this.moveAccel = opts.moveAccel ?? 0;
     this.moveDecel = opts.moveDecel ?? 0;
@@ -140,6 +141,8 @@ export class SceneControls {
     this._ray = new THREE.Ray();
 
     this._drag = null;
+    this._lookClock = 0;
+    this._lookBudget = 0;
     this._vel = new THREE.Vector3();
     this._wish = new THREE.Vector3();
     this._fwd = new THREE.Vector3();
@@ -258,9 +261,30 @@ export class SceneControls {
 
   addLookDelta(dx, dy) {
     if (!this.enabled) return;
-    this.yaw -= dx * this.lookSensitivity;
+    let yawDelta = -dx * this.lookSensitivity;
     const sign = this.mode === 'fps' ? -1 : 1;
-    this.pitch += sign * dy * this.lookSensitivity;
+    let pitchDelta = sign * dy * this.lookSensitivity;
+    const maxSpeed = this.lookSpeedMax ?? 0;
+    if (maxSpeed > 0) {
+      const now = performance.now() * 0.001;
+      const dt = this._lookClock
+        ? Math.min(0.05, Math.max(0, now - this._lookClock))
+        : 1 / 60;
+      this._lookClock = now;
+      this._lookBudget += maxSpeed * dt;
+      const mag = Math.hypot(yawDelta, pitchDelta);
+      if (mag > this._lookBudget) {
+        const s = this._lookBudget / Math.max(mag, 1e-6);
+        yawDelta *= s;
+        pitchDelta *= s;
+        this._lookBudget = 0;
+      } else {
+        this._lookBudget -= mag;
+      }
+      if (this._lookBudget > maxSpeed / 30) this._lookBudget = maxSpeed / 30;
+    }
+    this.yaw += yawDelta;
+    this.pitch += pitchDelta;
     this._clampPitch();
     this.apply();
   }
@@ -325,6 +349,8 @@ export class SceneControls {
     if (this.walkBob && this.mode === 'fps' && !this._orbit) this._tickWalkBob(dt, moved);
 
     if (this._orbit) {
+      this._lookBudget = 0;
+      this._lookClock = 0;
       const step = Math.min(this._orbit.left, this._orbit.rate * dt);
       this.yaw += step;
       this._orbit.left -= step;
@@ -363,6 +389,8 @@ export class SceneControls {
     this._wish.set(0, 0, 0);
     this._step = 0;
     this._bobFade = 0;
+    this._lookClock = 0;
+    this._lookBudget = 0;
   }
 
   apply() {
@@ -405,6 +433,8 @@ export class SceneControls {
     const onDown = (e) => {
       if (!this.enabled || !this.features.pointerLook) return;
       this._drag = { x: e.clientX, y: e.clientY };
+      this._lookClock = performance.now() * 0.001;
+      this._lookBudget = (this.lookSpeedMax ?? 0) * (1 / 60);
       try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     };
     const onMove = (e) => {
