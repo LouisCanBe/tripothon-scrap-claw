@@ -14,7 +14,7 @@
 //     { hint }                改底部提示
 //     { wait: 事件名 }         等待事件：allViews / firstCollect / questComplete
 //     { synthesis }           四幕合成演出
-//     { glitch, image? }      终幕故障转场（可选概念撕裂图）
+//     { glitch, image? }      终幕故障转场；省略 image 则仅音画故障/黑场，不叠概念图
 //     { interstitial, image, dur?, fadeIn?, fadeOut?, dipBefore?, dipAfter? }
 //       实现 narrativeBg.showInterstitial；导演 #run 顺序执行 script
 //       闪回后旁白卡顿：多为淡出后再 _runDip（见 present.transition.interstitialDipAfter）
@@ -96,10 +96,9 @@ export const ACTS = [
     framing: 'far',
     hint: null,
     script: [
-      { type: 'glitch', image: 'glitch' },
-      { type: 'revealBeat', dur: 4.2, image: 'revealBeat', line: '他今天吃了什么？\n手心里只有一罐。' },
+      { type: 'glitch' },
+      { type: 'revealBeat', dur: 3.4, line: '他今天吃了什么？\n手心里只有一罐。' },
       { type: 'reveal' },
-      { type: 'interstitial', image: 'truthTable', dur: 3.6, fadeIn: 0.9, fadeOut: 1.1 },
       { type: 'stinger', text: 'Demo 结束。他今天吃了什么？' },
     ],
   },

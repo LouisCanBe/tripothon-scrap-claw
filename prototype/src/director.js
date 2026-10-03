@@ -322,7 +322,9 @@ export class Director {
   }
 
   async #glitch(step = {}) {
-    const glitchOverlay = this.narrativeBg?.pulseGlitchOverlay(step.image ?? 'glitch', 2400);
+    const glitchOverlay = step.image
+      ? this.narrativeBg?.pulseGlitchOverlay(step.image, 2400)
+      : Promise.resolve();
     const grain0 = CONFIG.post.grain;
     CONFIG.post.grain = 0.13;
     await sleep(1400);
@@ -356,10 +358,12 @@ export class Director {
   }
 
   async #revealBeat({ line, dur = 4, image }) {
-    if (image) this.narrativeBg?.setRevealBeatImage(image);
     playRevealDrone();
     const el = this.elRevealBeat;
     if (!el) { await sleep(dur * 1000); return; }
+    const visual = el.querySelector('.reveal-beat-visual');
+    if (visual) visual.hidden = !image;
+    if (image) this.narrativeBg?.setRevealBeatImage(image);
     const txt = el.querySelector('.reveal-beat-text');
     if (txt) txt.textContent = line ?? '';
     el.hidden = false;
