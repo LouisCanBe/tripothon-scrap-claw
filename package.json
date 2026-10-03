@@ -8,7 +8,9 @@
   "scripts": {
     "start": "node tools/devServer.mjs 8000",
     "game": "node tools/devServer.mjs 8000",
+    "game:dev": "node tools/devServer.mjs 8000 --gui",
     "game:lan": "node tools/devServer.mjs 8000 --lan",
+    "dev": "node tools/devServer.mjs 8000 --gui",
     "hub": "node tools/hub.serve.mjs",
     "pixverse": "pixverse",
     "pixverse:login": "pixverse auth login",

@@ -83,6 +83,14 @@ function parseStartActIndex() {
   return 0;
 }
 
+/** 调参面板：npm start 默认关且 H 无效。?gui=1 / ?dev=1 或 npm run game:dev 打开后 H 可切换。 */
+function parseDevGui() {
+  const p = new URLSearchParams(location.search);
+  if (p.has('gui')) return p.get('gui') !== '0';
+  if (p.has('dev')) return p.get('dev') !== '0';
+  return false;
+}
+
 // —— 渲染器 ——
 // 触屏设备（iPad/手机）降渲染分辨率上限：Retina ×2 全幅 + 后处理极易爆显存崩标签页
 const COARSE = matchMedia('(pointer: coarse)').matches;
@@ -1123,8 +1131,11 @@ const pointerCtl = new PointerControls(document.getElementById('stage'), {
   },
 });
 
-// —— 调参面板（H 切换显隐；画幅按钮是调试入口，正常流程由导演接管）——
+// —— 调参面板（仅 dev / ?gui=1 可开；画幅按钮是调试入口，正常流程由导演接管）——
 const gui = new GUI({ title: '爪机手感调参' });
+const guiUnlocked = parseDevGui();
+let guiOn = guiUnlocked;
+gui.show(guiOn);
 {
   const f = gui.addFolder('移动惯性');
   f.add(CONFIG.claw, 'moveSpeed', 0.5, 4, 0.05);
@@ -1356,8 +1367,11 @@ const gui = new GUI({ title: '爪机手感调参' });
   };
   for (const k of Object.keys(act)) gui.add(act, k);
 }
-let guiOn = true;
-input.on('gui', () => { guiOn = !guiOn; gui.show(guiOn); });
+input.on('gui', () => {
+  if (!guiUnlocked) return;
+  guiOn = !guiOn;
+  gui.show(guiOn);
+});
 
 // —— 调试钩子（控制台/自动化用）——
 window.__debug = {

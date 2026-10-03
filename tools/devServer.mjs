@@ -24,15 +24,17 @@ const ROOT = path.resolve(TOOLS, '../prototype');
 function parseArgs(argv) {
   let port = 8000;
   let host = '127.0.0.1';
+  let gui = false;
   for (const a of argv) {
     if (a === '--lan' || a === '--bind-all') host = '0.0.0.0';
+    else if (a === '--gui' || a === '--dev') gui = true;
     else if (a.startsWith('--host=')) host = a.slice('--host='.length) || host;
     else if (/^\d+$/.test(a)) port = +a;
   }
-  return { port, host };
+  return { port, host, gui };
 }
 
-let { port: PORT, host: HOST } = parseArgs(process.argv.slice(2));
+let { port: PORT, host: HOST, gui: OPEN_GUI } = parseArgs(process.argv.slice(2));
 // PaaS（Render / Railway 等）注入 PORT，并需监听 0.0.0.0
 if (process.env.PORT && /^\d+$/.test(process.env.PORT)) {
   PORT = +process.env.PORT;
@@ -106,8 +108,10 @@ server.listen(PORT, HOST, () => {
     console.log('[dev] 内网访问：加参数 --lan');
   }
   const q = encodeURIComponent(pair);
+  const game = OPEN_GUI ? `http://127.0.0.1:${PORT}/?gui=1` : `http://127.0.0.1:${PORT}/`;
   console.log(`[collect] 默认配对口令 pair=${pair}（config.collectDisplay.pairId；书签可无参，多展台改 ?pair=）`);
-  console.log(`  主游戏  http://127.0.0.1:${PORT}/`);
+  console.log(`  主游戏  ${game}`);
+  console.log(`  调参    http://127.0.0.1:${PORT}/?gui=1  (npm run game:dev / ?gui=1；此时 H 切换)`);
   console.log(`  副屏    http://127.0.0.1:${PORT}/display.html`);
   console.log(`  相框    http://127.0.0.1:${PORT}/display-frame.html`);
   console.log(`  相框放映 http://127.0.0.1:${PORT}/display-frame-play.html`);
@@ -117,7 +121,8 @@ server.listen(PORT, HOST, () => {
   console.log(`          http://127.0.0.1:${PORT}/display.html?pair=${q}`);
   if (HOST === '0.0.0.0') {
     for (const ip of ipv4Lan()) {
-      console.log(`  主游戏  http://${ip}:${PORT}/`);
+      console.log(`  主游戏  http://${ip}:${PORT}/${OPEN_GUI ? '?gui=1' : ''}`);
+      console.log(`  调参    http://${ip}:${PORT}/?gui=1`);
       console.log(`  副屏    http://${ip}:${PORT}/display.html`);
       console.log(`  相框    http://${ip}:${PORT}/display-frame.html`);
       console.log(`  相框放映 http://${ip}:${PORT}/display-frame-play.html`);

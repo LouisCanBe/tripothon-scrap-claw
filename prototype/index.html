@@ -128,6 +128,36 @@
   #viewportChrome #hint {
     position: absolute; left: 0; right: 0; bottom: 10px; width: auto;
     text-align: center; margin: 0;
+    white-space: nowrap;
+  }
+  /* 圆遮罩：底栏竖排，避开字幕带，两行提示变高时导航点跟着上移 */
+  html.viewport-shape-circle #viewportChrome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 112px;
+    gap: 16px;
+  }
+  html.viewport-shape-circle #viewportChrome #hint {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: min(220px, 34%);
+    max-width: min(220px, 34%);
+    margin: 0;
+    transform: none;
+    white-space: normal;
+    line-height: 1.4;
+    text-align: center;
+    overflow: hidden;
+  }
+  html.viewport-shape-circle #viewportChrome #viewDots {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    transform: none;
   }
   #viewportChrome #viewDots {
     position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%);

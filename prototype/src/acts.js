@@ -26,7 +26,7 @@
 //   hudDecor  第三幕配额 HUD 装饰（如 rationWall）
 // ============================================================
 
-export const DEFAULT_HINT = '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环 · H 参数面板';
+export const DEFAULT_HINT = '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环';
 
 // 试玩：http://127.0.0.1:8000/?act=3（devServer 根即 prototype，无需 /prototype）；终幕 Y 再玩一次
 
