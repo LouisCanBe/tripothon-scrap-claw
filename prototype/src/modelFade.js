@@ -21,6 +21,10 @@ function smoothstep(u) {
   return t * t * (3 - 2 * t);
 }
 
+function isOutlineMesh(obj) {
+  return obj.userData?.comicOutline === true || String(obj.name || '').endsWith('__comic_outline');
+}
+
 function eachMaterial(root, fn) {
   if (!root) return;
   root.traverse((obj) => {
@@ -35,6 +39,8 @@ function eachMaterial(root, fn) {
 export function createModelFade() {
   /** @type {Map<object, { opacity: number, transparent: boolean, depthWrite: boolean }>} */
   const bases = new Map();
+  /** @type {Map<object, boolean>} 网格原来是否投影。描边壳不投影。 */
+  const castBases = new Map();
   /** @type {null | { root: object, from: number, to: number, t: number, dur: number, resolve: () => void }} */
   let job = null;
   /** 动画结束后继续套用，盖住暂停期间才换上的 GLB。release / restore 后停止。 */
@@ -72,6 +78,18 @@ export function createModelFade() {
       if (mat.depthWrite !== depthWrite) mat.depthWrite = depthWrite;
       const next = rec.opacity * k;
       if (mat.opacity !== next) mat.opacity = next;
+    });
+    // 影子只跟实体外壳。描边是放大的背面壳，投影会往机器外面甩出一块。
+    // 淡过一半就停投影，避免机器已经变淡，地上还留着一块实心黑影。
+    root.traverse((obj) => {
+      if (!obj.isMesh) return;
+      if (!castBases.has(obj)) castBases.set(obj, !!obj.castShadow);
+      if (isOutlineMesh(obj)) {
+        obj.castShadow = false;
+        return;
+      }
+      // 一淡就停投影。透明材质仍会投出实心黑影，和正在变淡的机器对不上。
+      obj.castShadow = !!castBases.get(obj) && (solid || k > 0.92);
     });
   }
 
@@ -151,6 +169,10 @@ export function createModelFade() {
       mat.needsUpdate = true;
     }
     bases.clear();
+    for (const [obj, cast] of castBases) {
+      obj.castShadow = isOutlineMesh(obj) ? false : cast;
+    }
+    castBases.clear();
     done?.();
   }
 

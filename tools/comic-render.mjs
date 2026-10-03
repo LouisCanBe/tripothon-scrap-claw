@@ -54,6 +54,7 @@ function addOutline(mesh, { thickness = 0.025, color = 0x141210 } = {}) {
   );
   outline.name = (mesh.name || 'mesh') + '__comic_outline';
   outline.userData.comicOutline = true;
+  outline.castShadow = false;
   outline.raycast = () => {};
   const s = 1 + thickness;
   outline.position.set(0, 0, 0);

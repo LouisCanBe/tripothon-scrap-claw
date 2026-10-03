@@ -112,6 +112,11 @@ export class SceneControls {
     this.features = { ...DEFAULT_FEATURES, ...opts.features };
     this.lookSensitivity = opts.lookSensitivity ?? 0.005;
     this.moveSpeed = opts.moveSpeed ?? 3;
+    this.moveAccel = opts.moveAccel ?? 0;
+    this.moveDecel = opts.moveDecel ?? 0;
+    this.walkBob = opts.walkBob ?? false;
+    this.walkBobAmount = opts.walkBobAmount ?? 0.014;
+    this.walkBobHz = opts.walkBobHz ?? 0.6;
     this.keyLookSpeed = opts.keyLookSpeed ?? 1.8;
     this.yawOffset = opts.yawOffset ?? 0;
     this.onModeChange = opts.onModeChange;
@@ -135,6 +140,13 @@ export class SceneControls {
     this._ray = new THREE.Ray();
 
     this._drag = null;
+    this._vel = new THREE.Vector3();
+    this._wish = new THREE.Vector3();
+    this._fwd = new THREE.Vector3();
+    this._right = new THREE.Vector3();
+    this._bobSide = new THREE.Vector3();
+    this._step = 0;
+    this._bobFade = 0;
     this._boundCanvas = opts.canvas ?? null;
     this._handlers = [];
     if (this._boundCanvas) this.attachPointer(this._boundCanvas);
@@ -176,26 +188,56 @@ export class SceneControls {
     return to;
   }
 
-  _moveBody(obj, fwd, right, axis, keys, speed) {
+  _wishFromInput(fwd, right, axis, keys) {
+    this._wish.set(0, 0, 0);
+    if (!this.features.moveWalk) return this._wish;
+    if (axis) {
+      if (axis.x) this._wish.addScaledVector(right, axis.x);
+      if (axis.z) this._wish.addScaledVector(fwd, -axis.z);
+    }
+    if (keys && this._wish.lengthSq() < 1e-6) {
+      if (keys.has('w') || keys.has('arrowup') || keys.has('KeyW')) this._wish.add(fwd);
+      if (keys.has('s') || keys.has('arrowdown') || keys.has('KeyS')) this._wish.sub(fwd);
+      if (keys.has('a') || keys.has('arrowleft') || keys.has('KeyA')) this._wish.sub(right);
+      if (keys.has('d') || keys.has('arrowright') || keys.has('KeyD')) this._wish.add(right);
+    }
+    if (this._wish.lengthSq() > 1) this._wish.normalize();
+    return this._wish;
+  }
+
+  _moveBody(obj, fwd, right, axis, keys, dt) {
     const prev = obj.clone();
     let moved = false;
-    if (this.features.moveWalk && axis) {
-      const { x, z } = axis;
-      if (x) { obj.addScaledVector(right, x * speed); moved = true; }
-      if (z) { obj.addScaledVector(fwd, -z * speed); moved = true; }
-    }
-    if (keys && this.features.moveWalk) {
-      if (keys.has('w') || keys.has('arrowup')) { obj.addScaledVector(fwd, speed); moved = true; }
-      if (keys.has('s') || keys.has('arrowdown')) { obj.addScaledVector(fwd, -speed); moved = true; }
-      if (keys.has('a') || keys.has('arrowleft')) { obj.addScaledVector(right, -speed); moved = true; }
-      if (keys.has('d') || keys.has('arrowright')) { obj.addScaledVector(right, speed); moved = true; }
+    const wish = this._wishFromInput(fwd, right, axis, keys);
+    const maxSpeed = this.moveSpeed;
+    const accel = Math.max(0, this.moveAccel);
+    const decel = Math.max(0, this.moveDecel);
+    if (accel > 0 || decel > 0) {
+      const target = wish.clone().multiplyScalar(maxSpeed);
+      const rate = (wish.lengthSq() > 1e-6 ? accel : decel) || maxSpeed * 8;
+      const k = 1 - Math.exp(-rate * dt);
+      this._vel.x += (target.x - this._vel.x) * k;
+      this._vel.z += (target.z - this._vel.z) * k;
+      if (this._vel.lengthSq() < 1e-8) this._vel.set(0, 0, 0);
+      if (this._vel.lengthSq() > 0) {
+        obj.addScaledVector(this._vel, dt);
+        moved = true;
+      }
+    } else if (wish.lengthSq() > 1e-6) {
+      obj.addScaledVector(wish, maxSpeed * dt);
+      this._vel.copy(wish).multiplyScalar(maxSpeed);
+      moved = true;
+    } else {
+      this._vel.set(0, 0, 0);
     }
     if (moved && this.colliderMeshes?.length && obj === this.pos) {
       this.pos.copy(this._clipAgainstMeshes(prev, this.pos));
+      this._vel.copy(this.pos).sub(prev).multiplyScalar(1 / Math.max(dt, 1e-4));
+      this._vel.y = 0;
     }
     if (keys && this.features.moveVertical) {
-      if (keys.has('q') || keys.has('keyq') || keys.has('KeyQ')) { obj.y -= speed; moved = true; }
-      if (keys.has('e') || keys.has('keye') || keys.has('KeyE')) { obj.y += speed; moved = true; }
+      if (keys.has('q') || keys.has('keyq') || keys.has('KeyQ')) { obj.y -= maxSpeed * dt; moved = true; }
+      if (keys.has('e') || keys.has('keye') || keys.has('KeyE')) { obj.y += maxSpeed * dt; moved = true; }
     }
     return moved;
   }
@@ -276,11 +318,11 @@ export class SceneControls {
       this._clampPitch();
     }
 
-    const speed = this.moveSpeed * dt;
-    const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-    const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    this._fwd.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+    this._right.set(-this._fwd.z, 0, this._fwd.x);
     const obj = this.mode === 'fps' ? this.pos : this.target;
-    const moved = this._moveBody(obj, fwd, right, axis, keys, speed);
+    const moved = this._moveBody(obj, this._fwd, this._right, axis, keys, dt);
+    if (this.walkBob && this.mode === 'fps' && !this._orbit) this._tickWalkBob(dt, moved);
 
     if (this._orbit) {
       const step = Math.min(this._orbit.left, this._orbit.rate * dt);
@@ -288,11 +330,25 @@ export class SceneControls {
       this._orbit.left -= step;
       if (this._orbit.left <= 1e-4) this._orbit = null;
       this.apply();
-    } else if (moved) this.apply();
+    } else if (moved || this._bobFade > 0.001) this.apply();
     else if (this.features.keyboardLook && axis) this.apply();
   }
 
-  /** 终幕自动环视一圈（秒）。拖拽仍可叠加。 */
+  _tickWalkBob(dt, moving) {
+    const amount = this.walkBobAmount ?? 0;
+    if (amount <= 0) {
+      this._bobFade = 0;
+      this._step = 0;
+      return;
+    }
+    const speed01 = THREE.MathUtils.clamp(this._vel.length() / Math.max(this.moveSpeed, 0.01), 0, 1);
+    const want = moving && speed01 > 0.08 ? 1 : 0;
+    this._bobFade += (want - this._bobFade) * Math.min(1, dt * 6);
+    if (this._bobFade > 0.02) this._step += dt * (this.walkBobHz ?? 0.6) * (0.55 + 0.45 * speed01);
+    else this._step = 0;
+  }
+
+  get orbiting() { return !!this._orbit; }
   beginOrbitSweep(turns = 1, seconds = 10) {
     const span = Math.PI * 2 * turns;
     this._orbit = { left: span, rate: span / Math.max(seconds, 0.2) };
@@ -300,6 +356,13 @@ export class SceneControls {
 
   stopOrbitSweep() {
     this._orbit = null;
+  }
+
+  resetWalkFeel() {
+    this._vel.set(0, 0, 0);
+    this._wish.set(0, 0, 0);
+    this._step = 0;
+    this._bobFade = 0;
   }
 
   apply() {
@@ -314,6 +377,15 @@ export class SceneControls {
       }
       this.camera.position.copy(this.pos);
       this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+      if (this.walkBob && this._bobFade > 0.001) {
+        const k = this._bobFade * (this.walkBobAmount ?? 0);
+        const s = Math.sin(this._step * Math.PI * 2);
+        const c = Math.cos(this._step * Math.PI * 2);
+        this.camera.position.y += k * (0.55 + 0.45 * s);
+        this._bobSide.set(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
+        this.camera.position.addScaledVector(this._bobSide, k * 0.22 * c);
+        this.camera.rotation.z += k * 0.55 * c;
+      }
     } else {
       if (this.bounds) this.target.clamp(this.bounds.min, this.bounds.max);
       this.camera.position.set(

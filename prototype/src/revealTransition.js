@@ -138,11 +138,14 @@ export function createRevealDissolveTransition(opts) {
   let handoffDone = false;
   let finished = false;
   let captureStarted = false;
+  let toTexture = null;
+  let liveElapsed = 0;
+  const exitBlendMs = (tc.exitBlendMs ?? 800) / 1000;
 
   const blit = (progress) => {
     onPrepareFrame?.();
     mat.uniforms.tFrom.value = rtFrom.texture;
-    mat.uniforms.tTo.value = rtTo.texture;
+    mat.uniforms.tTo.value = toTexture ?? rtTo.texture;
     mat.uniforms.uProgress.value = progress;
     mat.uniforms.uMode.value = 0;
     mat.transparent = false;
@@ -150,12 +153,12 @@ export function createRevealDissolveTransition(opts) {
     renderer.render(blitScene, blitCam);
   };
 
-  /** 底下已经是实时后处理的 Marble，只把定格娃娃机按溶解遮罩盖上去 */
-  const compositeOverLive = (progress, dt, t) => {
+  /** 底下已经是实时后处理的 Marble，把 overlayTex 按溶解遮罩盖上去 */
+  const compositeOverLive = (overlayTex, progress, dt, t) => {
     onPrepareFrame?.();
     post.render(dt, t);
-    overlayMat.uniforms.tFrom.value = rtFrom.texture;
-    overlayMat.uniforms.tTo.value = rtFrom.texture;
+    overlayMat.uniforms.tFrom.value = overlayTex;
+    overlayMat.uniforms.tTo.value = overlayTex;
     overlayMat.uniforms.uProgress.value = progress;
     overlayMat.uniforms.uMode.value = 1;
     const prevClear = renderer.autoClear;
@@ -213,7 +216,7 @@ export function createRevealDissolveTransition(opts) {
       blit(0);
       if (!handoffDone) return;
       onPrepareFrame?.();
-      post.renderToTarget(rtTo, dt, t);
+      if (!toTexture) post.renderToTarget(rtTo, dt, t);
       applyLift?.(dissolveLiftStart);
       blit(0);
       phase = 'dissolve';
@@ -225,10 +228,24 @@ export function createRevealDissolveTransition(opts) {
       const raw = Math.min(mixElapsed / duration, 1);
       const progress = easeDissolveProgress(raw);
       applyLift?.(liftForElapsed(mixElapsed));
-      compositeOverLive(progress, dt, t);
+      if (toTexture) blit(progress);
+      else compositeOverLive(rtFrom.texture, progress, dt, t);
       if (raw >= 1) {
-        phase = 'brighten';
+        phase = toTexture ? 'toLive' : 'brighten';
         brightenElapsed = 0;
+        liveElapsed = 0;
+      }
+      return;
+    }
+
+    if (phase === 'toLive') {
+      liveElapsed += dt;
+      const k = Math.min(liveElapsed / Math.max(exitBlendMs, 0.05), 1);
+      applyLift?.(liftForElapsed(duration + liveElapsed));
+      compositeOverLive(toTexture, k, dt, t);
+      if (k >= 1) {
+        phase = 'brighten';
+        brightenElapsed = brightenDuration;
       }
       return;
     }
@@ -253,7 +270,8 @@ export function createRevealDissolveTransition(opts) {
   return {
     active: true,
     get revealViewReady() { return handoffDone && !finished; },
-    get exitBlending() { return false; },
+    get exitBlending() { return phase === 'toLive'; },
+    setToTexture(tex) { toTexture = tex; },
     /** 创建后立刻定格上一帧，避免等下一 rAF 时黑一帧 */
     prime(dt = 0, t = 0) {
       if (phase === 'capture') beginCapture(dt, t);

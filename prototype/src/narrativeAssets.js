@@ -14,7 +14,6 @@ const SETS = {
     synthesis: `${C}last-meal-memory-table-seedream50pro-16x9.png`,
     glitch: `${C}glitch-frame-tear-seedream50pro-16x9.png`,
     revealBeat: `${C}reveal-truth-hand-can-seedream50pro-16x9.png`,
-    revealPano: `${C}reveal-ruins-wide-scrapyard-seedream50pro-16x9.png`,
     truthTable: `${C}last-meal-truth-table-seedream50pro-16x9.png`,
   },
   cursor: {
@@ -27,7 +26,6 @@ const SETS = {
     synthesis: 'design/backdrops/backdrop-act4-memory.jpg',
     glitch: `${C}glitch-frame-tear-cursor-photo-16x9.png`,
     revealBeat: 'assets/images/reveal-truth-hand-can.png',
-    revealPano: 'assets/worlds/ending-room-pano.png',
     truthTable: `${C}last-meal-truth-table-cursor-photo-16x9.png`,
   },
 };
@@ -52,11 +50,6 @@ export function narrativeSrc(key) {
   if (!key) return undefined;
   const map = getNarrative();
   return map[key] ?? (key.includes('/') ? key : undefined);
-}
-
-export function applyNarrativeToConfig() {
-  const n = getNarrative();
-  if (n.revealPano) CONFIG.reveal.pano = n.revealPano;
 }
 
 export function preloadNarrativeImages() {

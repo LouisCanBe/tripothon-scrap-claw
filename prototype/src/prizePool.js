@@ -172,7 +172,7 @@ const COARSE = matchMedia('(pointer: coarse)').matches;   // 触屏设备（iPad
 // 阴影标志统一设置：不透明 mesh 投影+接影；透明件（玻璃罩等）只接影不投影
 export function enableShadows(root) {
   root.traverse((o) => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || o.userData?.comicOutline) return;
     const transparent = Array.isArray(o.material)
       ? o.material.some(m => m?.transparent)
       : o.material?.transparent;

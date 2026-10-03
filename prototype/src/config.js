@@ -1,4 +1,5 @@
 import { DEFAULT_COLLECT_PAIR } from './collectPairDefault.js';
+import { REVEAL_WORLDS, applyRevealWorld } from './revealWorlds.js';
 
 // ============================================================
 // 《拾荒娃娃机》灰盒原型 · 全局参数中枢
@@ -402,13 +403,21 @@ export const CONFIG = {
     endingOrbitDelay: 7,
     endingOrbitTurns: 1,
     endingOrbitSeconds: 14,
-    pano: 'assets/worlds/ending-room-pano.png',
-    colliderGlb: 'assets/worlds/ending-room-collider.glb',
-    spz: 'assets/worlds/ending-room-500k.spz',
+    // 当前世界。点云 / 全景 / 碰撞 / 出生点见 revealWorlds.js，启动时写入下面三项。
+    world: 'ending-room',
+    worlds: REVEAL_WORLDS,
+    pano: '',
+    colliderGlb: '',
+    spz: '',
     boundsMargin: 0.45,        // AABB 内缩（越大越不容易贴到盒边）
     collisionSkin: 0.35,       // 沿 collider 网格射线阻挡的留白（米）
     showBoundsHelper: false,   // true：显示 collider 包围盒线框，核对是否贴 SPZ
-    moveSpeed: 4,              // immersive 行走速度（sceneControls.moveSpeed）
+    moveSpeed: 0.9,            // 环视结束后 WASD 目标速度（米/秒）
+    moveAccel: 1.5,            // 从静止加速到目标速度（米/秒²）
+    moveDecel: 4.2,            // 松手后减速（米/秒²）
+    walkBob: true,             // 走动时镜头轻微起伏
+    walkBobAmount: 0.014,      // 起伏幅度（米）
+    walkBobHz: 0.6,            // 步伐频率（Hz）
     backgroundIntensity: 1.0,
     yawOffset: 0,              // 全景与机位朝向对不齐时微调（弧度）
     // 与 Marble 默认出生点一致时可微调朝向（弧度）
@@ -545,3 +554,5 @@ export const CONFIG = {
     glbConcurrency: 3,       // 触屏设备 GLB 并行加载数（同时 16 个会内存尖峰）；桌面端不限
   },
 };
+
+applyRevealWorld(CONFIG.reveal);
