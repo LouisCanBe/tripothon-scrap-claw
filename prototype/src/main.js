@@ -1133,9 +1133,15 @@ const pointerCtl = new PointerControls(document.getElementById('stage'), {
 
 // —— 调参面板（仅 dev / ?gui=1 可开；画幅按钮是调试入口，正常流程由导演接管）——
 const gui = new GUI({ title: '爪机手感调参' });
+const TITLE_GAME = '拾荒娃娃机';
+const TITLE_GUI = '拾荒娃娃机 · 调参';
 const guiUnlocked = parseDevGui();
 let guiOn = guiUnlocked;
+function syncDocumentTitle() {
+  document.title = guiOn ? TITLE_GUI : TITLE_GAME;
+}
 gui.show(guiOn);
+syncDocumentTitle();
 {
   const f = gui.addFolder('移动惯性');
   f.add(CONFIG.claw, 'moveSpeed', 0.5, 4, 0.05);
@@ -1371,6 +1377,7 @@ input.on('gui', () => {
   if (!guiUnlocked) return;
   guiOn = !guiOn;
   gui.show(guiOn);
+  syncDocumentTitle();
 });
 
 // —— 调试钩子（控制台/自动化用）——
