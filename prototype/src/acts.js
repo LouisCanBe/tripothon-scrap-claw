@@ -19,7 +19,7 @@
 //       实现 narrativeBg.showInterstitial；导演 #run 顺序执行 script
 //       闪回后旁白卡顿：多为淡出后再 _runDip（见 present.transition.interstitialDipAfter）
 //     { revealBeat, line, image?, dur? }
-//     { reveal }              露出实景（调 main 注入的 onReveal）
+//     { reveal }              尘屑过渡 + Marble（main onRevealTransition）
 //     { stinger }             终幕手写体收尾 + 八音盒彩蛋钩子
 //   backdrop  幕背景（narrativeAssets 键名）
 //   hudDecor  第三幕配额 HUD 装饰（如 rationWall）

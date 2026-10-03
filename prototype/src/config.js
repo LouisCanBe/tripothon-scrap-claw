@@ -361,6 +361,13 @@ export const CONFIG = {
   // 终幕 Marble：mode 'pano' = 仅全景（与工具台 PNG 一致）；'immersive' = SPZ + collider 边界 + WASD
   reveal: {
     mode: 'pano',
+    transition: {
+      duration: 2.35,
+      handoffAt: 0.38,
+      count: 1200,
+      pointSize: 0.032,
+      color: 0x9a9086,
+    },
     pano: 'design/concepts/reveal-ruins-wide-scrapyard-cursor-photo-16x9.png',
     colliderGlb: 'assets/worlds/reveal-draft-collider.glb',
     spz: 'assets/worlds/reveal-draft-100k.spz',

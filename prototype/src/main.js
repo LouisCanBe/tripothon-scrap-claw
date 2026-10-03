@@ -32,6 +32,7 @@ import { ACTS, DEFAULT_HINT } from './acts.js';
 import { unlockAudio } from './gameAudio.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
 import { mountMarbleImmersive } from './revealMarble.js';
+import { createRevealDustTransition } from './revealTransition.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
 import { refreshClawComicFx } from './clawComicFx.js';
 import { loadPoolDevOverrides, savePoolDevOverrides, retunePoolVisualScale } from './poolDevPersist.js';
@@ -353,6 +354,35 @@ async function onGameplayRestart() {
   narrativeBg.hideInterstitial();
 }
 
+let revealDust = null;
+
+async function onRevealTransition() {
+  const elFlash = document.getElementById('flash');
+  if (elFlash) {
+    elFlash.style.transition = 'opacity 0.4s ease';
+    elFlash.style.background = '#000';
+    elFlash.style.opacity = '0.55';
+  }
+  await new Promise((resolve) => {
+    revealDust = createRevealDustTransition({
+      scene,
+      camera,
+      world,
+      onHandoff: () => {
+        onReveal();
+        if (elFlash) {
+          elFlash.style.transition = 'opacity 1.1s ease';
+          elFlash.style.opacity = '0';
+        }
+      },
+      onComplete: () => {
+        revealDust = null;
+        resolve();
+      },
+    });
+  });
+}
+
 async function onReveal() {
   world.visible = false;
   onRevealColdLighting();
@@ -417,6 +447,7 @@ director = new Director({
   hooks: {
     narrativeBg,
     onReveal,
+    onRevealTransition,
     onLightsCold: onRevealColdLighting,
     onRestart: onGameplayRestart,
     onEndingOrbit: () => {
@@ -712,6 +743,7 @@ function tick() {
     rig.update(dt, t);
   }
   claw.update(dt, t);
+  revealDust?.update(dt);
   prizeItemSim?.tick(dt);
   poolDecorSim?.tick(items, dt, claw.getPoolPhysicsContext());
   tickUpgrades(dt);

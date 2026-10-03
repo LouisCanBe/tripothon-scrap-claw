@@ -202,7 +202,10 @@ export class Director {
           break;
         case 'glitch': await this.#glitch(step); break;
         case 'revealBeat': await this.#revealBeat(step); break;
-        case 'reveal': this.hooks.onReveal?.(); break;
+        case 'reveal':
+          if (this.hooks.onRevealTransition) await this.hooks.onRevealTransition();
+          else await this.hooks.onReveal?.();
+          break;
         case 'stinger': this.#stinger(step.text); break;
       }
     }
