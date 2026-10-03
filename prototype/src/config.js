@@ -389,7 +389,7 @@ export const CONFIG = {
       // 溶解噪声格子密度（越大格子越小；全屏中性投影下做均匀渐隐）
       dissolveCellsX: 300,
       dissolveCellsY: 169,
-      brightenDuration: 4.8,
+      brightenDuration: 3,
       panoIntensityStart: 0.12,
       /** handoff 后首帧 Marble 亮度（勿用 0，否则混溶解前会闪黑） */
       dissolveLiftStart: 0.36,

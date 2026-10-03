@@ -221,6 +221,7 @@ const claw = new ClawMachine(world, items, {
     if (director?.act?.id !== 3) toast(`+1 ${item.name}`);
     director?.notify('collect', item);
   },
+  onGrabFail: (kind) => director?.notify('grabFail', kind),
   shouldSkipCollectLine: () => director?.shouldSkipCollectLine?.() ?? false,
   onHoleDrop: (item) => publishHoleDrop(item),
   onVended: (item) => publishVended(item),
@@ -526,7 +527,10 @@ function tickCinemaWidenSequence(dt) {
   const raw = Math.min(a.elapsed / a.widenSec, 1);
   mask.setCinemaLetterboxProgress(easeInOutCubicReveal(raw));
   Object.assign(viewRect, mask.getRect());
-  if (raw >= 1) cinemaWidenAnim = null;
+  if (raw >= 1) {
+    cinemaWidenAnim = null;
+    director.notify('cinemaWidened');
+  }
 }
 
 async function onRevealTransition() {
@@ -633,6 +637,7 @@ director = new Director({
     onLightsCold: onRevealColdLighting,
     setFisheyeFade: (v) => post.setFisheyeFade(v),
     onActEnter: (act) => {
+      if (act?.restockPool) resetAllPoolItems(items.filter(it => it.state === 'collected'));
       if ((act?.id ?? 0) >= 4) startRevealMarblePreload();
     },
     onRestart: onGameplayRestart,

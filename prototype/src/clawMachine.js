@@ -289,11 +289,11 @@ export class ClawMachine {
     const g = c.gripStrength;
     const cand = nearestItem(this.items, this.rig.position.x, this.rig.position.z, t.grabRadius);
 
-    if (cand && Math.random() < g * cand.gripFactor) {
+    if (cand && (c.forceGrip || Math.random() < g * cand.gripFactor)) {
       this.gripped = cand;
       cand.state = 'gripped';
       // 上升前一次性掷签：是否滑落、在哪个高度滑
-      this.slipPlanned = Math.random() < c.baseSlipProb * (1 - g * cand.gripFactor);
+      this.slipPlanned = !c.forceGrip && Math.random() < c.baseSlipProb * (1 - g * cand.gripFactor);
       this.slipAtY = lerp(t.grabY + 0.25, t.restY - 0.20, Math.random());
     } else {
       // 没抓住：把碰到的物品碰歪一点（物理存在感的廉价演出）
@@ -302,6 +302,7 @@ export class ClawMachine {
         cand.mesh.rotation.x += (Math.random() - 0.5) * 0.3;
       }
       this.#say('miss');
+      this.hooks.onGrabFail?.('miss');
     }
   }
 
@@ -318,6 +319,7 @@ export class ClawMachine {
       if (!skip) this.#say(it.category === 'food' ? 'food' : 'junk');
     } else {
       this.#say('slip');
+      this.hooks.onGrabFail?.('slip');
     }
   }
 

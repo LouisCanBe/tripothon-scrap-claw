@@ -72,18 +72,21 @@ export class Director {
 
       const q = this.act?.quest;
       const copy = this.act?.questCopy;
+      const slot = this.#questSlot(payload.id);
       if (this.act?.id === 3 && q) {
-        if (q.includes(payload.id) && !this._questDone.has(payload.id)) {
-          this._questDone.add(payload.id);
-          document.getElementById('q-' + payload.id)?.classList.add('done');
+        if (slot && !this._questDone.has(slot)) {
+          this._questDone.add(slot);
+          document.getElementById('q-' + slot)?.classList.add('done');
           this.#syncQuestHud();
-          const line = copy?.right?.[payload.id];
+          const line = copy?.right?.[slot];
           if (line) this.msg(line);
           if (q.every(id => this._questDone.has(id))) {
             this.mask.pulse(undefined, 160);
             setTimeout(() => this.notify('questComplete'), 700);
           }
-        } else if (!this._questDone.has(payload.id)) {
+        } else if (slot) {
+          if (copy?.dup) this.msg(copy.dup);
+        } else {
           const line = payload.category === 'junk'
             ? (copy?.wrongJunk ?? copy?.wrong)
             : (copy?.wrong ?? '……配额不认这个。');
@@ -102,8 +105,20 @@ export class Director {
 
       if (this.act?.tuning?.decayPerGrab)
         CONFIG.claw.gripStrength = Math.max(0.55, CONFIG.claw.gripStrength - this.act.tuning.decayPerGrab);
+      if (slot) this._failStreak = 0;
+    }
+    if (event === 'grabFail') {
+      const pity = this.act?.pity;
+      if (pity) {
+        this._failStreak = (this._failStreak ?? 0) + 1;
+        if (this._failStreak >= (pity.streak ?? 2)) {
+          CONFIG.claw.gripStrength = Math.min(1, CONFIG.claw.gripStrength + (pity.gripStep ?? 0.08));
+          CONFIG.claw.baseSlipProb = Math.max(0, CONFIG.claw.baseSlipProb - (pity.slipStep ?? 0.06));
+        }
+      }
     }
     if (event === 'view' && payload) {
+      if (payload !== 'front') this.notify('firstView');
       this._viewsSeen ??= new Set(['front']);
       this._viewsSeen.add(payload);
       if (['left', 'front', 'right'].every(v => this._viewsSeen.has(v))) this.notify('allViews');
@@ -135,6 +150,18 @@ export class Director {
 
   // ---------------- 内部 ----------------
 
+  /** 奖品 id → 配额格（questAccepts 里认的别名；没有就只认同名 id） */
+  #questSlot(id) {
+    const q = this.act?.quest;
+    if (!q || !id) return null;
+    const accepts = this.act.questAccepts;
+    if (accepts) {
+      for (const slot of q) if (accepts[slot]?.includes(id)) return slot;
+      return null;
+    }
+    return q.includes(id) ? id : null;
+  }
+
   #syncQuestHud() {
     if (!this.elQuestProg) return;
     const q = this.act?.quest;
@@ -158,6 +185,14 @@ export class Director {
     this.rig?.setZoom(act.zoom ?? 1);
     this.rig?.applyUserZoomPolicy(act.id ?? 1);
     this.claw.controlEnabled = !!(act.control.move || act.control.drop);
+    clearTimeout(this._pityTimer);
+    this._failStreak = 0;
+    CONFIG.claw.forceGrip = false;
+    if (act.pity?.forceAfterSeconds) {
+      this._pityTimer = setTimeout(() => {
+        if (gen === this._runGen) CONFIG.claw.forceGrip = true;
+      }, act.pity.forceAfterSeconds * 1000);
+    }
     if (act.tuning) {
       const { decayPerGrab, ...params } = act.tuning;
       Object.assign(CONFIG.claw, params);
@@ -207,6 +242,7 @@ export class Director {
           if (step.hideAfter) this.#panel(step.side, '');
           break;
         case 'hint':  this.elHint.textContent = step.text; break;
+        case 'pause': await sleep((step.dur ?? 1) * 1000); break;
         case 'wait':  await this.#waitFor(step.event); break;
         case 'synthesis': await this.#synthesis(act); break;
         case 'interstitial':

@@ -257,7 +257,9 @@ export function startCollectDisplayPairPanel(director) {
     e.stopPropagation();
   });
 
-  director.hooks.onActEnter = (act) => {
+  const prevActEnter = director.hooks.onActEnter;
+  director.hooks.onActEnter = (act, idx) => {
+    prevActEnter?.(act, idx);
     setPanelVisible(shouldShowPanel(act));
   };
 

@@ -12,7 +12,8 @@
 //       continue + continueAfter：先只显示本侧，点击该框或到时再往下走（也可派发 window 事件 narrative:continue）
 //       hideAfter：本步结束后收起，避免左右同时占屏
 //     { hint }                改底部提示
-//     { wait: 事件名 }         等待事件：allViews / firstCollect / questComplete
+//     { pause, dur }          留白，dur 秒
+//     { wait: 事件名 }         等待事件：firstView / allViews / firstCollect / questComplete / cinemaWidened
 //     { synthesis }           四幕合成演出
 //     { glitch, image? }      终幕故障转场；省略 image 则仅音画故障/黑场，不叠概念图
 //     { interstitial, image, dur?, fadeIn?, fadeOut?, dipBefore?, dipAfter? }
@@ -40,8 +41,9 @@ export const ACTS = [
       { type: 'sub', text: '资源枯竭纪元 21 年。', dur: 3 },
       { type: 'sub', text: '配给制度崩坏，人们靠"采集"活下去。', dur: 4 },
       { type: 'panel', side: 'left', text: '他还记得那台机器。\n那时候，食物是装在玻璃柜里的。', dur: 4.5 },
-      { type: 'wait', event: 'allViews' },
+      { type: 'wait', event: 'firstView' },
       { type: 'sub', text: '左边……右边……都一样。都是吃的。', dur: 4 },
+      { type: 'wait', event: 'allViews' },
     ],
   },
   {
@@ -63,9 +65,19 @@ export const ACTS = [
     id: 3, label: '第三幕 · 采集任务', layout: 'center', backdrop: 'act3', hudDecor: 'rationWall',
     control: { move: true, drop: true, view: true },
     tuning: { gripStrength: 0.78, baseSlipProb: 0.45, decayPerGrab: 0.06 },  // 爪力开始不稳
+    // 兜底：连续失败 streak 次后每次回升抓力；进幕 forceAfterSeconds 秒后抓到即成、不滑
+    pity: { streak: 2, gripStep: 0.08, slipStep: 0.06, forceAfterSeconds: 90 },
     quest: ['bread', 'can', 'veg'],
+    // 配额按标签记账，不看外观：发霉方块也算面包，锈罐也算罐头
+    questAccepts: {
+      bread: ['bread', 'moldy'],
+      can: ['can', 'rustcan'],
+      veg: ['veg', 'rot', 'apple'],
+    },
+    restockPool: true,   // 第二幕抓走的面包等补回池里
     questCopy: {
       right: { bread: '面包，入账。', can: '罐头。', veg: '青菜。' },
+      dup: '……这一样够了。',
       wrong: '……这不是今天的配额。',
       wrongJunk: '垃圾也进洞了。不算数。',
     },
@@ -86,8 +98,11 @@ export const ACTS = [
       { type: 'panel', side: 'left', text: '' },
       { type: 'panel', side: 'right', text: '' },
       { type: 'synthesis' },
-      { type: 'sub', text: '那天他们吃得很好。', dur: 3.2 },
-      { type: 'sub', text: '他一直是这么记的。', dur: 3 },
+      { type: 'pause', dur: 2 },
+      { type: 'sub', text: '那天他们吃得很好。', dur: 3.4 },
+      { type: 'pause', dur: 1.2 },
+      { type: 'sub', text: '他一直是这么记的。', dur: 3.6 },
+      { type: 'pause', dur: 1.2 },
     ],
   },
   {
@@ -97,8 +112,10 @@ export const ACTS = [
     hint: null,
     script: [
       { type: 'glitch' },
-      { type: 'revealBeat', dur: 3.4, line: '他今天吃了什么？\n手心里只有一罐。' },
+      { type: 'revealBeat', dur: 3.4, line: '手心里只有一罐。' },
       { type: 'reveal' },
+      { type: 'wait', event: 'cinemaWidened' },
+      { type: 'pause', dur: 1.5 },
       { type: 'stinger', text: 'Demo 结束。他今天吃了什么？' },
     ],
   },
