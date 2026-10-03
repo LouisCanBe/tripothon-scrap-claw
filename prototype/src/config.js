@@ -402,9 +402,9 @@ export const CONFIG = {
     endingOrbitDelay: 7,
     endingOrbitTurns: 1,
     endingOrbitSeconds: 14,
-    pano: 'assets/worlds/reveal-draft-pano.png',
-    colliderGlb: 'assets/worlds/reveal-draft-collider.glb',
-    spz: 'assets/worlds/reveal-draft-100k.spz',
+    pano: 'assets/worlds/ending-room-pano.png',
+    colliderGlb: 'assets/worlds/ending-room-collider.glb',
+    spz: 'assets/worlds/ending-room-500k.spz',
     boundsMargin: 0.45,        // AABB 内缩（越大越不容易贴到盒边）
     collisionSkin: 0.35,       // 沿 collider 网格射线阻挡的留白（米）
     showBoundsHelper: false,   // true：显示 collider 包围盒线框，核对是否贴 SPZ
@@ -412,7 +412,7 @@ export const CONFIG = {
     backgroundIntensity: 1.0,
     yawOffset: 0,              // 全景与机位朝向对不齐时微调（弧度）
     // 与 Marble 默认出生点一致时可微调朝向（弧度）
-    spawn: { yaw: 0, pitch: 0, eyeHeight: 1.55, offsetZFrac: 0.15, offsetX: 0 },
+    spawn: { yaw: 0, pitch: 0, eyeHeight: 1.55, offsetZFrac: 0, offsetX: 0 },
     lookSensitivity: 0.005,    // 与 Marble 工具台默认一致
     keyLookSpeed: 1.8,         // 仅 keyboardLook:true 时生效
     pitchMin: -1.45,

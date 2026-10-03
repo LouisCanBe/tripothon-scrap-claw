@@ -27,7 +27,7 @@ const SETS = {
     synthesis: 'design/backdrops/backdrop-act4-memory.jpg',
     glitch: `${C}glitch-frame-tear-cursor-photo-16x9.png`,
     revealBeat: 'assets/images/reveal-truth-hand-can.png',
-    revealPano: 'assets/worlds/reveal-draft-pano.png',
+    revealPano: 'assets/worlds/ending-room-pano.png',
     truthTable: `${C}last-meal-truth-table-cursor-photo-16x9.png`,
   },
 };
