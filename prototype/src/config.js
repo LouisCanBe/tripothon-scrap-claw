@@ -418,6 +418,19 @@ export const CONFIG = {
     pitchMin: -1.45,
     pitchMax: 1.45,
     fov: 78,
+    // 点云直出，对齐 Hub。ACES / 泛光 / 暗角会把显示用颜色再提亮成奶白。H 面板「终幕点云」可再加回去。
+    splatLook: {
+      toneMapping: 'none',
+      exposure: 1,
+      bloom: 0,
+      bloomThreshold: 0.8,
+      vignette: 0.28,
+      grain: 0,
+      saturation: 1,
+      warmth: 0,
+      chroma: 0,
+      fisheye: 0,
+    },
     // 终幕相机能力开关（SceneControls.features，见 sceneControls.js）
     controls: {
       pointerLook: true,       // 画布拖拽环视（与 world.html pano 相同）

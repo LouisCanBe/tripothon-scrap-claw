@@ -344,12 +344,46 @@ function setRevealPanoLift(k) {
   const lift = Math.max(0, Math.min(1, k));
   scene.backgroundIntensity = start + (end - start) * lift;
   applyRevealLightingForLift(lift, { key, fill, glow, hemi, ambient }, scene);
+  if (splatLookActive()) return;
   const exp = CONFIG.render.exposure ?? 1.18;
   if (!CONFIG.pool.comicFx.enabled) {
-    // 末段放缓，避免溶解一结束曝光顶满发白
+    // 全景回退才渐亮。点云直出时曝光由 splatLook 管，避免再提成奶白。
     const expK = 1 - (1 - lift) ** 2.4;
     renderer.toneMappingExposure = exp * (0.56 + 0.4 * expK);
   }
+}
+
+const GAME_OUTPUT_COLOR_SPACE = renderer.outputColorSpace;
+
+function splatLookActive() {
+  return shouldLinkMarbleScene() && revealRoot.visible;
+}
+
+function restoreGameplayGrade() {
+  post.setRevealLook(null);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.outputColorSpace = GAME_OUTPUT_COLOR_SPACE;
+  renderer.toneMappingExposure = CONFIG.pool.comicFx.enabled
+    ? (CONFIG.pool.comicFx.exposure ?? 1.15)
+    : (CONFIG.render.exposure ?? 1.18);
+}
+
+/** 点云在画面上时改走 Hub 同款直出。H 面板改 splatLook 后下一帧生效。 */
+function applySplatPresentation() {
+  if (!splatLookActive()) {
+    if (post._revealLook) restoreGameplayGrade();
+    return;
+  }
+  const look = CONFIG.reveal.splatLook ?? {};
+  post.setRevealLook(look);
+  renderer.toneMapping = look.toneMapping === 'aces'
+    ? THREE.ACESFilmicToneMapping
+    : THREE.NoToneMapping;
+  // 点云着色器写出的已是显示颜色。OutputPass 再做一次 sRGB 会发白，直出时关掉这层。
+  renderer.outputColorSpace = look.toneMapping === 'aces'
+    ? GAME_OUTPUT_COLOR_SPACE
+    : THREE.LinearSRGBColorSpace;
+  renderer.toneMappingExposure = look.exposure ?? 1;
 }
 
 function onRevealColdLighting() {
@@ -435,6 +469,7 @@ function disableRevealControls() {
   applyMemoryLighting({ key, fill, glow, hemi, ambient });
   document.documentElement.classList.remove('narrative-scene-bg');
   modelFade.restore();
+  restoreGameplayGrade();
   world.visible = true;
   CONFIG.post.grain = POST_GRAIN_DEFAULT;
 }
@@ -792,6 +827,24 @@ const gui = new GUI({ title: '爪机手感调参' });
     savePoolDev();
   });
 
+  const sf = gui.addFolder('终幕点云');
+  const splatLook = CONFIG.reveal.splatLook;
+  sf.add(splatLook, 'toneMapping', { 直出: 'none', ACES: 'aces' }).name('色调映射');
+  sf.add(splatLook, 'exposure', 0.4, 2, 0.02).name('曝光');
+  sf.add(splatLook, 'bloom', 0, 1.2, 0.02).name('泛光');
+  sf.add(splatLook, 'bloomThreshold', 0.3, 1, 0.02).name('泛光阈值');
+  sf.add(splatLook, 'vignette', 0, 1, 0.02).name('暗角');
+  sf.add(splatLook, 'grain', 0, 0.15, 0.005).name('颗粒');
+  sf.add(splatLook, 'saturation', 0, 1.6, 0.02).name('饱和');
+  sf.add(splatLook, 'warmth', -0.4, 0.4, 0.02).name('冷暖');
+  sf.add(splatLook, 'chroma', 0, 1, 0.02).name('色散');
+  sf.add(splatLook, 'fisheye', 0, 0.65, 0.005).name('桶形');
+  sf.add(CONFIG.reveal, 'fov', 35, 90, 1).name('FOV').onChange((v) => {
+    revealCtl.baseFov = v;
+    camera.fov = v;
+    camera.updateProjectionMatrix();
+  });
+
   const rf = gui.addFolder('渲染质感');
   rf.add(CONFIG.render, 'exposure', 0.4, 2, 0.02).name('ACES曝光').onChange(v => {
     if (!CONFIG.pool.comicFx.enabled) renderer.toneMappingExposure = v;
@@ -972,6 +1025,7 @@ function tick() {
   prizeItemSim?.tick(dt);
   poolDecorSim?.tick(items, dt, claw.getPoolPhysicsContext());
   tickUpgrades(dt);
+  applySplatPresentation();
   if (revealDissolve) {
     revealDissolve.update(dt, t);
   } else {

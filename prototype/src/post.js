@@ -106,18 +106,34 @@ export class Post {
   // 画幅中心的 UV 坐标（y 注意翻转）
   setCenter(cx, cy) { this.pass.uniforms.uCenter.value.set(cx, cy); }
 
+  /** 终幕点云：不用娃娃机那套调色。null 时恢复按幕的后处理。 */
+  setRevealLook(look) { this._revealLook = look || null; }
+
   _syncUniforms(dt, t) {
-    const p = CONFIG.post;
+    const look = this._revealLook;
     this.fisheyeFade += (this.fisheyeFadeTarget - this.fisheyeFade) * (1 - Math.exp(-dt / 0.6));
+    const u = this.pass.uniforms;
+    u.uTime.value = t;
+    if (look) {
+      this.bloom.strength = (look.bloom ?? 0) * this._bloomScale;
+      this.bloom.threshold = look.bloomThreshold ?? 0.8;
+      u.uK1.value = look.fisheye ?? 0;
+      u.uK2.value = 0;
+      u.uGrain.value = look.grain ?? 0;
+      u.uVig.value = look.vignette ?? 0;
+      u.uWarmth.value = look.warmth ?? 0;
+      u.uChroma.value = look.chroma ?? 0;
+      u.uSat.value = look.saturation ?? 1;
+      return;
+    }
+    const p = CONFIG.post;
     this.bloom.strength = p.bloom * this._bloomScale;
     this.bloom.threshold = p.bloomThreshold;
-    const u = this.pass.uniforms;
     const lens = viewportEdgeLensScale() * this.fisheyeFade;
     u.uK1.value = p.k1 * lens;
     u.uK2.value = p.k2 * lens;
     u.uGrain.value = p.grain;
     u.uVig.value = postVignetteForViewportEdge();
-    u.uTime.value = t;
     const pc = presentPostCoeffs();
     u.uWarmth.value = pc.warmth * this.fisheyeFade;
     u.uChroma.value = pc.chroma * lens;
