@@ -15,11 +15,17 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleCollectApi } from './collectDisplayHub.mjs';
-import { handleFrameUpgrade } from './frameStream.mjs';
 import { DEFAULT_COLLECT_PAIR } from '../prototype/src/collectPairDefault.js';
 
 const TOOLS = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const ROOT = path.resolve(TOOLS, '../prototype');
+
+let handleFrameUpgrade = (_req, socket) => { socket.destroy(); };
+const frameStreamPath = path.join(TOOLS, 'frameStream.mjs');
+if (existsSync(frameStreamPath)) {
+  const mod = await import('./frameStream.mjs');
+  handleFrameUpgrade = mod.handleFrameUpgrade;
+}
 
 function parseArgs(argv) {
   let port = 8000;
