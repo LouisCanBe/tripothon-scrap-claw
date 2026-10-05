@@ -2,11 +2,13 @@
   "_doc": "奖池资产台账 —— 单一事实来源。Hub「奖池」面板读它做预览/生成/配对检查；prizePool.js 是它的人工落地版。改这里不会自动改游戏；生成脚本与 Hub 会按它写 manifest。",
   "_howto": {
     "新增一件物品": "1) items 里加一条；2) memory/rot 的 id 决定 GLB 文件名（英文）；3) 在 Hub 面板点「生成这一对」；4) 把这一条同步进 prototype/src/prizePool.js 的 PRIZE_TABLE。",
-    "命名约定": "GLB 文件名 = id + '.glb'；坏模型默认用 <id>-rot，也可以用更具体的名字（如 moldy / rustcan / rot），由 rot.id 指定。",
+    "命名约定": "GLB 文件名 = 那一态的 id + '.glb'。显形态用物品 id，败露态默认 <id>-rot；已有的三件用更具体的名字（moldy / rustcan / rot），由 rot.id 指定。",
     "配额": "只有 quest 为 true 的会被写进第三幕的配额单；questLabel 是 HUD 上显示的中文。",
-    "只调材质": "rot.id 与 memory.id 相同时，表示没有独立败露模型，故障后靠材质覆盖（变脏）。配对检查会把它标成 partial。",
-    "生成套": "全部走 Tripo，发布套 = good-p2（轻量化）。命令：node tools/generate.mjs --set good-p2 --only <id>",
-    "碰撞体": "collider 只写一次、两态共用 —— 这是「判定不变」的物理保证，两态模型必须按它归一化（轮廓对齐）。"
+    "两态": "同一件东西两副样子即可，不要求轮廓严丝合缝。rot.id 与 memory.id 不同，并且两个 GLB 都在发布套目录里，才算成套。",
+    "待生成败露态": "rot.id 已经是独立文件名，但 GLB 还没落地。生成时只提交 rot.id，禁止覆盖 memory 那个已有文件。",
+    "只调材质": "rot.id 与 memory.id 相同时，故障后只压暗、不换模型。当前台账里不再留这种条目；补上独立 rot.id 后就离开这一档。",
+    "生成套": "全部走 Tripo，发布套 = good-p2（轻量化）。补败露态：node tools/generate.mjs --set good-p2 --only carton-rot,cheese-rot,bottle-rot,jar-rot,apple-rot。键名必须是 rot.id。",
+    "碰撞体": "collider 只写一次、两态共用，抓取判定不变。模型载入时会缩到这个槽位，所以比「归一化后的最大边」没有意义。"
   },
   "sets": {
     "release": "good-p2",
@@ -69,10 +71,11 @@
       "bounceMaterial": "rubber",
       "quest": false,
       "memory": { "id": "carton", "label": "牛奶盒", "prompt": "a milk carton, clean label", "kind": "text2model" },
-      "rot": { "id": "carton", "label": "空盒", "prompt": "a crushed empty milk carton, stained flattened", "kind": "text2model" },
+      "rot": { "id": "carton-rot", "label": "空盒", "prompt": "a crushed empty milk carton, stained", "kind": "text2model" },
       "paired": false,
+      "awaiting": "rot",
       "inGame": true,
-      "todo": "补独立败露模型 carton-rot.glb（瘪掉的空盒）"
+      "todo": "待生成 carton-rot.glb。只提交 rot.id，不要覆盖 carton.glb。接入后 variants.rot.to 改为 carton-rot，并去掉 tint。"
     },
     {
       "id": "cheese",
@@ -84,10 +87,11 @@
       "bounceMaterial": "soft",
       "quest": false,
       "memory": { "id": "cheese", "label": "干酪块", "prompt": "a wedge of cheese, clean", "kind": "text2model" },
-      "rot": { "id": "cheese", "label": "霉斑块", "prompt": "a moldy cheese wedge, blue-green spots, same silhouette", "kind": "text2model" },
+      "rot": { "id": "cheese-rot", "label": "霉斑块", "prompt": "a moldy cheese wedge, blue-green spots", "kind": "text2model" },
       "paired": false,
+      "awaiting": "rot",
       "inGame": true,
-      "todo": "补 cheese-rot.glb"
+      "todo": "待生成 cheese-rot.glb。只提交 rot.id，不要覆盖 cheese.glb。接入后去掉 tint。"
     },
     {
       "id": "bottle",
@@ -99,10 +103,11 @@
       "bounceMaterial": "glass",
       "quest": false,
       "memory": { "id": "bottle", "label": "瓶子", "prompt": "a glass bottle, clean", "kind": "text2model" },
-      "rot": { "id": "bottle", "label": "裂瓶", "prompt": "a cracked dirty glass bottle, murky contents, same silhouette", "kind": "text2model" },
+      "rot": { "id": "bottle-rot", "label": "裂瓶", "prompt": "a cracked dirty glass bottle, murky contents", "kind": "text2model" },
       "paired": false,
+      "awaiting": "rot",
       "inGame": true,
-      "todo": "补 bottle-rot.glb"
+      "todo": "待生成 bottle-rot.glb。只提交 rot.id，不要覆盖 bottle.glb。接入后去掉 tint。"
     },
     {
       "id": "jar",
@@ -114,10 +119,11 @@
       "bounceMaterial": "glass",
       "quest": false,
       "memory": { "id": "jar", "label": "玻璃罐", "prompt": "a glass jar, clean", "kind": "text2model" },
-      "rot": { "id": "jar", "label": "裂罐", "prompt": "a cracked glass jar, grimy, same silhouette", "kind": "text2model" },
+      "rot": { "id": "jar-rot", "label": "裂罐", "prompt": "a cracked glass jar, grimy", "kind": "text2model" },
       "paired": false,
+      "awaiting": "rot",
       "inGame": true,
-      "todo": "补 jar-rot.glb"
+      "todo": "待生成 jar-rot.glb。只提交 rot.id，不要覆盖 jar.glb。接入后去掉 tint。"
     },
     {
       "id": "apple",
@@ -129,10 +135,11 @@
       "bounceMaterial": "soft",
       "quest": false,
       "memory": { "id": "apple", "label": "苹果", "prompt": "a fresh apple", "kind": "text2model" },
-      "rot": { "id": "apple", "label": "瘪果", "prompt": "a shrivelled rotten apple, dark spots, same silhouette", "kind": "text2model" },
+      "rot": { "id": "apple-rot", "label": "瘪果", "prompt": "a shrivelled rotten apple, dark spots", "kind": "text2model" },
       "paired": false,
+      "awaiting": "rot",
       "inGame": true,
-      "todo": "补 apple-rot.glb"
+      "todo": "待生成 apple-rot.glb。只提交 rot.id，不要覆盖 apple.glb。接入后去掉 tint。"
     },
     {
       "id": "fish",
@@ -143,11 +150,11 @@
       "gripFactor": 0.85,
       "bounceMaterial": "soft",
       "quest": false,
-      "memory": { "id": "fish", "label": "鱼罐头", "prompt": "a flat tin of fish, clean label", "kind": "text2model" },
-      "rot": { "id": "fish-rot", "label": "腐烂的鱼", "prompt": "a rotting fish, dull scales, same outline", "kind": "text2model" },
+      "memory": { "id": "fish", "label": "咸鱼干", "prompt": "a dried salted fish, flat", "kind": "text2model" },
+      "rot": { "id": "fish-rot", "label": "腐烂的咸鱼", "prompt": "a rotting dried fish, dull and spoiled", "kind": "text2model" },
       "paired": false,
       "inGame": false,
-      "todo": "新增两态（扁长条轮廓，轮廓库目前缺这个形状）"
+      "todo": "新增两态。同一条咸鱼的两种样子，不要求轮廓严丝合缝。"
     },
     {
       "id": "ration",
@@ -159,7 +166,7 @@
       "bounceMaterial": "rubber",
       "quest": false,
       "memory": { "id": "ration", "label": "口粮袋", "prompt": "a sealed emergency ration bag, printed label", "kind": "text2model" },
-      "rot": { "id": "ration-rot", "label": "空瘪袋", "prompt": "an empty flattened ration bag, torn, same silhouette", "kind": "text2model" },
+      "rot": { "id": "ration-rot", "label": "空瘪袋", "prompt": "an empty flattened ration bag, torn", "kind": "text2model" },
       "paired": false,
       "inGame": false,
       "todo": "新增两态"
@@ -174,7 +181,7 @@
       "bounceMaterial": "rubber",
       "quest": false,
       "memory": { "id": "cracker", "label": "饼干盒", "prompt": "a flat biscuit tin, clean label", "kind": "text2model" },
-      "rot": { "id": "cracker-rot", "label": "受潮纸盒", "prompt": "a damp warped biscuit tin, mould stains, same silhouette", "kind": "text2model" },
+      "rot": { "id": "cracker-rot", "label": "受潮纸盒", "prompt": "a damp warped biscuit tin, mould stains", "kind": "text2model" },
       "paired": false,
       "inGame": false,
       "todo": "新增两态（比牛奶盒更扁更宽，避免撞轮廓）"
@@ -189,7 +196,7 @@
       "bounceMaterial": "glass",
       "quest": false,
       "memory": { "id": "oil", "label": "食用油", "prompt": "a tall slim cooking oil bottle", "kind": "text2model" },
-      "rot": { "id": "oil-rot", "label": "浑浊油瓶", "prompt": "a cloudy dirty oil bottle, sediment, same silhouette", "kind": "text2model" },
+      "rot": { "id": "oil-rot", "label": "浑浊油瓶", "prompt": "a cloudy dirty oil bottle, sediment", "kind": "text2model" },
       "paired": false,
       "inGame": false,
       "todo": "新增两态（细长圆柱，抓起来最滑的那一类）"
@@ -204,7 +211,7 @@
       "bounceMaterial": "soft",
       "quest": false,
       "memory": { "id": "fruit2", "label": "青果", "prompt": "a small green fruit", "kind": "text2model" },
-      "rot": { "id": "fruit2-rot", "label": "烂青果", "prompt": "a rotten green fruit, shrivelled, same silhouette", "kind": "text2model" },
+      "rot": { "id": "fruit2-rot", "label": "烂青果", "prompt": "a rotten green fruit, shrivelled", "kind": "text2model" },
       "paired": false,
       "inGame": false,
       "todo": "新增两态（凑 13 件用，可随时替换）"
@@ -222,9 +229,9 @@
   "checks": {
     "_note": "Hub 面板按这几条给出红/黄/绿。e2e 里也已经断言了其中几条。",
     "rules": [
-      { "id": "pair", "label": "两态成套", "detail": "rot.id 与 memory.id 不同 = 有独立败露模型" },
-      { "id": "silhouette", "label": "轮廓对齐", "detail": "两态归一化后最大边一致（≤5% 偏差）；collider 是唯一尺寸源" },
-      { "id": "onDisk", "label": "文件存在", "detail": "assets/prizes-good-p2/<id>.glb 存在" },
+      { "id": "pair", "label": "两态成套", "detail": "rot.id 与 memory.id 不同，且两个 GLB 都在发布套目录里。只派了文件名、文件还没有 = 待生成败露态，不算成套。" },
+      { "id": "silhouette", "label": "轮廓参考", "detail": "不挡生成、不挡接入。两态是同一件东西的两种样子即可。载入时会缩到 collider，比归一化后的最大边没有意义。" },
+      { "id": "onDisk", "label": "文件存在", "detail": "assets/prizes-good-p2/<该态 id>.glb 存在。补败露态时只查 rot.id，不要把缺文件当成该覆盖显形态。" },
       { "id": "lightweight", "label": "轻量化", "detail": "单件 ≤ 1.5MB、贴图 ≤ 2K（超了标黄，提示可以压）" },
       { "id": "questCover", "label": "配额可达成", "detail": "quest 为 true 的每一件在池子里都有实例" }
     ]
