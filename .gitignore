@@ -1,16 +1,16 @@
-# API Key 缁濅笉鎻愪氦
+# API Key 绝不提交
 .env.local
 .env
 
 node_modules/
 
-# Tripo 生成缓冲区（确认好用后改名进 prizes/ 才入库）
+# Tripo ????????????????ú?????? prizes/ ?????
 prototype/assets/generated/
 
-# 鐩告?嗗師鍘? SDK 鍘嬬缉鍖呬笌瑙ｅ帇鐩?褰曘�傚紑鍙戝壇鏈?鍦? prototype/vendor/jupiter
+# 相???原?? SDK 压缩包与解压??录。开发副???? prototype/vendor/jupiter
 JupiterSR/**/Jupiter-Interlace-SDK-*
 
-# 鐩告?嗗師鍘傚?椾欢鐣欏湪鏈?鏈猴紝涓嶈繘浠撳簱銆傚紑鍙戝壇鏈?鍦? prototype/vendor/jupiter
+# 相???原厂???件留在??机，不进仓库。开发副???? prototype/vendor/jupiter
 /JupiterSR/
 
 # Cursor Agent Skill (npm run skills:pixverse); not game runtime
@@ -27,10 +27,27 @@ prototype/assets/worlds/world-*-collider.glb
 prototype/assets/worlds/world-*-100k.spz
 
 # Local only: submission drafts, generation logs, machine backups
-/参赛提交.md
-/CONCEPT-参赛与裸眼3D.md
-/JupiterSR-创意申请.md
+/??????.md
+/CONCEPT-??????????3D.md
+/JupiterSR-????????.md
 tools/*.log
 prototype/assets/machine/archive/
 prototype/assets/machine/*.blend1
 *.zip
+
+# Not used by the current game build (kept on disk, add back when needed)
+prototype/assets/prizes/
+prototype/assets/prizes-good/
+prototype/assets/machine/machine-shell.blend
+prototype/assets/machine/machine_*.glb
+prototype/assets/worlds/reveal-draft-*
+prototype/design/machine-parts/
+prototype/design/machine-shell-ref/
+prototype/design/ui-ration-wall-scrap.png
+prototype/design/act*.png
+prototype/design/concepts/*seedream*
+prototype/design/concepts/scrapyard-thickpaint*
+prototype/design/concepts/key-visual*
+prototype/design/concepts/props-memory*
+prototype/design/concepts/reveal-truth-scene*
+.shots/
