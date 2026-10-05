@@ -54,12 +54,13 @@ const damp = (a, b, tau, dt) => a + (b - a) * (1 - Math.exp(-dt / Math.max(tau, 
 const S = { IDLE: 0, DROP: 1, CLOSE_PAUSE: 2, CLOSE: 3, GRAB_PAUSE: 4,
             LIFT: 5, RETURN: 6, DELIVER: 7, OPEN: 8, RESET: 9 };
 
+const L = (zh, en) => ({ zh, en });
 const MESSAGES = {
-  drop: ['落爪——'],
-  miss: ['空了。', '什么都没抓住。'],
-  slip: ['啊——滑掉了。', '就差一点。'],
-  food: ['成功了。他和妹妹分着吃。', '是吃的。今晚有着落了。'],
-  junk: ['……这个也能吃。', '捡都捡了。'],
+  drop: [L('落爪——', 'Drop—')],
+  miss: [L('空了。', 'Nothing there.'), L('什么都没抓住。', 'Nothing in the claw.')],
+  slip: [L('啊——滑掉了。', 'It slipped.'), L('就差一点。', 'So close.')],
+  food: [L('成功了。他和妹妹分着吃。', 'It worked. He and his sister split it.'), L('是吃的。今晚有着落了。', 'It\'s food. Tonight is covered.')],
+  junk: [L('……这个也能吃。', '…This can be eaten too.'), L('捡都捡了。', 'It\'s already in hand.')],
 };
 
 export class ClawMachine {
@@ -68,13 +69,31 @@ export class ClawMachine {
     return this._tripoVisual ?? this.clawVisual ?? this.claw;
   }
 
-  /** 同步 Tripo 爪 GLB 的 scale / offsetY（H 面板调） */
+  /** 同步 Tripo 爪 GLB 的缩放。XZ 钉在顶盖轴心上，offsetY 只做微调。 */
   syncTripoVisualTransform() {
     const cfg = CONFIG.clawGLB;
-    if (!this._tripoVisual || !cfg) return;
+    const visual = this._tripoVisual;
+    if (!visual || !cfg) return;
     const clawS = (C().meshVisualScale ?? 1) * (cfg.scaleWithPrize ?? 1);
-    this._tripoVisual.scale.setScalar(cfg.scale * clawS);
-    this._tripoVisual.position.y = cfg.offsetY * clawS;
+    visual.scale.setScalar(cfg.scale * clawS);
+    const seat = this._tripoSeat ?? { x: 0, y: 0, z: 0 };
+    const nudge = (cfg.offsetY ?? 0) * clawS;
+    visual.position.set(seat.x, seat.y + nudge, seat.z);
+  }
+
+  /** 把生成模型的顶盖轴心对到吊缆正下方，避免爪子看起来悬在杆子旁边 */
+  #seatTripoOnCable(visual, cap) {
+    visual.position.set(0, 0, 0);
+    visual.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(cap);
+    const center = box.getCenter(new THREE.Vector3());
+    const cableBottom = 0.05;
+    this._tripoSeat = {
+      x: -center.x,
+      y: cableBottom - box.max.y,
+      z: -center.z,
+    };
+    this.syncTripoVisualTransform();
   }
 
   /** 奖池装饰推力：仅待机巡移时由爪子推开，落爪～回位复位期间关闭 */
@@ -207,7 +226,6 @@ export class ClawMachine {
       const newClaw = new THREE.Group();
       const clawS = (C().meshVisualScale ?? 1) * (cfg.scaleWithPrize ?? 1);
       newClaw.scale.setScalar(cfg.scale * clawS);
-      newClaw.position.y = cfg.offsetY * clawS;
       newClaw.rotation.y = cfg.rotationY ?? 0;   // 转正：让正视角看到开合
       newClaw.add(root);
 
@@ -238,8 +256,10 @@ export class ClawMachine {
         );
       }
 
-      this.claw.add(newClaw);
+      const cap = byName.tripo_part_7 ?? root;
       this._tripoVisual = newClaw;
+      this.#seatTripoOnCable(newClaw, cap);
+      this.claw.add(newClaw);
 
       // 预编译材质，避免替换瞬间卡帧
       if (renderer && camera) {

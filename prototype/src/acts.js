@@ -98,7 +98,7 @@ export const ACTS = [
     tuning: { gripStrength: 1.0, baseSlipProb: 0 },   // 教学：首抓必成
     hint: DEFAULT_HINT,
     script: [
-      { type: 'panel', side: 'left', text: L('移动爪子。\n对准。', 'Move the claw.\nLine it up.'), continue: true, continueAfter: 3.4, hideAfter: true },
+      { type: 'panel', side: 'left', text: L('WASD 移动爪子。\n对准。', 'WASD to move the claw.\nLine it up.'), continue: true, continueAfter: 3.4, hideAfter: true },
       { type: 'panel', side: 'right', text: L('按下空格。\n落爪。', 'Press space.\nDrop.') },
       { type: 'wait', event: 'firstCollect' },
       { type: 'panel', side: 'right', text: '' },

@@ -5,6 +5,8 @@
 
 ## 运行
 
+入口和 `?act=` / `?lang=` / `?gui=1` 等链接见仓库根 `README.md`。下面是旧的本地静态服写法，日常用 `npm start` 即可。
+
 ES Module 必须走本地服务器（不能直接双击 html）：
 
 ```powershell

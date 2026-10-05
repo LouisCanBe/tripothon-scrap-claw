@@ -15,9 +15,29 @@ npm run hub                      # 工具台 http://localhost:8780/
 # 长命令仍可用：node tools/devServer.mjs 8000
 ```
 
-浏览器打开 **http://localhost:8000/** 即玩（根目录就是 `prototype/`，不要加 `/prototype` 路径）。  
-试玩第三幕任务：**http://127.0.0.1:8000/?act=3**；终幕后 **Y** 再玩一次。  
+浏览器打开 **http://localhost:8000/** 即玩（根目录就是 `prototype/`，不要加 `/prototype` 路径）。终幕后 **Y** 再玩一次。  
 跨设备出货副屏见 `prototype/COLLECT-DISPLAY.md`（`--lan`，默认配对口令在 `collectPairDefault.js`）。
+
+### 链接参数（同一端口，换查询串进不同界面）
+
+语言：没写 `lang`、也没手动切过时，看浏览器语言（`zh*` 中文，其余英文）；点过右上角 **EN / 中** 之后以本地选择为准。
+
+| 打开 | 地址 |
+|---|---|
+| 主游戏，从第一幕 | http://127.0.0.1:8000/ |
+| 从第 N 幕试玩（1–5，也认 `from`） | http://127.0.0.1:8000/?act=3 |
+| 强制中文 / 英文 | http://127.0.0.1:8000/?lang=zh · `?lang=en` |
+| 幕 + 语言可以叠 | http://127.0.0.1:8000/?act=2&lang=en |
+| 调参面板（之后 H 才能开关） | http://127.0.0.1:8000/?gui=1 |
+| 外壳用灰盒，不用摆好的 GLB | http://127.0.0.1:8000/?machineShell=proc |
+| 过场图套（cursor / seedream） | http://127.0.0.1:8000/?art=cursor |
+| 奖池模型套（good-p2 / good / legacy） | http://127.0.0.1:8000/?models=good |
+| 视口边缘（鱼眼 / 直角） | http://127.0.0.1:8000/?frameEdge=square |
+| 出货副屏 | http://127.0.0.1:8000/display.html |
+| 副屏指定配对口令 | http://127.0.0.1:8000/display.html?pair=口令 |
+| 概念图审阅 | http://127.0.0.1:8000/design/concepts/review.html |
+| 概念图另一套 | http://127.0.0.1:8000/design/concepts/review.html?set=cursor |
+| 工具台（另一个端口） | http://localhost:8780/ |
 
 ### 键位
 

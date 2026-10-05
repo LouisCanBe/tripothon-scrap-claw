@@ -151,7 +151,7 @@ export const CONFIG = {
     url: 'assets/machine/claw_parts.glb',
     scale: 0.58,
     scaleWithPrize: 1.15,    // 略放大以配合 2.5× 娃娃，勿与 meshVisualScale 叠乘过大
-    offsetY: -0.24,        // 缩放后整体下移：顶盖≈+0.05 接吊缆，爪尖≈-0.53
+    offsetY: 0,            // 装载时已把顶盖轴心对到吊缆下；这里只做上下微调
     staticParts: ['tripo_part_0', 'tripo_part_2', 'tripo_part_5', 'tripo_part_7'],
     prongGroups: [         // 三条爪臂；part_6 小关节贴在前臂上，同组随动
       ['tripo_part_1', 'tripo_part_6'],

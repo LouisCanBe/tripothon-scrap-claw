@@ -77,6 +77,23 @@ export class Director {
     }
     if (act.hint && this.elHint) this.elHint.textContent = copy(act.hint);
     this.#paintQuestHud();
+    if (this._msgSource != null && this.elMsg && this.elMsg.style.opacity !== '0') {
+      if (this._typeRaf) cancelAnimationFrame(this._typeRaf);
+      this._typeRaf = 0;
+      clearInterval(this._typeTimer);
+      this.elMsg.classList.remove('typing');
+      this.elMsg.textContent = copy(this._msgSource);
+    }
+    for (const side of ['left', 'right']) {
+      const src = this._panelSource?.[side];
+      const el = this.elPanel[side];
+      if (!src || !el?.classList.contains('show')) continue;
+      this.#paintPanel(el, src.text, src.op);
+    }
+    if (this.elMsg?.classList.contains('stinger') && this.elHint) {
+      const replayOn = this.elReplay?.classList.contains('show');
+      this.elHint.textContent = replayOn ? t('stingerReplay') : t('stingerLook');
+    }
   }
 
   /** 计入配额的那件落到出货口之后再响，不和下落声叠在一起 */
@@ -122,17 +139,17 @@ export class Director {
           this.#armQuotaChime(payload);
           this.#syncQuestHud();
           const row = PRIZE_TABLE.find(p => p.id === slot);
-          const line = copy(questCopy?.right?.[slot]) || (row ? t('quotaLine', { name: copy(row.questLabel || row.name) }) : '');
-          if (line) this.msg(line);
+          const raw = questCopy?.right?.[slot];
+          if (raw) this.msg(raw);
+          else if (row) this.msg(t('quotaLine', { name: copy(row.questLabel || row.name) }));
           if (q.every(id => (this._questDone.get(id) ?? 0) >= need)) {
             this.mask.pulse(undefined, 160);
             setTimeout(() => this.notify('questComplete'), 700);
           }
         } else if (slot) {
-          if (questCopy?.dup) this.msg(copy(questCopy.dup));
+          if (questCopy?.dup) this.msg(questCopy.dup);
         } else {
-          const line = copy(questCopy?.wrongJunk ?? questCopy?.wrong) || t('quotaReject');
-          this.msg(line);
+          this.msg(questCopy?.wrongJunk ?? questCopy?.wrong ?? t('quotaReject'));
         }
       } else if (q?.includes(payload.id) && !this._questDone.has(payload.id)) {
         this._questDone.set(payload.id, 1);
@@ -330,9 +347,9 @@ export class Director {
     for (const step of act.script) {
       if (this._skip || gen !== this._runGen) return;
       switch (step.type) {
-        case 'sub':   await this.#sub({ ...step, text: copy(step.text) }); break;
+        case 'sub':   await this.#sub(step); break;
         case 'panel':
-          this.#panel(step.side, copy(step.text), copy(step.op));
+          this.#panel(step.side, step.text, step.op);
           if (step.continue && step.text) await this.#untilContinue(step, gen);
           else if (step.dur) await sleep(step.dur * 1000);
           if (step.hideAfter) this.#panel(step.side, '');
@@ -393,15 +410,17 @@ export class Director {
   }
 
   msg(text, { tick = false, hold = 2400 } = {}) {
+    this._msgSource = text;
     this.elMsg.classList.remove('stinger', 'typing');
     clearTimeout(this._msgTimer);
     clearInterval(this._typeTimer);
     if (this._typeRaf) cancelAnimationFrame(this._typeRaf);
     this._typeRaf = 0;
     this.elMsg.style.opacity = '1';
-    const chars = [...text];
+    const shown = copy(text);
+    const chars = [...shown];
     if (!tick) {
-      this.elMsg.textContent = text;
+      this.elMsg.textContent = shown;
     } else {
       let i = 0;
       let acc = '';
@@ -438,7 +457,7 @@ export class Director {
   }
 
   async #sub({ text, dur = 3 }) {
-    const holdMs = Math.max(dur * 1000, [...text].length * 46 + 320);
+    const holdMs = Math.max(dur * 1000, [...copy(text)].length * 46 + 320);
     this.msg(text, { tick: true, hold: holdMs });
     await sleep(holdMs);
     this.elMsg.style.opacity = '0';
@@ -449,18 +468,33 @@ export class Director {
   #panel(side, text, op) {
     const el = this.elPanel[side];
     if (!el) return;
+    this._panelSource ??= {};
     el.classList.remove('await-continue', 'print', 'comic');
-    if (!text && !op) { el.replaceChildren(); el.classList.remove('show'); return; }
-    el.replaceChildren();
-    if (text) el.append(document.createTextNode(text));
-    if (op) {
-      const hint = document.createElement('span');
-      hint.className = 'op';
-      hint.textContent = op;
-      el.append(hint);
+    if (!text && !op) {
+      delete this._panelSource[side];
+      el.replaceChildren();
+      el.classList.remove('show');
+      return;
     }
+    this._panelSource[side] = { text, op };
+    this.#paintPanel(el, text, op);
     randomizePanelStains(el);
     el.classList.add('show');
+  }
+
+  #paintPanel(el, text, op) {
+    const keep = el.classList.contains('await-continue');
+    el.replaceChildren();
+    const body = copy(text);
+    const hintText = copy(op);
+    if (body) el.append(document.createTextNode(body));
+    if (hintText) {
+      const hint = document.createElement('span');
+      hint.className = 'op';
+      hint.textContent = hintText;
+      el.append(hint);
+    }
+    if (keep) el.classList.add('await-continue');
   }
 
   /** 旁白闸门：点当前框、派发 narrative:continue、或 continueAfter 秒后继续。 */
@@ -662,6 +696,7 @@ export class Director {
   #stinger(text) {
     if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = false;
     playMusicBoxStinger();
+    this._msgSource = text;
     this.elMsg.classList.add('stinger');
     this.elMsg.textContent = copy(text);
     this.elMsg.style.opacity = '1';

@@ -5,8 +5,9 @@
 ## 打开方式
 
 ```text
-主游戏：http://127.0.0.1:8000/
+主游戏：http://127.0.0.1:8000/          （幕次、语言见 README「链接参数」，如 ?act=3&lang=en）
 副屏：  http://127.0.0.1:8000/display.html
+配对：  两边都加 ?pair=同一口令（不写则用 config 默认）
 ```
 
 同机第二显示器 / 第二浏览器窗口即可。控制台：`__debug.openCollectDisplay()`。
