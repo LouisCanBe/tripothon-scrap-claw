@@ -30,6 +30,11 @@
   #panel textarea { min-height: 72px; resize: vertical; }
   #panel button.primary { width: 100%; margin-top: 12px; background: var(--accent); color: #111; border-color: var(--accent); }
   #panel .hint { color: var(--dim); margin-top: 8px; line-height: 1.5; }
+  #filePreview img, #filePreview video { width: 100%; max-height: 140px; object-fit: contain; background: #08080a; border-radius: 4px; display: block; margin-top: 8px; }
+  #filePreview span { display: block; color: var(--dim); margin-top: 4px; word-break: break-all; }
+  .slot { margin-top: 10px; }
+  .slot img { width: 100%; max-height: 88px; object-fit: cover; border-radius: 4px; background: #08080a; display: block; margin-top: 6px; }
+  .slot .slot-name { display: block; color: var(--dim); margin-top: 4px; word-break: break-all; }
   #genStatus { margin-top: 10px; color: var(--accent); white-space: pre-wrap; }
   #stage canvas { display: block; }
   #info { position: fixed; left: 12px; bottom: 10px; font-size: 12px; color: var(--dim);
@@ -54,19 +59,48 @@
   <label>输入</label>
   <select id="inKind">
     <option value="text">文本</option>
-    <option value="image">图片 URL</option>
-    <option value="pano">全景图 URL</option>
-    <option value="video">视频 URL</option>
+    <option value="image">图片</option>
+    <option value="multi">多图</option>
+    <option value="pano">全景图</option>
+    <option value="video">视频</option>
   </select>
   <div id="textWrap">
     <label>Prompt</label>
     <textarea id="prompt" placeholder="塌顶废墟，尘光，远处一台仍亮着的娃娃机，前景一只手伸向锈罐头"></textarea>
   </div>
   <div id="urlWrap" hidden>
-    <label>本地文件</label>
-    <input id="mediaFile" type="file" accept="image/png,image/jpeg,image/webp,video/mp4" />
-    <label>或公网 URL（二选一）</label>
+    <label id="fileLabel">上传图片</label>
+    <input id="mediaFile" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+    <div id="filePreview" hidden></div>
+    <label>或公网 URL（与上传二选一）</label>
     <input id="mediaUrl" placeholder="https://…" />
+  </div>
+  <div id="multiWrap" hidden>
+    <div class="slot" data-azimuth="0" data-label="正前">
+      <label>正前 · 0°</label>
+      <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+      <img alt="" hidden />
+      <span class="slot-name"></span>
+    </div>
+    <div class="slot" data-azimuth="90" data-label="右侧">
+      <label>右侧 · 90°</label>
+      <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+      <img alt="" hidden />
+      <span class="slot-name"></span>
+    </div>
+    <div class="slot" data-azimuth="180" data-label="背后">
+      <label>背后 · 180°</label>
+      <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+      <img alt="" hidden />
+      <span class="slot-name"></span>
+    </div>
+    <div class="slot" data-azimuth="270" data-label="左侧">
+      <label>左侧 · 270°</label>
+      <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+      <img alt="" hidden />
+      <span class="slot-name"></span>
+    </div>
+    <p class="hint">四个位置固定。至少放 2 张，空着的不上传。发出去的顺序就是正前、右侧、背后、左侧。</p>
   </div>
   <label>模型</label>
   <select id="model">
@@ -77,7 +111,7 @@
   <label>文件名前缀</label>
   <input id="slug" placeholder="reveal-ruins" />
   <button class="primary" id="btnSubmit" type="button">提交并下载</button>
-  <p class="hint">文本直接生成。图片（jpg/png/webp）、全景、视频（mp4）可以选本地文件，也可以填公网 URL。图片和视频可再写一句补充描述。完成后自动保存全景、碰撞 GLB、100k SPZ。</p>
+  <p class="hint">文本直接生成。图片（jpg / png / webp）和视频（mp4 / mov / mkv）上传本地文件，或填可公网访问的 URL。多图是同一场景的四张朝向：正前、右侧、背后、左侧。全景图按等距矩形 360° 处理。可再写一句补充描述。完成后自动保存全景、碰撞 GLB、100k SPZ。</p>
   <div id="genStatus"></div>
 </aside>
 <div id="stage"></div>
@@ -259,12 +293,123 @@ async function refreshCredits() {
 document.getElementById('btnBal').onclick = refreshCredits;
 refreshCredits();
 
-document.getElementById('btnGen').onclick = () => document.body.classList.toggle('panel');
-document.getElementById('inKind').onchange = () => {
-  const text = document.getElementById('inKind').value === 'text';
-  document.getElementById('urlWrap').hidden = text;
-  document.querySelector('#textWrap label').textContent = text ? 'Prompt' : '补充描述（可选）';
+const KIND_META = {
+  image: { label: '上传图片', accept: '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp', exts: ['jpg', 'jpeg', 'png', 'webp'], bad: '图片请用 jpg、png 或 webp' },
+  pano: { label: '上传全景图', accept: '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp', exts: ['jpg', 'jpeg', 'png', 'webp'], bad: '全景图请用 jpg、png 或 webp' },
+  video: { label: '上传视频', accept: '.mp4,.mov,.mkv,video/mp4,video/quicktime,video/x-matroska', exts: ['mp4', 'mov', 'mkv'], bad: '视频请用 mp4、mov 或 mkv' },
 };
+const IMAGE_EXTS = KIND_META.image.exts;
+const fileExt = name => (name.split('.').pop() || '').toLowerCase();
+let previewUrl = '';
+function showFilePreview(file) {
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = '';
+  const box = document.getElementById('filePreview');
+  if (!file) { box.hidden = true; box.replaceChildren(); return; }
+  previewUrl = URL.createObjectURL(file);
+  const video = KIND_META.video.exts.includes(fileExt(file.name));
+  const media = document.createElement(video ? 'video' : 'img');
+  media.src = previewUrl;
+  if (video) { media.muted = true; media.controls = true; }
+  const name = document.createElement('span');
+  name.textContent = file.name;
+  box.replaceChildren(media, name);
+  box.hidden = false;
+}
+const slotUrls = new WeakMap();
+function setSlotFile(slot, file) {
+  const input = slot.querySelector('input');
+  const preview = slot.querySelector('img');
+  const name = slot.querySelector('.slot-name');
+  const prev = slotUrls.get(slot);
+  if (prev) URL.revokeObjectURL(prev);
+  slotUrls.delete(slot);
+  if (!file) {
+    input.value = '';
+    preview.hidden = true;
+    preview.removeAttribute('src');
+    name.textContent = '';
+    return;
+  }
+  if (!IMAGE_EXTS.includes(fileExt(file.name))) {
+    if (input.value) input.value = '';
+    preview.hidden = true;
+    name.textContent = '';
+    document.getElementById('genStatus').textContent = `${slot.dataset.label} 请用 jpg、png 或 webp`;
+    return;
+  }
+  if (input.files?.[0] !== file) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+  }
+  const url = URL.createObjectURL(file);
+  slotUrls.set(slot, url);
+  preview.src = url;
+  preview.hidden = false;
+  name.textContent = file.name;
+  document.getElementById('genStatus').textContent = '';
+}
+function filledSlots() {
+  return [...document.querySelectorAll('#multiWrap .slot')].flatMap(slot => {
+    const file = slot.querySelector('input').files?.[0];
+    return file ? [{ file, azimuth: Number(slot.dataset.azimuth), label: slot.dataset.label }] : [];
+  });
+}
+function syncKind() {
+  const kind = document.getElementById('inKind').value;
+  const text = kind === 'text';
+  document.getElementById('urlWrap').hidden = text || kind === 'multi';
+  document.getElementById('multiWrap').hidden = kind !== 'multi';
+  document.querySelector('#textWrap label').textContent = text ? 'Prompt' : '补充描述（可选）';
+  if (text || kind === 'multi') return;
+  const meta = KIND_META[kind];
+  document.getElementById('fileLabel').textContent = meta.label;
+  const input = document.getElementById('mediaFile');
+  input.accept = meta.accept;
+  const f = input.files?.[0];
+  if (f && !meta.exts.includes(fileExt(f.name))) {
+    input.value = '';
+    showFilePreview(null);
+  }
+}
+
+document.getElementById('btnGen').onclick = () => document.body.classList.toggle('panel');
+document.getElementById('inKind').onchange = syncKind;
+document.getElementById('mediaFile').onchange = () => {
+  const kind = document.getElementById('inKind').value;
+  const input = document.getElementById('mediaFile');
+  const f = input.files?.[0];
+  const meta = KIND_META[kind];
+  if (f && meta && !meta.exts.includes(fileExt(f.name))) {
+    input.value = '';
+    showFilePreview(null);
+    document.getElementById('genStatus').textContent = meta.bad;
+    return;
+  }
+  showFilePreview(f || null);
+};
+document.querySelectorAll('#multiWrap .slot').forEach(slot => {
+  slot.querySelector('input').onchange = () => setSlotFile(slot, slot.querySelector('input').files?.[0] || null);
+});
+document.getElementById('panel').addEventListener('dragover', e => e.preventDefault());
+document.getElementById('panel').addEventListener('drop', e => {
+  const files = [...(e.dataTransfer?.files ?? [])];
+  const kind = document.getElementById('inKind').value;
+  if (!files.length || kind === 'text') return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (kind === 'multi') {
+    const empty = [...document.querySelectorAll('#multiWrap .slot')].filter(slot => !slot.querySelector('input').files?.[0]);
+    files.forEach((f, i) => { if (empty[i]) setSlotFile(empty[i], f); });
+    return;
+  }
+  const dt = new DataTransfer();
+  dt.items.add(files[0]);
+  const input = document.getElementById('mediaFile');
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change'));
+});
 document.getElementById('btnSubmit').onclick = async () => {
   const btn = document.getElementById('btnSubmit');
   const status = document.getElementById('genStatus');
@@ -274,10 +419,25 @@ document.getElementById('btnSubmit').onclick = async () => {
   if (kind === 'text' && !prompt) { status.textContent = '请填写 prompt'; return; }
   btn.disabled = true;
   try {
-    if (kind !== 'text') {
+    if (kind === 'multi') {
+      const shots = filledSlots();
+      if (shots.length < 2) throw new Error('多图至少放 2 张，单张请改用「图片」');
+      const images = [];
+      for (let i = 0; i < shots.length; i++) {
+        const shot = shots[i];
+        status.textContent = `上传${shot.label} ${i + 1}/${shots.length}…\n${shot.file.name}`;
+        const up = await fetch('/api/marble/upload?filename=' + encodeURIComponent(shot.file.name) + '&kind=image', { method: 'POST', body: shot.file }).then(async r => {
+          const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j;
+        });
+        images.push({ mediaAssetId: up.media_asset_id, azimuth: shot.azimuth });
+      }
+      body.images = images;
+    } else if (kind !== 'text') {
       const file = document.getElementById('mediaFile').files?.[0];
       const url = document.getElementById('mediaUrl').value.trim();
       if (file) {
+        const meta = KIND_META[kind];
+        if (!meta.exts.includes(fileExt(file.name))) { status.textContent = meta.bad; return; }
         status.textContent = '上传文件…';
         const upKind = kind === 'video' ? 'video' : 'image';
         const up = await fetch('/api/marble/upload?filename=' + encodeURIComponent(file.name) + '&kind=' + upKind, { method: 'POST', body: file }).then(async r => {

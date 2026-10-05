@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { ACTS } from './acts.js';
+import { randomizePanelStains } from './narrativeBg.js';
 import { PRIZE_TABLE } from './prizePool.js';
 import {
   playGlitchTick,
@@ -18,6 +19,7 @@ import {
   playTypeTick,
   stopRoomReturn,
   setClawTravel,
+  playQuotaCoin,
 } from './gameAudio.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -35,6 +37,8 @@ export class Director {
 
     this.idx = -1;
     this._runGen = 0;
+    this._quotaChime = new Set();
+    this._quotaChimeTimer = 0;
     this.happened = new Set();
     this._waiter = null;
     this._skip = false;
@@ -63,8 +67,23 @@ export class Director {
     });
   }
 
+  /** 计入配额的那件落到出货口之后再响，不和下落声叠在一起 */
+  onQuotaLanded(item) {
+    if (!this._quotaChime.delete(item)) return;
+    clearTimeout(this._quotaChimeTimer);
+    this._quotaChimeTimer = setTimeout(() => playQuotaCoin(), 280);
+  }
+
+  #armQuotaChime(item) {
+    this._quotaChime.add(item);
+  }
+
   get act() { return ACTS[this.idx]; }
-  allow(what) { return this.act?.control?.[what] !== false; }
+  allow(what) {
+    const over = this._control;
+    if (over && Object.prototype.hasOwnProperty.call(over, what)) return over[what] !== false;
+    return this.act?.control?.[what] !== false;
+  }
   /** 俯拍扫视角 / 终幕演出期间：用户输入一律不生效 */
   get interactive() { return !this._scanActive; }
 
@@ -88,6 +107,7 @@ export class Director {
         if (slot && got < need) {
           this._questDone.set(slot, got + 1);
           if (got + 1 >= need) document.getElementById('q-' + slot)?.classList.add('done');
+          this.#armQuotaChime(payload);
           this.#syncQuestHud();
           const row = PRIZE_TABLE.find(p => p.id === slot);
           const line = copy?.right?.[slot] ?? (row ? `${row.questLabel || row.name}，入账。` : '');
@@ -101,8 +121,6 @@ export class Director {
         } else {
           const line = copy?.wrongJunk ?? copy?.wrong ?? '……配额不认这个。';
           this.msg(line);
-          this.#panel('right', line, 'print');
-          setTimeout(() => this.#panel('right', ''), 2200);
         }
       } else if (q?.includes(payload.id) && !this._questDone.has(payload.id)) {
         this._questDone.set(payload.id, 1);
@@ -152,6 +170,8 @@ export class Director {
     unlockAudio();
     stopRoomReturn();
     setClawTravel(0);
+    this._quotaChime.clear();
+    clearTimeout(this._quotaChimeTimer);
     this._runGen += 1;
     this._skip = true;
     if (this._waiter) { this._waiter.resolve(); this._waiter = null; }
@@ -218,6 +238,7 @@ export class Director {
     const act = this.act;
     if (!act) return;
     this._skip = false;
+    this._control = null;
     this.#hideReplayCue();
     this.happened = new Set();
     this._questDone = new Map();   // 配额格 → 已抓数量（questCount > 1 时是计数不是布尔）
@@ -273,13 +294,18 @@ export class Director {
     if (act.label) {
       this.elLabel.textContent = act.label;
       this.elLabel.classList.add('show');
-      setTimeout(() => this.elLabel.classList.remove('show'), 2600);
+      if (i !== 0) setTimeout(() => this.elLabel.classList.remove('show'), 5200);
     }
 
     this.#panel('left', ''); this.#panel('right', '');
 
-    await bgTask;
-    await sleep(280);
+    if (act.id === 1) {
+      void bgTask;
+      await sleep(50);
+    } else {
+      await bgTask;
+      await sleep(i === 0 ? 240 : 280);
+    }
     if (gen !== this._runGen) return;
     await this.#run(act, gen);
     if (gen !== this._runGen) return;
@@ -294,18 +320,40 @@ export class Director {
       switch (step.type) {
         case 'sub':   await this.#sub(step); break;
         case 'panel':
-          this.#panel(step.side, step.text, step.voice);
+          this.#panel(step.side, step.text, step.op);
           if (step.continue && step.text) await this.#untilContinue(step, gen);
           else if (step.dur) await sleep(step.dur * 1000);
           if (step.hideAfter) this.#panel(step.side, '');
           break;
-        case 'hint':  this.elHint.textContent = step.text; break;
+        case 'hint':
+          this.elHint.textContent = step.text ?? '';
+          this.elHint.style.opacity = step.text ? '1' : '0';
+          break;
+        case 'allow': {
+          this._control ??= {};
+          for (const k of ['view', 'move', 'drop']) {
+            if (k in step) this._control[k] = step[k];
+          }
+          break;
+        }
         case 'pause': await sleep((step.dur ?? 1) * 1000); break;
         case 'wait':  await this.#waitFor(step.event); break;
         case 'synthesis': await this.#synthesis(act); break;
         case 'interstitial':
+          if (step.revealOnShow) {
+            setTimeout(() => { this.hooks.onRevealMachine?.(); }, (step.revealAfter ?? 5) * 1000);
+          }
           await this.narrativeBg?.showInterstitial(step.image, step.dur ?? 2.5, step);
           break;
+        case 'openViewport':
+          this.hooks.onOpenViewport?.();
+          await sleep((step.dur ?? 3.4) * 1000);
+          break;
+        case 'revealMachine': {
+          const reveal = this.hooks.onRevealMachine?.();
+          if (step.wait !== false) await reveal;
+          break;
+        }
         case 'glitch': await this.#glitch(step); break;
         case 'poolScan': await this.#poolScan(step); break;
         case 'restore':
@@ -332,50 +380,75 @@ export class Director {
     return new Promise(resolve => (this._waiter = { event, resolve }));
   }
 
-  msg(text, { tick = false } = {}) {
+  msg(text, { tick = false, hold = 2400 } = {}) {
     this.elMsg.classList.remove('stinger', 'typing');
     clearTimeout(this._msgTimer);
     clearInterval(this._typeTimer);
+    if (this._typeRaf) cancelAnimationFrame(this._typeRaf);
+    this._typeRaf = 0;
     this.elMsg.style.opacity = '1';
     const chars = [...text];
     if (!tick) {
       this.elMsg.textContent = text;
     } else {
       let i = 0;
+      let acc = '';
+      let lastTs = 0;
+      const CHAR_MS = 46;
       this.elMsg.textContent = '';
       this.elMsg.classList.add('typing');
-      this._typeTimer = setInterval(() => {
-        const ch = chars[i++];
-        this.elMsg.textContent = chars.slice(0, i).join('');
-        if (ch && !/\s/.test(ch)) playTypeTick();
+      const step = (now) => {
         if (i >= chars.length) {
-          clearInterval(this._typeTimer);
           this.elMsg.classList.remove('typing');
+          this._typeRaf = 0;
+          return;
         }
-      }, 46);
+        if (!lastTs) lastTs = now;
+        let ticked = false;
+        while (i < chars.length && now - lastTs >= CHAR_MS) {
+          lastTs += CHAR_MS;
+          const ch = chars[i++];
+          acc += ch;
+          if (ch && !/\s/.test(ch) && !ticked) {
+            ticked = true;
+            try { playTypeTick(); } catch { /* 音频未解锁也不挡字幕 */ }
+          }
+        }
+        if (acc.length !== this.elMsg.textContent.length) this.elMsg.textContent = acc;
+        this._typeRaf = requestAnimationFrame(step);
+      };
+      this._typeRaf = requestAnimationFrame(step);
     }
     this._msgTimer = setTimeout(() => {
       this.elMsg.style.opacity = '0';
       this.elMsg.classList.remove('typing');
-    }, 2400);
+    }, hold);
   }
 
   async #sub({ text, dur = 3 }) {
-    this.msg(text, { tick: true });
-    await sleep(dur * 1000);
+    const holdMs = Math.max(dur * 1000, [...text].length * 46 + 320);
+    this.msg(text, { tick: true, hold: holdMs });
+    await sleep(holdMs);
     this.elMsg.style.opacity = '0';
     this.elMsg.classList.remove('typing');
     await sleep(400);
   }
 
-  #panel(side, text, voice = 'comic') {
+  #panel(side, text, op) {
     const el = this.elPanel[side];
     if (!el) return;
     el.classList.remove('await-continue', 'print', 'comic');
-    if (!text) { el.classList.remove('show'); return; }
-    el.textContent = text;
-    const print = voice === 'print';
-    el.classList.add('show', print ? 'print' : 'comic');
+    if (!text && !op) { el.replaceChildren(); el.classList.remove('show'); return; }
+    el.replaceChildren();
+    if (text) el.append(document.createTextNode(text));
+    if (op) {
+      const hint = document.createElement('span');
+      hint.className = 'op';
+      hint.textContent = op;
+      el.append(hint);
+    }
+    randomizePanelStains(el);
+    el.classList.add('show');
   }
 
   /** 旁白闸门：点当前框、派发 narrative:continue、或 continueAfter 秒后继续。 */

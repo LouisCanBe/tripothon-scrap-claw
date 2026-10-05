@@ -61,6 +61,7 @@ export function applyActPostLens(actId) {
   if (!post) return;
   post.k1 = extra.k1 ?? g.k1;
   post.k2 = extra.k2 ?? g.k2;
+  window.dispatchEvent(new CustomEvent('present:lens'));
 }
 
 export function presentPostCoeffs() {

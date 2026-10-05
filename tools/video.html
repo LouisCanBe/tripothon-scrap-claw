@@ -156,7 +156,7 @@ const V56_CLIP = {
 let authMode = 'openapi';
 let creditsTotal = null;
 
-const api = p => fetch('/api/pixverse' + p).then(async r => {
+const api = (p, init) => fetch('/api/pixverse' + p, init).then(async r => {
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.error) throw new Error(j.error || r.statusText);
   return j;

@@ -30,7 +30,8 @@ import { buildMachineShell } from './machineShell.js';
 import { upgradeMachineShellTripo } from './machineShellTripo.js';
 import { Director } from './director.js';
 import { ACTS, DEFAULT_HINT } from './acts.js';
-import { unlockAudio } from './gameAudio.js';
+import { primeAudioFiles, primeAudioDecode, unlockAudio } from './gameAudio.js';
+import { enqueueRendererCompile, setCoalesceIncrementalCompile } from './renderCompile.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
 import { applyRevealWorld, REVEAL_WORLDS, walkBoxFromBounds } from './revealWorlds.js';
 import { buildWalkSpace } from './revealWalkSpace.js';
@@ -57,6 +58,8 @@ import { initPresent, applyPresentAct, getPresentActId } from './present.js';
 import { resolveViewportEdgeFromQuery, syncViewportEdgeToDom, applyFisheyeEdgeToBorder } from './frameEdge.js';
 
 loadPoolDevOverrides();
+setCoalesceIncrementalCompile(true);
+primeAudioFiles();
 resolveViewportEdgeFromQuery();
 syncViewportEdgeToDom();
 preloadNarrativeImages();
@@ -187,8 +190,12 @@ const items = spawnPool(world);
 groundIdlePrizesToFloor(items, 0);
 const poolDecor = spawnPoolDecor(world, items);
 let poolDecorSim = attachPoolDecorPhysics(poolDecor);
-upgradePoolDecor(poolDecor, items)
-  .then(() => poolDecorSim?.rebuild?.(poolDecor))
+const decorReady = upgradePoolDecor(poolDecor, items)
+  .then(() => {
+    decorLoaded = true;
+    paintLoading();
+    return poolDecorSim?.rebuild?.(poolDecor);
+  })
   .catch((e) => console.warn('[decor] upgrade', e));
 const prizeItemSim = attachPrizeItemPhysics(items);
 enableShadows(world);   // 机器壳+几何体奖品统一开阴影（玻璃罩透明自动跳过投影）
@@ -243,7 +250,10 @@ const claw = new ClawMachine(world, items, {
   onGrabFail: (kind) => director?.notify('grabFail', kind),
   shouldSkipCollectLine: () => director?.shouldSkipCollectLine?.() ?? false,
   onHoleDrop: (item) => publishHoleDrop(item),
-  onVended: (item) => publishVended(item),
+  onVended: (item) => {
+    publishVended(item);
+    director?.onQuotaLanded?.(item);
+  },
 });
 const shellReady = upgradeMachineShellTripo(
   machineShellBuilt.shell,
@@ -261,7 +271,15 @@ const clawReady = Promise.all([shellReady, claw.upgradeClawVisual(renderer, came
   clawLoaded = true;
   paintLoading();
 });
+const machineVisualsReady = Promise.all([prizesReady, clawReady, decorReady]);
 
+/** 上货条满后、点「开始」前：模型 / 装饰 / 音效预解码 */
+function fullBootReadiness() {
+  return Promise.allSettled([
+    machineVisualsReady,
+    primeAudioDecode(),
+  ]);
+}
 // —— 镜头 / 画幅 / 后处理 / 输入 ——
 const rig = new CameraRig(camera);
 document.documentElement.classList.add('game-booting');
@@ -1293,8 +1311,21 @@ director = new Director({
     },
     setFisheyeFade: (v) => post.setFisheyeFade(v),
     onActEnter: (act) => {
+      if (act?.id === 1) {
+        world.visible = false;
+        document.documentElement.classList.add('act-opening');
+      }
       // 第四幕（最暖的一幕）就该开始为终幕的换货备料
       if ((act?.id ?? 0) >= 4) { startRevealMarblePreload(); preloadRotVisuals(); }
+    },
+    onOpenViewport: () => {
+      document.documentElement.classList.remove('act-opening');
+      mask.growCircle(3.4);
+    },
+    onRevealMachine: async () => {
+      await machineVisualsReady.catch(() => {});
+      document.getElementById('actLabel')?.classList.remove('show');
+      world.visible = true;
     },
     onRestart: onGameplayRestart,
   },
@@ -1312,7 +1343,6 @@ input.on('cycle', (d) => {
 });
 input.on('next', () => director.skip());
 input.on('replay', () => { director.restart(); toast('重新开始'); });
-window.addEventListener('pointerdown', () => unlockAudio(), { once: true });
 // 近/远取景切换：仅居中画幅幕开放（一幕右布局用 far 会穿帮）
 input.on('frameMode', () => {
   if (revealControlsOn && revealCtl.features.modeToggle) {
@@ -1691,34 +1721,81 @@ applyViewRect();
 const loadingEl = document.getElementById('loading');
 const loadFill = document.getElementById('loadFill');
 const loadPct = document.getElementById('loadPct');
-let prizeDone = 0, prizeTotal = 1, clawLoaded = false, shellLoaded = false, shellTripoCount = 0;
+const loadStartBtn = document.getElementById('loadStart');
+let prizeDone = 0, prizeTotal = 1, clawLoaded = false, shellLoaded = false, shellTripoCount = 0, decorLoaded = false;
+
+function setLoadStatus(msg) {
+  const t = loadingEl?.querySelector('.t');
+  if (t && msg) t.textContent = msg;
+}
+
 const paintLoading = () => {
-  const frac = (prizeDone + (clawLoaded ? 1 : 0) + (shellLoaded ? 1 : 0)) / (prizeTotal + 2);
-  loadFill.style.width = (frac * 100 | 0) + '%';
-  loadPct.textContent = (frac * 100 | 0) + '%';
+  const frac = (prizeDone + (clawLoaded ? 1 : 0) + (shellLoaded ? 1 : 0) + (decorLoaded ? 1 : 0)) / (prizeTotal + 3);
+  const pct = frac * 100 | 0;
+  loadFill.style.width = pct + '%';
+  loadPct.textContent = pct + '%';
+  if (!shellLoaded) setLoadStatus('正在组装娃娃机外壳……');
+  else if (!clawLoaded) setLoadStatus('正在装载抓爪与导轨……');
+  else if (prizeTotal > 0 && prizeDone < prizeTotal) {
+    setLoadStatus(`正在上货（${prizeDone}/${prizeTotal}）……`);
+  } else if (!decorLoaded) setLoadStatus('正在摆放奖池与场景杂物……');
+  else setLoadStatus('正在整理奖池摆放……');
 };
-let booted = false;
-function boot() {
-  if (booted) return;
-  booted = true;
+
+let loadGateReady = false;
+let gameStarted = false;
+
+async function onLoadGateReady() {
+  if (loadGateReady) return;
+  loadGateReady = true;
   const startIdx = parseStartActIndex();
   director.setStartActIndex(startIdx);
-  if (startIdx > 0) {
-    const act = ACTS[startIdx];
-    const t = loadingEl.querySelector('.t');
-    if (t) t.textContent = `试玩：从第 ${act?.id ?? startIdx + 1} 幕开始…`;
+  if ((ACTS[startIdx]?.id ?? 1) === 1) world.visible = false;
+  setCoalesceIncrementalCompile(false);
+  setLoadStatus('正在预热画面（后台进行，可先点开始）……');
+  void enqueueRendererCompile(renderer, camera, world, { force: true });
+  setLoadStatus(startIdx > 0
+    ? `试玩就绪：从第 ${ACTS[startIdx]?.id ?? startIdx + 1} 幕开始`
+    : '上货完成，可以开始了');
+  loadFill.style.width = '100%';
+  loadPct.textContent = '100%';
+  loadingEl?.classList.add('ready');
+  loadingEl?.setAttribute('aria-busy', 'false');
+  if (loadStartBtn) {
+    loadStartBtn.hidden = false;
+    loadStartBtn.focus();
   }
-  loadingEl.classList.add('done');
-  setTimeout(() => loadingEl.remove(), 800);
-  document.documentElement.classList.remove('game-booting');
-  director.start();
-  startRevealMarblePreload();
-  if (startIdx > 0) toast(`从「${ACTS[startIdx]?.label ?? '第三幕'}」试玩`);
-  // 自动化验收标记（headless --dump-dom 读 <html data-dsh-boot>）
-  if (window.__boot) window.__boot.booted = true;
+  if (window.__boot) {
+    window.__boot.loadReady = true;
+    window.__boot.started = true;
+  }
 }
-Promise.allSettled([prizesReady, clawReady]).then(boot);
-setTimeout(boot, 30000);   // 兜底：30 秒无论如何开演（个别资产失败不应卡死）
+
+function beginGame() {
+  if (gameStarted) return;
+  gameStarted = true;
+  const startIdx = parseStartActIndex();
+  unlockAudio();
+  if (loadStartBtn) loadStartBtn.hidden = true;
+  loadingEl?.classList.add('fading');
+  // 字先收掉，黑场再慢慢揭开，盖住开场那一下编译卡顿
+  setTimeout(() => {
+    loadingEl?.classList.add('done');
+    document.documentElement.classList.remove('game-booting');
+    director.start();
+    if (startIdx > 0) toast(`从「${ACTS[startIdx]?.label ?? '第三幕'}」试玩`);
+    if (window.__boot) window.__boot.booted = true;
+  }, 420);
+  setTimeout(() => loadingEl?.remove(), 2400);
+}
+
+loadStartBtn?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  beginGame();
+});
+
+fullBootReadiness().then(onLoadGateReady);
+setTimeout(onLoadGateReady, 45000);
 
 // —— 视角指示点（左/正/右；任何途径切视角都会收敛到这里）——
 const viewDots = [...document.querySelectorAll('#viewDots i')];

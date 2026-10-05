@@ -48,8 +48,8 @@ export async function handleMarbleApi(req, res, u, client) {
   }
 
   if (u.pathname === '/api/marble/gen' && req.method === 'POST') {
-    const { text, imageUrl, panoUrl, videoUrl, mediaAssetId, kind, isPano, ...opts } = JSON.parse((await readBody(req)).toString() || '{}');
-    json(res, 200, await client.generate({ text, imageUrl, panoUrl, videoUrl, mediaAssetId, kind, isPano }, opts));
+    const { text, imageUrl, panoUrl, videoUrl, mediaAssetId, kind, isPano, images, reconstruct, ...opts } = JSON.parse((await readBody(req)).toString() || '{}');
+    json(res, 200, await client.generate({ text, imageUrl, panoUrl, videoUrl, mediaAssetId, kind, isPano, images, reconstruct }, opts));
     return 'handled';
   }
 

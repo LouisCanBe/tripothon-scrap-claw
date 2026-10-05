@@ -8,7 +8,7 @@
 <script>
   // 调试钩子：收集运行时错误，便于自动化验证
   window.__errs = [];
-  window.__boot = { started: false, booted: false };
+  window.__boot = { started: false, loadReady: false, booted: false };
   addEventListener('error', e => {
     const src = e.target && e.target !== window && (e.target.src || e.target.href);
     __errs.push(src ? `RESOURCE_FAIL ${src}` : String(e.message || e.type));
@@ -23,6 +23,11 @@
   addEventListener('load', __publish);
 </script>
 <link rel="stylesheet" href="./theme.css" />
+<link rel="preload" href="./assets/audio/claw-open.ogg" as="fetch" type="audio/ogg" crossorigin />
+<link rel="preload" href="./assets/audio/claw-close.ogg" as="fetch" type="audio/ogg" crossorigin />
+<link rel="preload" href="./assets/audio/claw-thud.ogg" as="fetch" type="audio/ogg" crossorigin />
+<link rel="preload" href="./assets/audio/sfx_coin.mp3" as="fetch" type="audio/mpeg" crossorigin />
+<link rel="preload" href="./assets/audio/sfx_type_tick.wav" as="fetch" type="audio/wav" crossorigin />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
@@ -75,6 +80,14 @@
                 background 0.95s ease; }
   #narrativeDip { position: fixed; inset: 0; z-index: 3; pointer-events: none;
     background: #070708; opacity: 0; }
+  /* 第一幕开场：盖住娃娃机，只留字幕。圆视窗出来后再揭开 */
+  #actVeil { position: fixed; inset: 0; z-index: 8; pointer-events: none;
+    background: #070708; opacity: 0; transition: opacity 1.05s ease; }
+  html.act-opening #actVeil { opacity: 1; }
+  html.act-opening #viewportChrome,
+  html.act-opening #frameBorder,
+  html.act-opening #presentGrain,
+  html.act-opening #presentMarginVig { opacity: 0 !important; }
   #narrativeViewportShade.no-anim { transition: none !important; }
   html.game-booting #stage,
   html.game-booting #frameBorder,
@@ -99,6 +112,7 @@
     transform-origin: 50% 62%; will-change: opacity, transform;
     transition: left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
                 width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1); }
+  #narrativePhoto.await-dismiss { pointer-events: auto; cursor: pointer; }
   #narrativePhoto[hidden] { display: none !important; opacity: 0 !important; }
   #narrativePhoto.no-anim { transition: none !important; }
   #narrativePhotoCard { width: 100%; height: 100%; box-sizing: border-box; position: relative;
@@ -149,10 +163,11 @@
       radial-gradient(circle at 68% 72%, rgba(0,0,0,.5) 0 0.8px, transparent 0.9px),
       radial-gradient(circle at 44% 88%, rgba(255,255,255,.6) 0 0.6px, transparent 0.7px);
     opacity: .8; mix-blend-mode: soft-light; }
-  #narrativePhotoCaption { position: absolute; left: 0; right: 0; bottom: 0.55vmin;
-    padding: 0 6%; text-align: center; color: #4e4331;
-    font-family: var(--font-hand); font-size: clamp(12px, 1.6vmin, 18px); letter-spacing: 1.5px;
-    text-shadow: 0 1px 0 rgba(255,250,230,.35); }
+  #narrativePhotoCaption { position: absolute; left: 0; right: 0; bottom: 0.45vmin;
+    padding: 0 5%; text-align: center; color: #3a3224;
+    font-family: var(--font-hand); font-size: clamp(16px, 2.65vmin, 26px); letter-spacing: 2px;
+    line-height: 1.35;
+    text-shadow: 0 1px 0 rgba(255,250,230,.5), 0 0 12px rgba(255,247,222,.25); }
   /* 出场/收场都用 animation 显式驱动。
      注意：如果给 [data-state="in"] 挂 animation 又用内联 opacity 去淡出，
      动画的 fill:both 会盖住内联 opacity —— 淡出永远不会生效（踩过）。 */
@@ -261,9 +276,11 @@
   #hud { position: fixed; top: 20px; left: 20px; z-index: 10; font-size: var(--font-size-hud);
          line-height: 1.9; text-shadow: var(--text-shadow); user-select: none; pointer-events: none;
          padding: 13px 18px 12px; background: rgba(9,9,12,.55);
-         border: 1px solid rgba(216,212,200,.20); border-radius: 10px; }
+         border: 1px solid rgba(216,212,200,.20); border-radius: 10px;
+         transition: opacity .65s ease; }
+  #hud.dimmed { opacity: var(--chrome-dim, 0.22); }
   #hud .hud-title { font-size: 11px; letter-spacing: 3px; color: var(--color-ink-dim);
-                    padding-left: 8px; border-left: 3px solid var(--color-accent); margin-bottom: 7px; }
+                    padding-left: 8px; border-left: 3px solid #e39a45; margin-bottom: 7px; }
   #hud .hud-count { margin-top: 6px; font-size: 12px; color: var(--color-accent); }
   #globalGrabStat { position: fixed; left: 20px; bottom: 52px; z-index: 10; font-size: 11px; letter-spacing: 1px;
                     color: var(--color-ink-dim); text-shadow: var(--text-shadow); pointer-events: none; user-select: none;
@@ -290,8 +307,10 @@
     display: block; width: 100%; height: 100%;
     object-fit: contain; object-position: center;
   }
-  #revealBeat .reveal-beat-text { font-size: 15px; line-height: 1.75; letter-spacing: 2px; white-space: pre-line;
-    color: var(--color-ink); text-shadow: var(--text-shadow); max-width: 26em; margin: 0 auto; }
+  #revealBeat .reveal-beat-text { font-size: clamp(19px, 3.1vmin, 28px); line-height: 1.55; letter-spacing: 3px;
+    white-space: pre-line; color: var(--color-ink);
+    text-shadow: 0 0 1px rgba(0,0,0,.9), 0 2px 14px rgba(0,0,0,.88);
+    max-width: 22em; margin: 0 auto; padding: 0 12px; }
   #hud .quest { position: relative; padding-left: 20px; transition: color .3s; }
   #hud .quest::before { content: ''; position: absolute; left: 3px; top: 50%; width: 9px; height: 9px;
                         transform: translateY(-50%); border: 1px solid var(--color-ink-dim);
@@ -303,11 +322,14 @@
   #hud .hud-count { margin-top: 8px; padding-top: 7px; border-top: 1px dashed rgba(216,212,200,.16);
                     font-size: 11px; letter-spacing: 2px; color: var(--color-ink-dim); }
   #hud .hud-count span { color: var(--color-ink); font-size: 15px; }
-  /* 副屏：右上角单卡折叠 / 展开（第三幕起） */
-  #collectPairPanel { position: fixed; top: 18px; right: 18px; z-index: 11;
-                      max-width: min(280px, 56vw); pointer-events: auto;
+  /* 出货副屏：方框内右下，展开向上；闲置后与底部提示一起变浅 */
+  #collectPairPanel { position: fixed; right: 18px; bottom: 78px; z-index: 13;
+                      display: flex; flex-direction: column-reverse;
+                      max-width: min(240px, 28vw); pointer-events: auto;
                       background: rgba(9,9,12,.78); border: 1px solid rgba(216,212,200,.22);
-                      border-radius: 8px; overflow: hidden; }
+                      border-radius: 8px; overflow: hidden;
+                      transition: opacity .65s ease; }
+  #collectPairPanel.dimmed { opacity: var(--chrome-dim, 0.22); }
   #collectPairPanel[hidden] { display: none !important; }
   #collectPairPanel[data-state="wait"] { border-color: rgba(216,180,120,.35); }
   #collectPairPanel[data-state="ok"] { border-color: rgba(140,180,140,.35); }
@@ -365,44 +387,40 @@
           letter-spacing: var(--letter-spacing); pointer-events: none; transition: opacity .5s;
           text-shadow: 0 1px 8px rgba(0,0,0,.85); }
 
-  /* —— 页边旁白：漫画框。字不旋转、不平移，避免楷体被斜着采样发糊 —— */
-  .panel { position: fixed; bottom: 14%; left: 4%; transform: none;
-           width: min(360px, 32%); padding: 14px 16px 16px; z-index: 8; pointer-events: none;
-           background: #f6f0e4; color: #1c1a16;
-           font-family: "KaiTi", "STKaiti", "KaiTi_GB2312", serif;
-           font-size: 20px; line-height: 1.55;
-           white-space: pre-line; border: none; border-radius: 2px 16px 4px 18px;
-           outline: 2px solid #1c1a16; box-shadow: 5px 5px 0 #1c1a16;
-           opacity: 0; transition: opacity .45s; }
-  .panel.right { left: auto; right: 4%; bottom: auto; top: 16%;
-                 transform: none;
-                 border-radius: 16px 3px 18px 4px; }
-  .panel.comic::before { content: ''; position: absolute; left: 18px; bottom: -9px;
-                         width: 14px; height: 14px; background: #f6f0e4;
-                         border-right: 2px solid #1c1a16; border-bottom: 2px solid #1c1a16;
-                         transform: rotate(28deg); }
-  .panel.right.comic::before { left: auto; right: 20px; }
-  .panel.print { top: 16%; bottom: auto; left: 2.5%; width: min(200px, 16%);
-                 font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
-                 font-size: 16px; letter-spacing: .5px; line-height: 1.55;
-                 background: rgba(246,240,228,.9); color: #1a1814;
-                 border-radius: 2px; outline: none; box-shadow: none;
-                 transform: none; padding: 8px 10px; }
-  .panel.right.print { top: 16%; right: 2.5%; left: auto; transform: none; }
-  .panel.print::before { display: none; }
+  /* —— 左右字（旁白与操作提示同一套）—— */
+  .panel { position: fixed; top: 50%; left: 5%; transform: translateY(-50%) rotate(-.8deg);
+           width: 24%; max-width: 330px; padding: 18px 20px; z-index: 8; pointer-events: none;
+           background-color: #efe9dc; color: #26241f;
+           font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+           font-weight: 400; font-synthesis: none;
+           font-size: 15px; line-height: 1.9;
+           white-space: pre-line; border: 2px solid #26241f; box-shadow: 4px 4px 0 rgba(0,0,0,.45);
+           opacity: 0; transition: opacity .6s; }
+  .panel.right { left: auto; right: 5%; transform: translateY(-50%) rotate(.7deg); }
   .panel.show { opacity: 1; }
+  .panel .op { display: block; margin-top: 10px;
+    font-size: 12px; line-height: 1.45; letter-spacing: .4px; color: #9a5b2a; }
   .panel.await-continue { pointer-events: auto; cursor: pointer; }
   .panel.await-continue::after { content: '点击继续'; display: block; margin-top: 10px;
-    font-size: 11px; letter-spacing: 2px; opacity: .5; font-family: var(--font-main); }
-  .panel.print.await-continue::after { color: rgba(26,24,20,.55); opacity: 1; }
+    font-size: 11px; letter-spacing: 2px; opacity: .5; }
 
-  /* —— 幕标题卡（两侧细线装饰）—— */
-  #actLabel { position: fixed; top: 8%; width: 100%; text-align: center; z-index: 9;
+  /* —— 幕标题卡（两侧细线 + 半透明底，亮场景里也可读）—— */
+  #actLabel { position: fixed; top: 8%; left: 50%; transform: translateX(-50%); z-index: 9;
+              display: inline-flex; align-items: center; justify-content: center;
+              width: max-content; max-width: min(92vw, 520px); padding: 7px 22px;
               font-size: 15px; letter-spacing: 6px; color: var(--color-ink);
+              text-shadow: 0 0 1px rgba(0,0,0,.9), 0 1px 10px rgba(0,0,0,.88);
+              background: rgba(8,8,10,.55); border: 1px solid rgba(216,212,200,.16);
+              border-radius: 999px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
               opacity: 0; transition: opacity .8s; pointer-events: none; }
-  #actLabel::before, #actLabel::after { content: ''; display: inline-block; width: 64px; height: 1px;
-              background: var(--color-ink-dim); vertical-align: middle; margin: 0 20px; opacity: .55; }
-  #actLabel.show { opacity: .9; }
+  #actLabel::before, #actLabel::after { content: ''; flex: 0 0 48px; width: 48px; height: 1px;
+              background: linear-gradient(90deg, transparent, rgba(216,212,200,.72));
+              box-shadow: 0 0 10px rgba(0,0,0,.75); opacity: .85; }
+  #actLabel::before { margin-right: 16px;
+              background: linear-gradient(90deg, transparent, rgba(216,212,200,.72)); }
+  #actLabel::after { margin-left: 16px;
+              background: linear-gradient(270deg, transparent, rgba(216,212,200,.72)); }
+  #actLabel.show { opacity: .95; }
 
   /* —— 收集飘字 / 提示 toast —— */
   #toasts { position: fixed; left: 50%; bottom: 26%; transform: translateX(-50%); z-index: 15;
@@ -447,8 +465,22 @@
   /* —— 加载闸门：GLB 全部就位才开演（线上资产走网络，避免演到一半换装）—— */
   #loading { position: fixed; inset: 0; z-index: 40; background: #070708;
              display: flex; flex-direction: column; align-items: center; justify-content: center;
-             gap: 16px; transition: opacity .7s; }
+             gap: 16px; transition: opacity 1.85s ease; }
+  #loading .mark, #loading .title, #loading .t, #loading .bar, #loading .pct, #loading .load-start {
+    transition: opacity .4s ease; }
+  #loading.fading .mark, #loading.fading .title, #loading.fading .t,
+  #loading.fading .bar, #loading.fading .pct, #loading.fading .load-start { opacity: 0; }
   #loading.done { opacity: 0; pointer-events: none; }
+  #loading.ready .bar,
+  #loading.ready .pct { opacity: .4; }
+  #loading .load-start { display: none; margin-top: 8px; padding: 12px 36px 14px;
+    font-family: inherit; font-size: 15px; letter-spacing: 8px; color: #26241f;
+    background: #efe9dc; border: 2px solid #26241f; box-shadow: 4px 4px 0 rgba(0,0,0,.45);
+    cursor: pointer; transition: transform .12s, box-shadow .12s, opacity .4s ease; }
+  #loading .load-start:hover { transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 rgba(0,0,0,.48); }
+  #loading .load-start:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0,0,0,.4); }
+  #loading.ready .load-start { display: block; }
   #loading .mark { width: 52px; height: 52px; display: block; margin-bottom: -4px; }
   #loading .title { font-size: 28px; letter-spacing: 12px; color: var(--color-ink);
                     text-indent: 12px; margin-bottom: 8px; }
@@ -517,6 +549,7 @@
   </div>
   <div id="stage"></div>
   <div id="narrativeDip" aria-hidden="true"></div>
+  <div id="actVeil" aria-hidden="true"></div>
   <div id="frameBorder"></div>
   <div id="flash"></div>
 
@@ -570,7 +603,7 @@
     <span class="kicker">手心里还是那一罐</span>
     <span class="label">再记一遍</span>
   </button>
-  <div id="loading"><img class="mark" alt="" src="./assets/mark-horizontal.svg" /><div class="title">拾荒娃娃机</div><div class="t">上货中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div></div>
+  <div id="loading" aria-live="polite" aria-busy="true"><img class="mark" alt="" src="./assets/mark-horizontal.svg" /><div class="title">拾荒娃娃机</div><div class="t">准备中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div><button type="button" id="loadStart" class="load-start" hidden>开始</button></div>
 
   <script src="./vendor/qrcode-generator.js"></script>
   <script type="importmap">

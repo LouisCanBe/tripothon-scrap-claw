@@ -5,6 +5,38 @@ import { applyPresentAct } from './present.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+/** 左右字上的咖啡渍：大团浅斑压在卡片边角（与相框同用 % 椭圆，直接写 background-image）。 */
+export function randomizePanelStains(el) {
+  if (!el) return;
+  const j = (a, b) => a + Math.random() * (b - a);
+  const blob = (x, y, w, h, a) =>
+    `radial-gradient(ellipse ${w.toFixed(0)}% ${h.toFixed(0)}% at ${x.toFixed(1)}% ${y.toFixed(1)}%, rgba(92,68,38,${a.toFixed(2)}), transparent 72%)`;
+  const layers = [
+    blob(j(2, 10), j(2, 12), j(50, 64), j(38, 52), j(0.16, 0.24)),
+    blob(j(88, 98), j(84, 96), j(52, 66), j(40, 54), j(0.14, 0.22)),
+    blob(j(72, 92), j(4, 14), j(32, 44), j(22, 34), j(0.08, 0.14)),
+  ];
+  el.style.backgroundImage = layers.join(', ');
+}
+
+/** 相纸污渍：五团色斑 + 灰点/亮点。 */
+export function randomizePaperStains(el) {
+  if (!el) return;
+  const R = (a, b) => Math.round(a + Math.random() * (b - a));
+  for (let i = 0; i < 5; i++) {
+    el.style.setProperty(`--st${i}x`, `${R(-10, 10)}px`);
+    el.style.setProperty(`--st${i}y`, `${R(-8, 8)}px`);
+  }
+  const dots = (count, rgb) => Array.from({ length: count }, () => {
+    const x = R(3, 97);
+    const y = R(3, 97);
+    const a = (0.18 + Math.random() * 0.35).toFixed(2);
+    return `radial-gradient(circle at ${x}% ${y}%, ${rgb}${a}) 0 0.9px, transparent 1.2px)`;
+  }).join(', ');
+  el.style.setProperty('--speck-a', dots(3, 'rgba(92,72,44,'));
+  el.style.setProperty('--speck-b', dots(2, 'rgba(255,250,232,'));
+}
+
 function transitionCfg() {
   return CONFIG.present?.transition ?? {};
 }
@@ -138,7 +170,27 @@ export class NarrativeBg {
     if (this.photoCap) this.photoCap.textContent = '';
   }
 
+  #armPhotoClickDismiss() {
+    const el = this.photo;
+    if (!el) return;
+    this.#clearPhotoClickDismiss();
+    el.classList.add('await-dismiss');
+    this._photoClick = () => {
+      this.#clearPhotoClickDismiss();
+      this.hideFrame({ animate: true });
+    };
+    el.addEventListener('pointerdown', this._photoClick);
+  }
+
+  #clearPhotoClickDismiss() {
+    const el = this.photo;
+    if (el && this._photoClick) el.removeEventListener('pointerdown', this._photoClick);
+    this._photoClick = null;
+    el?.classList.remove('await-dismiss');
+  }
+
   hideFrame({ animate = false } = {}) {
+    this.#clearPhotoClickDismiss();
     this._photoGen += 1;
     const el = this.photo;
     if (!el) return;
@@ -156,25 +208,7 @@ export class NarrativeBg {
    */
   /** 每次出场重新掷一遍相纸的污渍位置 —— 不要每张照片都长在同一个地方 */
   _randomizePaper() {
-    const card = document.getElementById('narrativePhotoCard');
-    if (!card) return;
-    const R = (a, b) => Math.round(a + Math.random() * (b - a));
-
-    // 五团污渍：整体挪几像素，位置就从"永远在左上角"变成每次都不一样
-    for (let i = 0; i < 5; i++) {
-      card.style.setProperty(`--st${i}x`, `${R(-10, 10)}px`);
-      card.style.setProperty(`--st${i}y`, `${R(-8, 8)}px`);
-    }
-
-    // 再撒几粒独立的灰点/亮点
-    const dots = (count, rgb) => Array.from({ length: count }, () => {
-      const x = R(3, 97);
-      const y = R(3, 97);
-      const a = (0.18 + Math.random() * 0.35).toFixed(2);
-      return `radial-gradient(circle at ${x}% ${y}%, ${rgb}${a}) 0 0.9px, transparent 1.2px)`;
-    }).join(', ');
-    card.style.setProperty('--speck-a', dots(3, 'rgba(92,72,44,'));
-    card.style.setProperty('--speck-b', dots(2, 'rgba(255,250,232,'));
+    randomizePaperStains(document.getElementById('narrativePhotoCard'));
   }
 
   async showFrame(keyOrUrl, dur = 3, step = {}) {
@@ -200,7 +234,30 @@ export class NarrativeBg {
     el.dataset.state = 'in';
     playPaper();
 
-    await sleep(dur * 1000);
+    if (step.hold) {
+      await sleep(860);
+      if (step.dismiss === 'click') this.#armPhotoClickDismiss();
+      return;
+    }
+    if (step.dismiss === 'click') {
+      el.classList.add('await-dismiss');
+      await new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          el.removeEventListener('pointerdown', finish);
+          resolve();
+        };
+        const waitMs = step.dismissAfter;
+        const timer = waitMs > 0 ? setTimeout(finish, waitMs * 1000) : 0;
+        el.addEventListener('pointerdown', finish);
+      });
+      el.classList.remove('await-dismiss');
+    } else {
+      await sleep(dur * 1000);
+    }
     if (gen !== this._photoGen) return;
 
     el.dataset.state = 'out';

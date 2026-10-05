@@ -62,6 +62,31 @@ export class FrameMask {
     }
   }
 
+  /**
+   * 第一幕开场：圆从中心一小点张开到定稿大小。
+   * 先无动画钉在小圆上，下一帧再放开过渡。
+   */
+  growCircle(dur = 3.4) {
+    if (this.viewportShape !== 'circle' || this.mode === 'wide') {
+      this.apply(true);
+      return;
+    }
+    const saved = CONFIG.frame.circleScale;
+    const ease = 'cubic-bezier(.45,0,.2,1)';
+    const prop = `clip-path ${dur}s ${ease}, left ${dur}s ${ease}, top ${dur}s ${ease}, width ${dur}s ${ease}, height ${dur}s ${ease}, border-radius ${dur}s ${ease}`;
+    const els = [this.stage, this.border, document.getElementById('narrativeViewportShade'), document.getElementById('viewportChrome')].filter(Boolean);
+    CONFIG.frame.circleScale = 0.07;
+    this.apply(false);
+    requestAnimationFrame(() => {
+      for (const el of els) el.style.transition = prop;
+      CONFIG.frame.circleScale = saved ?? 0.94;
+      this.apply(true);
+      setTimeout(() => {
+        for (const el of els) el.style.transition = '';
+      }, dur * 1000 + 40);
+    });
+  }
+
   /** 上货/首帧前按起始幕摆好视口，避免 center→right 带动画拖影 */
   bootstrapLayout(mode) {
     this.mode = mode;

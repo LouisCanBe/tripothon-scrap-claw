@@ -97,51 +97,36 @@ export class MarbleClient {
     return json;
   }
 
-  // 本地文件 → media_asset_id（图片 jpg/png/webp，视频 mp4）
+  // 本地文件 → media_asset_id。文档：prepare_upload → PUT 签名 URL（只带 required_headers）→ worlds:generate 引用 media_asset。
+  // 图片 jpg/jpeg/png/webp；视频 mp4/mov/mkv。
   async uploadMedia(filePath, kind = 'image') {
-    const file_name = path.basename(filePath).slice(0, 64);
-    const extension = (path.extname(file_name).slice(1) || (kind === 'video' ? 'mp4' : 'png')).toLowerCase();
+    const { file_name, extension } = mediaUploadName(filePath, kind);
     const prep = await this.call('POST', '/media-assets:prepare_upload', { file_name, kind, extension });
     const info = prep.upload_info ?? {};
-    const id = prep.media_asset?.media_asset_id;
+    const asset = prep.media_asset ?? {};
+    const id = asset.media_asset_id ?? asset.id;
     if (!info.upload_url || !id) throw new Error('prepare_upload 未返回 upload_url / media_asset_id');
     const buf = fs.readFileSync(filePath);
-    const headers = { ...(info.required_headers ?? {}) };
-    if (!headers['Content-Type'] && !headers['content-type']) {
-      headers['Content-Type'] = kind === 'video' ? 'video/mp4' : `image/${extension === 'jpg' ? 'jpeg' : extension}`;
+    const res = await fetch(info.upload_url, {
+      method: info.upload_method || 'PUT',
+      headers: { ...(info.required_headers ?? {}) },
+      body: buf,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`文件上传失败 HTTP ${res.status}${detail ? ' ' + detail.slice(0, 180) : ''}`);
     }
-    const res = await fetch(info.upload_url, { method: info.upload_method || 'PUT', headers, body: buf });
-    if (!res.ok) throw new Error(`文件上传失败 HTTP ${res.status}`);
     return id;
   }
 
-  // 生成世界。文本直接传；图片/全景/视频用 mediaAssetId（本地上传）或公网 uri。
+  // 生成世界。文本直接传；单图/全景/视频用 mediaAssetId 或公网 uri；多图用 images[]。
   generate(input, opts = {}) {
-    let world_prompt;
-    const guide = input.text;
-    if (input.mediaAssetId) {
-      const ref = { source: 'media_asset', media_asset_id: input.mediaAssetId };
-      world_prompt = input.kind === 'video'
-        ? strip({ type: 'video', video_prompt: ref, text_prompt: guide })
-        : strip({ type: 'image', image_prompt: ref, is_pano: input.isPano ?? 'auto', text_prompt: guide });
-    } else if (input.imageUrl || input.panoUrl) {
-      world_prompt = strip({
-        type: 'image',
-        image_prompt: { source: 'uri', uri: input.imageUrl || input.panoUrl },
-        is_pano: input.panoUrl ? true : 'auto',
-        text_prompt: guide,
-      });
-    } else if (input.videoUrl) {
-      world_prompt = strip({ type: 'video', video_prompt: { source: 'uri', uri: input.videoUrl }, text_prompt: guide });
-    } else if (guide) {
-      world_prompt = { type: 'text', text_prompt: guide };
-    } else throw new Error('generate 需要 text，或图片/全景/视频（本地上传或公网 URL）');
     return this.call('POST', '/worlds:generate', strip({
       display_name: opts.displayName,
       model: opts.model ?? 'marble-1.0-draft',   // 测试默认 draft（150 积分）；正式用 marble-1.1 / plus
       seed: opts.seed,
       tags: opts.tags,
-      world_prompt,
+      world_prompt: buildWorldPrompt(input),
     }));
   }
 
@@ -277,6 +262,73 @@ async function cli() {
 }
 
 const strip = o => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== undefined));
+
+// 多图：同一场景的若干朝向。azimuth 为水平角度（0 正前、90 右、180 后、270 左），可省略。
+// reconstruct_images 为 false 时最多 4 张，true 时最多 8 张。
+export function buildWorldPrompt(input) {
+  const guide = input.text || undefined;
+  if (Array.isArray(input.images) && input.images.length) {
+    const reconstruct = !!input.reconstruct;
+    const max = reconstruct ? 8 : 4;
+    if (input.images.length < 2) throw new Error('多图至少 2 张，单张请改用「图片」');
+    if (input.images.length > max) {
+      throw new Error(reconstruct ? '重建模式最多 8 张' : '多图最多 4 张，勾选重建模式可到 8 张');
+    }
+    const multi_image_prompt = input.images.map((img, i) => {
+      let content;
+      if (img.mediaAssetId) content = { source: 'media_asset', media_asset_id: img.mediaAssetId };
+      else if (img.uri) content = { source: 'uri', uri: img.uri };
+      else throw new Error(`第 ${i + 1} 张缺少图片`);
+      let azimuth;
+      if (img.azimuth !== undefined && img.azimuth !== null && img.azimuth !== '') {
+        azimuth = Number(img.azimuth);
+        if (!Number.isFinite(azimuth)) throw new Error(`第 ${i + 1} 张方位角不是数字`);
+      }
+      return strip({ azimuth, content });
+    });
+    return strip({
+      type: 'multi-image',
+      multi_image_prompt,
+      reconstruct_images: reconstruct,
+      text_prompt: guide,
+    });
+  }
+  if (input.mediaAssetId) {
+    const ref = { source: 'media_asset', media_asset_id: input.mediaAssetId };
+    return input.kind === 'video'
+      ? strip({ type: 'video', video_prompt: ref, text_prompt: guide })
+      : strip({ type: 'image', image_prompt: ref, is_pano: input.isPano ?? 'auto', text_prompt: guide });
+  }
+  if (input.imageUrl || input.panoUrl) {
+    return strip({
+      type: 'image',
+      image_prompt: { source: 'uri', uri: input.imageUrl || input.panoUrl },
+      is_pano: input.panoUrl ? true : 'auto',
+      text_prompt: guide,
+    });
+  }
+  if (input.videoUrl) return strip({ type: 'video', video_prompt: { source: 'uri', uri: input.videoUrl }, text_prompt: guide });
+  if (guide) return { type: 'text', text_prompt: guide };
+  throw new Error('generate 需要 text，或图片/全景/视频/多图');
+}
+
+const MEDIA_EXT = {
+  image: new Set(['jpg', 'jpeg', 'png', 'webp']),
+  video: new Set(['mp4', 'mov', 'mkv']),
+};
+
+export function mediaUploadName(filePath, kind = 'image') {
+  const allow = MEDIA_EXT[kind];
+  if (!allow) throw new Error('kind 只能是 image 或 video');
+  const raw = path.basename(filePath);
+  const extension = path.extname(raw).slice(1).toLowerCase();
+  if (!allow.has(extension)) {
+    throw new Error(`${kind === 'video' ? '视频' : '图片'}只支持 ${[...allow].join(' / ')}`);
+  }
+  const stem = path.basename(raw, path.extname(raw)).replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '') || 'upload';
+  const file_name = `${stem.slice(0, Math.max(1, 63 - extension.length))}.${extension}`;
+  return { file_name, extension };
+}
 
 if (import.meta.main && !process.env.SCRAPCLAW_LIB_MODE) {
   cli().catch(e => { console.error(e.message ?? e); process.exit(1); });
