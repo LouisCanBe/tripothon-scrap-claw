@@ -3,6 +3,7 @@
 // 摇杆走 Input.setAnalogMove；方向键仍 press/release Arrow*，与键盘同路。
 // 触屏自动显示；桌面 H 面板「屏幕按钮」开启。
 // ============================================================
+import { onLangChange, t } from './i18n.js';
 
 const DPAD = [
   { code: 'ArrowUp',    label: '▲', cls: 'up'    },
@@ -65,17 +66,24 @@ export class OnscreenButtons {
     const view = document.createElement('button');
     view.type = 'button';
     view.className = 'act view';
-    view.textContent = '视角';
+    view.textContent = t('view');
+    this._viewBtn = view;
     view.addEventListener('pointerdown', (e) => { e.preventDefault(); input.emit('cycle', 1); });
     const drop = document.createElement('button');
     drop.type = 'button';
     drop.className = 'act drop';
-    drop.textContent = '抓';
+    drop.textContent = t('grab');
+    this._dropBtn = drop;
     drop.addEventListener('pointerdown', (e) => { e.preventDefault(); input.emit('drop'); });
     acts.append(view, drop);
 
     this.root.append(movePanel, acts);
     document.body.appendChild(this.root);
+    onLangChange(() => {
+      if (this._viewBtn) this._viewBtn.textContent = t('view');
+      if (this._dropBtn) this._dropBtn.textContent = t('grab');
+      this._applyMoveMode();
+    });
 
     window.addEventListener('pointerup', () => DPAD.forEach(({ code }) => input.release(code)));
 
@@ -146,8 +154,8 @@ export class OnscreenButtons {
     const joy = this._moveMode === 'joystick';
     this.joyRoot.hidden = !joy;
     this._dpad.hidden = joy;
-    this._modeBtn.textContent = joy ? '键位' : '摇杆';
-    this._modeBtn.title = joy ? '切换为屏幕方向键' : '切换为摇杆';
+    this._modeBtn.textContent = joy ? t('keys') : t('stick');
+    this._modeBtn.title = joy ? t('keys') : t('stick');
     if (!joy) this.input.clearAnalog();
   }
 

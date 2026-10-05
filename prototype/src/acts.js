@@ -1,5 +1,7 @@
 import { QUEST_MENU } from './prizeTableData.js';
 
+const L = (zh, en) => ({ zh, en });
+
 // ============================================================
 // 分幕数据（剧情设计-拾荒娃娃机.md 的代码化；文案/时长都在这改，不动引擎）
 //
@@ -41,7 +43,10 @@ import { QUEST_MENU } from './prizeTableData.js';
 // 第三幕起不出现"移动""落爪"字样。黑场四句台词语气与第三幕完全一致，不许变调。
 // ============================================================
 
-export const DEFAULT_HINT = '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环';
+export const DEFAULT_HINT = L(
+  '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环',
+  '←→↑↓ / WASD move · Space drop · 1/2/3 view · Q/E cycle',
+);
 
 /** 每格配额需要抓几件（缺省 1）。改这个要同步 index.html 的 #q-* 文案与 "N/3" 计数。 */
 export const QUEST_COUNT = 1;
@@ -53,7 +58,7 @@ export const ACTS = [
   // 第一幕 · 引子：干净柜，全是他记得的样子。只能看，不能抓。
   // ---------------------------------------------------------------
   {
-    id: 1, label: '第一幕 · 引子', layout: 'right', backdrop: 'act1', viewportShape: 'circle',
+    id: 1, label: L('第一幕 · 引子', 'Act I · Prologue'), layout: 'right', backdrop: 'act1', viewportShape: 'circle',
     control: { move: false, drop: false, view: false },
     appearance: 'manifest',
     zoom: 0.95,   // 幕级变焦；near 模式再 ×0.7 → 有效 0.67，贴近玻璃柜的近景
@@ -61,24 +66,24 @@ export const ACTS = [
     hint: null,
     script: [
       // 黑屏先念两句。圆视窗和背景随后才开，娃娃机先藏着预加载
-      { type: 'sub', text: '资源枯竭纪元 21 年。', dur: 5.6 },
-      { type: 'sub', text: '配给制度崩坏，人们靠"采集"活下去。', dur: 6.4 },
+      { type: 'sub', text: L('资源枯竭纪元 21 年。', 'Year 21 of the scarcity era.'), dur: 5.6 },
+      { type: 'sub', text: L('配给制度崩坏，人们靠"采集"活下去。', 'The ration system has collapsed. People live by “foraging.”'), dur: 6.4 },
       { type: 'openViewport' },
       { type: 'pause', dur: 2.5 },
-      { type: 'panel', side: 'left', text: '他还记得那台机器。\n那时候，食物是装在玻璃柜里的。' },
+      { type: 'panel', side: 'left', text: L('他还记得那台机器。\n那时候，食物是装在玻璃柜里的。', 'He still remembers that machine.\nBack then, food sat inside a glass case.') },
       { type: 'pause', dur: 5 },
-      { type: 'panel', side: 'left', text: '他还记得那台机器。\n那时候，食物是装在玻璃柜里的。', op: '点击照片收起' },
-      { type: 'interstitial', image: 'act1Open', caption: '干净得不像话。', dismiss: 'click', dismissAfter: 0, revealOnShow: true, revealAfter: 5 },
-      { type: 'panel', side: 'left', text: '那时候经常趴在两边往里看。' },
+      { type: 'panel', side: 'left', text: L('他还记得那台机器。\n那时候，食物是装在玻璃柜里的。', 'He still remembers that machine.\nBack then, food sat inside a glass case.'), op: L('点击照片收起', 'Tap the photo to put it away') },
+      { type: 'interstitial', image: 'act1Open', caption: L('干净得不像话。', 'Too clean to be true.'), dismiss: 'click', dismissAfter: 0, revealOnShow: true, revealAfter: 5 },
+      { type: 'panel', side: 'left', text: L('那时候经常趴在两边往里看。', 'He used to lean in from both sides and look.') },
       { type: 'pause', dur: 1.6 },
-      { type: 'panel', side: 'left', text: '那时候经常趴在两边往里看。', op: 'Q / E　或　1 / 2 / 3 转动视线。' },
+      { type: 'panel', side: 'left', text: L('那时候经常趴在两边往里看。', 'He used to lean in from both sides and look.'), op: L('Q / E　或　1 / 2 / 3 转动视线。', 'Q / E or 1 / 2 / 3 to look around.') },
       { type: 'allow', view: true },
       { type: 'wait', event: 'firstView' },
-      { type: 'sub', text: '左边……右边……都一样。都是吃的。', dur: 4.8 },
+      { type: 'sub', text: L('左边……右边……都一样。都是吃的。', 'Left… right… the same. All of it food.'), dur: 4.8 },
       { type: 'wait', event: 'allViews' },
       // 落灰：左字跟着第二张相框换，点一下或停够再收
-      { type: 'panel', side: 'left', text: '不知道什么时候变旧了。', op: '点击照片收起' },
-      { type: 'interstitial', image: 'act1Close', dur: 4, caption: '后来就旧了。', dismiss: 'click', dismissAfter: 8 },
+      { type: 'panel', side: 'left', text: L('不知道什么时候变旧了。', 'He doesn’t know when it got old.'), op: L('点击照片收起', 'Tap the photo to put it away') },
+      { type: 'interstitial', image: 'act1Close', dur: 4, caption: L('后来就旧了。', 'Then it got old.'), dismiss: 'click', dismissAfter: 8 },
     ],
   },
 
@@ -86,22 +91,22 @@ export const ACTS = [
   // 第二幕 · 学会抓：教学。首次必成。手与妹妹这两件事在这一幕埋下。
   // ---------------------------------------------------------------
   {
-    id: 2, label: '第二幕 · 学会抓', layout: 'center', backdrop: 'act2', viewportShape: 'circle',
+    id: 2, label: L('第二幕 · 学会抓', 'Act II · Learning to Grab'), layout: 'center', backdrop: 'act2', viewportShape: 'circle',
     control: { move: true, drop: true, view: true },
     appearance: 'manifest',
     framing: 'far',   // 中远景站远抓（首版构图）；V 键可切 near 凑近看
     tuning: { gripStrength: 1.0, baseSlipProb: 0 },   // 教学：首抓必成
     hint: DEFAULT_HINT,
     script: [
-      { type: 'panel', side: 'left', text: '移动爪子。\n对准。', continue: true, continueAfter: 3.4, hideAfter: true },
-      { type: 'panel', side: 'right', text: '按下空格。\n落爪。' },
+      { type: 'panel', side: 'left', text: L('移动爪子。\n对准。', 'Move the claw.\nLine it up.'), continue: true, continueAfter: 3.4, hideAfter: true },
+      { type: 'panel', side: 'right', text: L('按下空格。\n落爪。', 'Press space.\nDrop.') },
       { type: 'wait', event: 'firstCollect' },
       { type: 'panel', side: 'right', text: '' },
       // 闪回：记忆里那只按按钮的手（终幕现实里的手是同一只）
-      { type: 'interstitial', image: 'flashbackSister', dur: 3.2, caption: '那天的照片。' },
-      { type: 'panel', side: 'left', text: '成功了。\n他和妹妹分着吃。', dur: 4 },
+      { type: 'interstitial', image: 'flashbackSister', dur: 3.2, caption: L('那天的照片。', 'The photo from that day.') },
+      { type: 'panel', side: 'left', text: L('成功了。\n他和妹妹分着吃。', 'It worked.\nHe and his sister split it.'), dur: 4 },
       // 说明图：第一次让玩家看见"手心里是什么"，也是终幕反转的伏笔种子
-      { type: 'interstitial', image: 'act2Close', dur: 3.0, caption: '他手里是干净的。' },
+      { type: 'interstitial', image: 'act2Close', dur: 3.0, caption: L('他手里是干净的。', 'What he held was clean.') },
     ],
   },
 
@@ -110,7 +115,7 @@ export const ACTS = [
   // 配额按"形状"记账不看外观：显形态面包与败露态发霉块都算面包。
   // ---------------------------------------------------------------
   {
-    id: 3, label: '第三幕 · 采集配额', layout: 'center', backdrop: 'act3', hudDecor: 'rationWall',
+    id: 3, label: L('第三幕 · 采集配额', 'Act III · The Quota'), layout: 'center', backdrop: 'act3', hudDecor: 'rationWall',
     control: { move: true, drop: true, view: true },
     appearance: 'manifest',
     tuning: { gripStrength: 0.78, baseSlipProb: 0.45, decayPerGrab: 0.06 },  // 爪力开始不稳
@@ -122,23 +127,30 @@ export const ACTS = [
     // 所以不需要别名表 —— 抓到就是那一格。
     restockPool: true,   // 第二幕抓走的那件补回池里
     questCopy: {
-      right: { bread: '面包，入账。', can: '罐头。', veg: '青菜。' },
-      dup: '……这一样够了。',
-      wrong: '……这不是今天的配额。',
-      wrongJunk: '垃圾也进洞了。不算数。',
+      right: {
+        bread: L('面包，入账。', 'Bread, logged.'),
+        can: L('罐头。', 'A can.'),
+        veg: L('青菜。', 'Greens.'),
+      },
+      dup: L('……这一样够了。', '…That’s enough of this one.'),
+      wrong: L('……这不是今天的配额。', '…This isn’t today’s quota.'),
+      wrongJunk: L('垃圾也进洞了。不算数。', 'Junk went down the hole too. It doesn’t count.'),
     },
-    hint: '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环 · V 凑近/退远 · 滚轮缩放',
+    hint: L(
+      '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环 · V 凑近/退远 · 滚轮缩放',
+      '←→↑↓ / WASD move · Space drop · 1/2/3 view · Q/E cycle · V closer/farther · wheel zoom',
+    ),
     script: [
-      { type: 'interstitial', image: 'rationNotice', dur: 3.0, caption: '今天的配额。' },
-      { type: 'panel', side: 'left', text: '配额写在墙上了。\n今天也是三样。', continue: true, continueAfter: 3.6, hideAfter: true },
-      { type: 'panel', side: 'right', text: '抓够之前，\n别去想机器外面是什么。' },
+      { type: 'interstitial', image: 'rationNotice', dur: 3.0, caption: L('今天的配额。', 'Today’s quota.') },
+      { type: 'panel', side: 'left', text: L('配额写在墙上了。\n今天也是三样。', 'The quota is on the wall.\nThree things again today.'), continue: true, continueAfter: 3.6, hideAfter: true },
+      { type: 'panel', side: 'right', text: L('抓够之前，\n别去想机器外面是什么。', 'Until you’ve got enough,\ndon’t wonder what’s outside the machine.') },
       // 题眼：与第一幕同机位的一闪，柜里其实是腐败的。玩家会以为自己看错了。
       // 这一张故意切得快、淡得浅 —— 它要像"看错了"，不像"给你看张图"。
       { type: 'interstitial', image: 'act3Dark', dur: 2.0, fadeIn: 0.3, fadeOut: 0.4, caption: '' },
       { type: 'wait', event: 'questComplete' },
       // 集齐瞬间：过曝 + 耳鸣 + 灯泡骤亮，整池东西"看起来"又是新鲜的了
       { type: 'interstitial', image: 'act3LightLie', dur: 1.4, fadeIn: 0.1, fadeOut: 0.4, caption: '' },
-      { type: 'sub', text: '……齐了。今天能吃了。', dur: 2.5 },
+      { type: 'sub', text: L('……齐了。今天能吃了。', '…That’s all of them. He can eat today.'), dur: 2.5 },
     ],
   },
 
@@ -146,21 +158,28 @@ export const ACTS = [
   // 第四幕 · 他记得的那顿饭：配给单翻面成菜单，机柜淡回干净柜。全片最暖处。
   // ---------------------------------------------------------------
   {
-    id: 4, label: '第四幕 · 他记得的那顿饭', layout: 'center', backdrop: 'synthesis',
+    id: 4, label: L('第四幕 · 他记得的那顿饭', 'Act IV · The Meal He Remembers'), layout: 'center', backdrop: 'synthesis',
     control: { move: false, drop: false, view: false },
     appearance: 'manifest',
     hint: null,
-    menu: { cards: QUEST_MENU.cards, line: QUEST_MENU.line },
+    menu: {
+      cards: [
+        L('面包汤', 'Bread soup'),
+        L('罐头', 'A can'),
+        L('烫青菜', 'Blanched greens'),
+      ],
+      line: L('今日菜单\n面包汤 · 罐头 · 烫青菜', 'Today’s menu\nBread soup · A can · Blanched greens'),
+    },
     script: [
       { type: 'panel', side: 'left', text: '' },
       { type: 'panel', side: 'right', text: '' },
-      { type: 'interstitial', image: 'menuCard', dur: 2.6, caption: '翻过来，就是今天吃什么。' },
+      { type: 'interstitial', image: 'menuCard', dur: 2.6, caption: L('翻过来，就是今天吃什么。', 'Turn it over. That’s dinner.') },
       { type: 'synthesis' },
       { type: 'interstitial', image: 'act4Meal', dur: 3.4, caption: '' },
       { type: 'pause', dur: 0.8 },
-      { type: 'sub', text: '那天他们吃得很好。', dur: 3.4 },
+      { type: 'sub', text: L('那天他们吃得很好。', 'They ate well that day.'), dur: 3.4 },
       { type: 'pause', dur: 1.2 },
-      { type: 'sub', text: '他一直是这么记的。', dur: 3.6 },
+      { type: 'sub', text: L('他一直是这么记的。', 'That’s how he has always remembered it.'), dur: 3.6 },
       { type: 'pause', dur: 2.0 },   // 这 2 秒留给玩家反应"他是不是在骗自己"
     ],
   },
@@ -184,25 +203,25 @@ export const ACTS = [
       { type: 'glitch' },
       // 换货 + 消失全都发生在原地：**镜头一次都不动**。
       // 他还在用刚才那副视角看着同一个柜子，只是柜子在化、东西在变。
-      { type: 'sub', text: '……灯怎么灭了。', dur: 3.0 },
+      { type: 'sub', text: L('……灯怎么灭了。', '…Why did the light go out.'), dur: 3.0 },
       { type: 'pause', dur: 0.6 },
-      { type: 'sub', text: '面包。罐头。青菜。', dur: 3.4 },
+      { type: 'sub', text: L('面包。罐头。青菜。', 'Bread. A can. Greens.'), dur: 3.4 },
       { type: 'pause', dur: 0.8 },
-      { type: 'sub', text: '都是好的。', dur: 2.8 },
+      { type: 'sub', text: L('都是好的。', 'All of it good.'), dur: 2.8 },
       { type: 'pause', dur: 1.0 },
       // 把"谎言"直接说成"条件"——他不是不知道
-      { type: 'sub', text: '只要灯亮着就行。', dur: 3.2 },
+      { type: 'sub', text: L('只要灯亮着就行。', 'As long as the light stays on.'), dur: 3.2 },
       { type: 'pause', dur: 1.4 },
       // 整机溶解：壳先淡 → 爪子/装饰跟上 → 台子收尾，池里那几件东西**最后才走**。
       // 一路淡到全透明，画面自然溶解进后面的实景 —— 不是淡完就隐藏，也没有切视角。
       { type: 'fadeMachine', dur: 9.5, stage: 'all' },
       { type: 'pause', dur: 0.4 },
-      { type: 'revealBeat', dur: 3.4, line: '手心里只有一罐。' },
+      { type: 'revealBeat', dur: 3.4, line: L('手心里只有一罐。', 'Only a can in his palm.') },
       { type: 'reveal' },
       { type: 'wait', event: 'cinemaWidened' },
       { type: 'pause', dur: 1.5 },
-      { type: 'revealBeat', dur: 3.0, line: '远处那台，还亮着。' },
-      { type: 'stinger', text: 'Demo 结束。他今天吃了什么？' },
+      { type: 'revealBeat', dur: 3.0, line: L('远处那台，还亮着。', 'Far off, that machine is still lit.') },
+      { type: 'stinger', text: L('Demo 结束。他今天吃了什么？', 'Demo over. What did he eat today?') },
     ],
   },
 ];

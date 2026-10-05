@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { ACTS } from './acts.js';
+import { copy, onLangChange, t } from './i18n.js';
 import { randomizePanelStains } from './narrativeBg.js';
 import { PRIZE_TABLE } from './prizePool.js';
 import {
@@ -65,6 +66,17 @@ export class Director {
       this.#hideReplayCue();
       this.restart();
     });
+    onLangChange(() => this.#refreshVisibleCopy());
+  }
+
+  #refreshVisibleCopy() {
+    const act = this.act;
+    if (!act) return;
+    if (act.label && this.elLabel?.classList.contains('show')) {
+      this.elLabel.textContent = copy(act.label);
+    }
+    if (act.hint && this.elHint) this.elHint.textContent = copy(act.hint);
+    this.#paintQuestHud();
   }
 
   /** 计入配额的那件落到出货口之后再响，不和下落声叠在一起 */
@@ -99,7 +111,7 @@ export class Director {
       if (this.act?.id === 2 && !this.happened.has('firstCollect')) this.notify('firstCollect');
 
       const q = this.act?.quest;
-      const copy = this.act?.questCopy;
+      const questCopy = this.act?.questCopy;
       const slot = this.#questSlot(payload.id);
       if (this.act?.id === 3 && q) {
         const need = Math.max(1, this.act.questCount ?? 1);
@@ -110,16 +122,16 @@ export class Director {
           this.#armQuotaChime(payload);
           this.#syncQuestHud();
           const row = PRIZE_TABLE.find(p => p.id === slot);
-          const line = copy?.right?.[slot] ?? (row ? `${row.questLabel || row.name}，入账。` : '');
+          const line = copy(questCopy?.right?.[slot]) || (row ? t('quotaLine', { name: copy(row.questLabel || row.name) }) : '');
           if (line) this.msg(line);
           if (q.every(id => (this._questDone.get(id) ?? 0) >= need)) {
             this.mask.pulse(undefined, 160);
             setTimeout(() => this.notify('questComplete'), 700);
           }
         } else if (slot) {
-          if (copy?.dup) this.msg(copy.dup);
+          if (questCopy?.dup) this.msg(copy(questCopy.dup));
         } else {
-          const line = copy?.wrongJunk ?? copy?.wrong ?? '……配额不认这个。';
+          const line = copy(questCopy?.wrongJunk ?? questCopy?.wrong) || t('quotaReject');
           this.msg(line);
         }
       } else if (q?.includes(payload.id) && !this._questDone.has(payload.id)) {
@@ -226,7 +238,7 @@ export class Director {
       const el = document.createElement('div');
       el.className = 'quest';
       el.id = 'q-' + id;
-      el.textContent = `${row?.questLabel || row?.name || id} ×${need}`;
+      el.textContent = `${copy(row?.questLabel || row?.name || id)} ×${need}`;
       if (count) count.before(el);
       else hud.appendChild(el);
     }
@@ -289,10 +301,10 @@ export class Director {
     }
 
     this.elHint.style.opacity = act.hint === null ? '0' : '1';
-    if (act.hint) this.elHint.textContent = act.hint;
+    if (act.hint) this.elHint.textContent = copy(act.hint);
 
     if (act.label) {
-      this.elLabel.textContent = act.label;
+      this.elLabel.textContent = copy(act.label);
       this.elLabel.classList.add('show');
       if (i !== 0) setTimeout(() => this.elLabel.classList.remove('show'), 5200);
     }
@@ -318,15 +330,15 @@ export class Director {
     for (const step of act.script) {
       if (this._skip || gen !== this._runGen) return;
       switch (step.type) {
-        case 'sub':   await this.#sub(step); break;
+        case 'sub':   await this.#sub({ ...step, text: copy(step.text) }); break;
         case 'panel':
-          this.#panel(step.side, step.text, step.op);
+          this.#panel(step.side, copy(step.text), copy(step.op));
           if (step.continue && step.text) await this.#untilContinue(step, gen);
           else if (step.dur) await sleep(step.dur * 1000);
           if (step.hideAfter) this.#panel(step.side, '');
           break;
         case 'hint':
-          this.elHint.textContent = step.text ?? '';
+          this.elHint.textContent = copy(step.text ?? '');
           this.elHint.style.opacity = step.text ? '1' : '0';
           break;
         case 'allow': {
@@ -513,7 +525,7 @@ export class Director {
     cards.forEach((c, i) => {
       const name = act.menu?.cards?.[i];
       c.hidden = !name;
-      if (name) c.textContent = name;
+      if (name) c.textContent = copy(name);
     });
     synth.hidden = false;
     cards.forEach((c, i) => setTimeout(() => c.classList.add('show'), i * 450));
@@ -521,7 +533,7 @@ export class Director {
     cards.forEach(c => c.classList.add('merge'));
     await sleep(1100);
     const menu = document.getElementById('menuCard');
-    menu.textContent = act.menu?.line ?? '';
+    menu.textContent = copy(act.menu?.line ?? '');
     menu.classList.add('show');
     await sleep(3000);
     synth.hidden = true;
@@ -623,7 +635,7 @@ export class Director {
     if (visual) visual.hidden = !image;
     if (image) this.narrativeBg?.setRevealBeatImage(image);
     const txt = el.querySelector('.reveal-beat-text');
-    if (txt) txt.textContent = line ?? '';
+    if (txt) txt.textContent = copy(line ?? '');
     el.hidden = false;
     el.classList.add('show');
     await sleep(dur * 1000);
@@ -651,14 +663,14 @@ export class Director {
     if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = false;
     playMusicBoxStinger();
     this.elMsg.classList.add('stinger');
-    this.elMsg.textContent = text;
+    this.elMsg.textContent = copy(text);
     this.elMsg.style.opacity = '1';
     this.elHint.style.opacity = '1';
-    this.elHint.textContent = '按住拖拽，自己再看一圈。';
+    this.elHint.textContent = t('stingerLook');
     this.#hideReplayCue();
     this._replayTimer = setTimeout(() => {
       if (this.idx !== ACTS.length - 1) return;
-      this.elHint.textContent = '风停在这儿。想再记一遍，就点下面。';
+      this.elHint.textContent = t('stingerReplay');
       this.#showReplayCue();
     }, 10000);
   }

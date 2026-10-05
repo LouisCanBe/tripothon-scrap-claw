@@ -2,6 +2,7 @@ import { CONFIG } from './config.js';
 import { playPaper } from './gameAudio.js';
 import { getNarrative, narrativeSrc } from './narrativeAssets.js';
 import { applyPresentAct } from './present.js';
+import { copy } from './i18n.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -222,7 +223,7 @@ export class NarrativeBg {
     const fadeOut = step.fadeOut ?? 0.55;
 
     this.photoImg.src = url;
-    if (this.photoCap) this.photoCap.textContent = step.caption ?? '';
+    if (this.photoCap) this.photoCap.textContent = copy(step.caption ?? '');
     this._randomizePaper();
     this._placePhotoFrame();
     el.hidden = false;

@@ -30,6 +30,7 @@ import { buildMachineShell } from './machineShell.js';
 import { upgradeMachineShellTripo } from './machineShellTripo.js';
 import { Director } from './director.js';
 import { ACTS, DEFAULT_HINT } from './acts.js';
+import { applyStaticCopy, copy, onLangChange, t as tr, toggleLang } from './i18n.js';
 import { primeAudioFiles, primeAudioDecode, unlockAudio } from './gameAudio.js';
 import { enqueueRendererCompile, setCoalesceIncrementalCompile } from './renderCompile.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
@@ -230,11 +231,15 @@ function toast(text) {
 
 // —— 全幕累计入洞数；界面留到终幕收束才显示（「今天收集了 N 个物资」）——
 let globalGrabCount = 0;
-const elGlobalGrabCount = () => document.getElementById('globalGrabCount');
+function paintGrabStat() {
+  const el = document.getElementById('globalGrabStat');
+  if (!el) return;
+  el.dataset.n = String(globalGrabCount);
+  el.textContent = tr('grabStat', { n: globalGrabCount });
+}
 function bumpGlobalGrabCount() {
   globalGrabCount += 1;
-  const el = elGlobalGrabCount();
-  if (el) el.textContent = String(globalGrabCount);
+  paintGrabStat();
 }
 
 // —— 爪机 ——
@@ -244,7 +249,7 @@ const claw = new ClawMachine(world, items, {
   onMessage: (t) => director?.msg(t),
   onCollect: (item) => {
     bumpGlobalGrabCount();
-    if (director?.act?.id !== 3) toast(`+1 ${item.name}`);
+    if (director?.act?.id !== 3) toast(tr('collected', { name: copy(item.name) }));
     director?.notify('collect', item);
   },
   onGrabFail: (kind) => director?.notify('grabFail', kind),
@@ -766,7 +771,7 @@ function unlockRevealWalk() {
   applyRevealFeatures();
   if (revealImmersive) applyRevealWalkBounds(revealImmersive);
   if (revealControlsOn && elHint) {
-    elHint.textContent = '按住拖拽环视 · WASD 走动 · 滚轮缩放视野';
+    elHint.textContent = tr('lookDrag');
   }
 }
 
@@ -780,12 +785,10 @@ function enableRevealControls({ recapture = true } = {}) {
   if (elViewDots) elViewDots.style.opacity = '0.25';
   const immersive = CONFIG.reveal.mode === 'immersive';
   elHint.textContent = revealWalkUnlocked
-    ? '按住拖拽环视 · WASD 走动 · 滚轮缩放视野'
-    : (immersive
-      ? '按住拖拽环视 · WASD 走动 · QE 升降 · 滚轮 FOV · V 切换环视'
-      : '按住拖拽环视 · 滚轮缩放视野');
+    ? tr('lookDrag')
+    : (immersive ? tr('lookFps') : tr('lookOrbit'));
   elHint.style.opacity = '1';
-  toast(immersive ? '沉浸式废墟' : '环视废墟实景');
+  toast(immersive ? tr('ruinImmersive') : tr('ruinOrbit'));
 }
 
 function stepRevealPictureGate() {
@@ -861,7 +864,7 @@ async function setRevealWorld(id) {
     console.error('[reveal world]', e);
     revealImmersive = null;
     revealMarbleLoad = null;
-    if (!(await applyRevealPanoFallback())) toast('Marble 与全景均未加载', true);
+    if (!(await applyRevealPanoFallback())) toast(tr('marbleFail'), true);
   }
   return CONFIG.reveal.world;
 }
@@ -1086,8 +1089,7 @@ async function onGameplayRestart() {
   disableRevealControls();
   await teardownRevealAssets();
   globalGrabCount = 0;
-  const gc = elGlobalGrabCount();
-  if (gc) gc.textContent = '0';
+  paintGrabStat();
   resetAllPoolItems(items);
   claw.reset();
   rig.setView('front');
@@ -1252,14 +1254,14 @@ async function onReveal({ deferControls = false } = {}) {
       revealImmersive = null;
       revealMarbleLoad = null;
       if (wantImmersive) {
-        toast('沉浸式加载失败，回退全景图', true);
+        toast(tr('ruinFail'), true);
         CONFIG.reveal.mode = 'pano';
         applyRevealFeatures();
       }
-      if (!(await applyRevealPanoFallback())) toast('Marble 与全景均未加载', true);
+      if (!(await applyRevealPanoFallback())) toast(tr('marbleFail'), true);
     }
   } else if (!(await applyRevealPanoFallback())) {
-    toast('全景加载失败', true);
+    toast(tr('panoFail'), true);
   }
   if (!deferControls) {
     enableRevealControls({ recapture: CONFIG.reveal.mode !== 'immersive' });
@@ -1342,17 +1344,17 @@ input.on('cycle', (d) => {
   if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); }
 });
 input.on('next', () => director.skip());
-input.on('replay', () => { director.restart(); toast('重新开始'); });
+input.on('replay', () => { director.restart(); toast(tr('restart')); });
 // 近/远取景切换：仅居中画幅幕开放（一幕右布局用 far 会穿帮）
 input.on('frameMode', () => {
   if (revealControlsOn && revealCtl.features.modeToggle) {
     revealCtl.toggleMode();
-    toast(revealCtl.mode === 'fps' ? '第一人称' : '环视');
+    toast(revealCtl.mode === 'fps' ? tr('fps') : tr('orbit'));
     return;
   }
   if (director.act?.layout === 'center') {
     mask.toggleViewMode();
-    toast(mask.viewMode === 'near' ? '凑近' : '站远');
+    toast(mask.viewMode === 'near' ? tr('near') : tr('far'));
   }
 });
 input.on('toggleFrame', () => mask.toggle(true));
@@ -1609,7 +1611,7 @@ syncDocumentTitle();
     '屏幕按钮(摇杆)': () => buttons.toggle(),
     '摇杆/键位切换': () => {
       const m = buttons.toggleMoveMode();
-      toast(m === 'joystick' ? '移动：摇杆' : '移动：方向键');
+      toast(m === 'joystick' ? tr('moveStick') : tr('moveKeys'));
     },
     '设计稿叠加(G)': () => design.toggle(),
     '右布局(一幕)': () => mask.setLayout('right'),
@@ -1734,12 +1736,12 @@ const paintLoading = () => {
   const pct = frac * 100 | 0;
   loadFill.style.width = pct + '%';
   loadPct.textContent = pct + '%';
-  if (!shellLoaded) setLoadStatus('正在组装娃娃机外壳……');
-  else if (!clawLoaded) setLoadStatus('正在装载抓爪与导轨……');
+  if (!shellLoaded) setLoadStatus(tr('loadShell'));
+  else if (!clawLoaded) setLoadStatus(tr('loadClaw'));
   else if (prizeTotal > 0 && prizeDone < prizeTotal) {
-    setLoadStatus(`正在上货（${prizeDone}/${prizeTotal}）……`);
-  } else if (!decorLoaded) setLoadStatus('正在摆放奖池与场景杂物……');
-  else setLoadStatus('正在整理奖池摆放……');
+    setLoadStatus(tr('loadStock', { n: prizeDone, total: prizeTotal }));
+  } else if (!decorLoaded) setLoadStatus(tr('loadDecor'));
+  else setLoadStatus(tr('loadArrange'));
 };
 
 let loadGateReady = false;
@@ -1752,11 +1754,11 @@ async function onLoadGateReady() {
   director.setStartActIndex(startIdx);
   if ((ACTS[startIdx]?.id ?? 1) === 1) world.visible = false;
   setCoalesceIncrementalCompile(false);
-  setLoadStatus('正在预热画面（后台进行，可先点开始）……');
+  setLoadStatus(tr('loadWarm'));
   void enqueueRendererCompile(renderer, camera, world, { force: true });
   setLoadStatus(startIdx > 0
-    ? `试玩就绪：从第 ${ACTS[startIdx]?.id ?? startIdx + 1} 幕开始`
-    : '上货完成，可以开始了');
+    ? tr('loadReadyAct', { n: ACTS[startIdx]?.id ?? startIdx + 1 })
+    : tr('loadReady'));
   loadFill.style.width = '100%';
   loadPct.textContent = '100%';
   loadingEl?.classList.add('ready');
@@ -1783,11 +1785,23 @@ function beginGame() {
     loadingEl?.classList.add('done');
     document.documentElement.classList.remove('game-booting');
     director.start();
-    if (startIdx > 0) toast(`从「${ACTS[startIdx]?.label ?? '第三幕'}」试玩`);
+    if (startIdx > 0) toast(tr('tryAct', { label: copy(ACTS[startIdx]?.label) || tr('loadReadyAct', { n: startIdx + 1 }) }));
     if (window.__boot) window.__boot.booted = true;
   }, 420);
   setTimeout(() => loadingEl?.remove(), 2400);
 }
+
+applyStaticCopy();
+document.getElementById('langToggle')?.addEventListener('click', () => toggleLang());
+onLangChange(() => {
+  if (gameStarted || !loadingEl || loadingEl.classList.contains('done')) return;
+  if (loadGateReady) {
+    const startIdx = parseStartActIndex();
+    setLoadStatus(startIdx > 0
+      ? tr('loadReadyAct', { n: ACTS[startIdx]?.id ?? startIdx + 1 })
+      : tr('loadReady'));
+  } else paintLoading();
+});
 
 loadStartBtn?.addEventListener('click', (e) => {
   e.stopPropagation();

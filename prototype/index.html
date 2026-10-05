@@ -401,7 +401,7 @@
   .panel .op { display: block; margin-top: 10px;
     font-size: 12px; line-height: 1.45; letter-spacing: .4px; color: #9a5b2a; }
   .panel.await-continue { pointer-events: auto; cursor: pointer; }
-  .panel.await-continue::after { content: '点击继续'; display: block; margin-top: 10px;
+  .panel.await-continue::after { content: var(--i18n-continue, '点击继续'); display: block; margin-top: 10px;
     font-size: 11px; letter-spacing: 2px; opacity: .5; }
 
   /* —— 幕标题卡（两侧细线 + 半透明底，亮场景里也可读）—— */
@@ -421,6 +421,12 @@
   #actLabel::after { margin-left: 16px;
               background: linear-gradient(270deg, transparent, rgba(216,212,200,.72)); }
   #actLabel.show { opacity: .95; }
+  html[lang="en"] #actLabel { letter-spacing: 1.5px; font-size: 13px; }
+  html[lang="en"] #msg, html[lang="en"] .panel { letter-spacing: .2px; }
+  #langToggle { position: fixed; top: 16px; right: 16px; z-index: 50; pointer-events: auto;
+    font-family: inherit; font-size: 12px; letter-spacing: 1px; color: var(--color-ink);
+    background: rgba(8,8,10,.55); border: 1px solid rgba(216,212,200,.28);
+    border-radius: 999px; padding: 6px 12px; cursor: pointer; }
 
   /* —— 收集飘字 / 提示 toast —— */
   #toasts { position: fixed; left: 50%; bottom: 26%; transform: translateX(-50%); z-index: 15;
@@ -555,7 +561,7 @@
 
   <div id="collectPairPanel" hidden data-state="wait">
     <button type="button" class="collect-pair-head" aria-expanded="false">
-      <span class="status-title">出货副屏</span>
+      <span class="status-title" data-i18n="pairTitle">出货副屏</span>
       <span class="chev" aria-hidden="true">▸</span>
     </button>
     <div class="collect-pair-expand" hidden>
@@ -563,7 +569,7 @@
         <canvas width="84" height="84" aria-label="出货副屏链接二维码"></canvas>
         <div class="pair-url-row">
           <input type="text" class="pair-url" readonly spellcheck="false" aria-label="副屏地址" />
-          <button type="button" class="pair-copy">复制</button>
+          <button type="button" class="pair-copy" data-i18n="pairCopy">复制</button>
         </div>
         <div class="pair-hint"></div>
       </div>
@@ -572,10 +578,10 @@
   </div>
 
   <div id="hud">
-    <div class="hud-title">今日采集配额</div>
-    <div class="hud-count">配额进度 <span id="questProgress">0</span>/<span id="questNeed">3</span></div>
+    <div class="hud-title" data-i18n="hudTitle">今日采集配额</div>
+    <div class="hud-count"><span data-i18n="hudCount">配额进度</span> <span id="questProgress">0</span>/<span id="questNeed">3</span></div>
   </div>
-  <div id="globalGrabStat" hidden>今天收集了 <span id="globalGrabCount">0</span> 个物资</div>
+  <div id="globalGrabStat" hidden data-n="0">今天收集了 0 个物资</div>
   <div id="toasts"></div>
   <div id="viewportChrome" aria-hidden="false">
     <div id="viewDots"><i data-v="left"></i><i data-v="front" class="on"></i><i data-v="right"></i></div>
@@ -600,10 +606,11 @@
   </div>
   <div id="msg"></div>
   <button id="replayCue" type="button" hidden>
-    <span class="kicker">手心里还是那一罐</span>
-    <span class="label">再记一遍</span>
+    <span class="kicker" data-i18n="replayKicker">手心里还是那一罐</span>
+    <span class="label" data-i18n="replay">再记一遍</span>
   </button>
-  <div id="loading" aria-live="polite" aria-busy="true"><img class="mark" alt="" src="./assets/mark-horizontal.svg" /><div class="title">拾荒娃娃机</div><div class="t">准备中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div><button type="button" id="loadStart" class="load-start" hidden>开始</button></div>
+  <button type="button" id="langToggle">EN</button>
+  <div id="loading" aria-live="polite" aria-busy="true"><img class="mark" alt="" src="./assets/mark-horizontal.svg" /><div class="title" data-i18n="title">拾荒娃娃机</div><div class="t">准备中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div><button type="button" id="loadStart" class="load-start" data-i18n="start" hidden>开始</button></div>
 
   <script src="./vendor/qrcode-generator.js"></script>
   <script type="importmap">

@@ -1,5 +1,6 @@
 // 主屏右上角：副屏配对 + 连接状态（第三幕起，LAN/SSE）
 import { CONFIG } from './config.js';
+import { onLangChange, t } from './i18n.js';
 import {
   resolveCollectPair, shouldUseRemotePublish, collectDisplayShareUrl,
 } from './collectDisplayBus.js';
@@ -127,13 +128,13 @@ export function startCollectDisplayPairPanel(director) {
       if (waitBlock) waitBlock.hidden = false;
       if (errText) errText.hidden = true;
       drawQr(canvas, url);
-      if (hintEl) hintEl.textContent = '扫码打开副屏，或粘贴已复制的链接';
+      if (hintEl) hintEl.textContent = t('pairHint');
       await doCopy();
     } else if (linkState === 'err') {
       if (waitBlock) waitBlock.hidden = true;
       if (errText) {
         errText.hidden = false;
-        errText.textContent = '请在本机运行 node tools/devServer.mjs 后刷新页面。';
+        errText.textContent = t('pairErr');
       }
     }
     renderTitles();
@@ -158,19 +159,20 @@ export function startCollectDisplayPairPanel(director) {
   const renderTitles = () => {
     root.dataset.state = linkState;
     if (linkState === 'ok') {
-      titleEl.textContent = `出货副屏 · 已连接（${subscribers}）`;
+      titleEl.textContent = t('pairOk', { n: subscribers });
       return;
     }
     if (linkState === 'err') {
-      titleEl.textContent = expanded
-        ? '出货副屏 · 同步未就绪'
-        : '出货副屏 · 同步未就绪（点开说明）';
+      titleEl.textContent = expanded ? t('pairErrOpen') : t('pairErrClosed');
       return;
     }
-    titleEl.textContent = expanded
-      ? '出货副屏 · 扫码连接'
-      : '出货副屏 · 未连接（点发展码）';
+    titleEl.textContent = expanded ? t('pairWaitOpen') : t('pairWaitClosed');
   };
+  onLangChange(() => {
+    renderTitles();
+    if (hintEl && linkState === 'wait') hintEl.textContent = t('pairHint');
+    if (errText && !errText.hidden) errText.textContent = t('pairErr');
+  });
 
   const render = () => {
     const shareUrl = collectDisplayShareUrl();
