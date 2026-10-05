@@ -25,3 +25,12 @@ prototype/assets/worlds/.tmp*
 prototype/assets/worlds/world-*-pano.png
 prototype/assets/worlds/world-*-collider.glb
 prototype/assets/worlds/world-*-100k.spz
+
+# Local only: submission drafts, generation logs, machine backups
+/参赛提交.md
+/CONCEPT-参赛与裸眼3D.md
+/JupiterSR-创意申请.md
+tools/*.log
+prototype/assets/machine/archive/
+prototype/assets/machine/*.blend1
+*.zip

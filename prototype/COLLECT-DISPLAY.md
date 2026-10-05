@@ -162,12 +162,46 @@ node tools/devServer.mjs 8000 --lan
 | **Netlify/Vercel Functions** | ⚠️ 差 | 无标准长连接 SSE；超时短，不适合 25s 心跳副屏 |
 | **静态 CDN + 小 Node** | ✅ 进阶 | `prototype/` 上 Cloudflare Pages，仅把 `hubUrl` 指到 Render 上的 collect API（需改前端 API 根，当前默认同源） |
 
-**Render 最小配置（示意）**
+**Render 最小配置**
 
 - Runtime：Node
-- Build Command：（留空或 `npm install` 无依赖可跳过）
+- Build Command：留空
 - Start Command：`node tools/devServer.mjs`
-- 环境变量：一般无需；HTTPS 由 Render 终止，浏览器访问 `https://xxx.onrender.com`
+- Health Check Path：`/health`
+- 环境变量：不需要。不要配 `.env.local`。HTTPS 由 Render 终止
+
+部署完成后：
+
+| 用途 | 地址 |
+|---|---|
+| 主游戏 | `https://<服务名>.onrender.com/` |
+| 从某一幕、指定语言 | `https://<服务名>.onrender.com/?act=2&lang=en` |
+| 副屏 | `https://<服务名>.onrender.com/display.html` |
+| 配对 | 主游戏和副屏都加同一个 `?pair=口令` |
+| 保活 | `https://<服务名>.onrender.com/health` |
+
+`/health` 与 `/healthz` 都返回 `200` 和 `{"ok":true}`，不加载游戏资源。免费档约 15 分钟无访问会休眠。用 [UptimeRobot](https://uptimerobot.com) 建一个 HTTP(s) 监控，地址填 `/health`，间隔 5 分钟，即可把进程叫醒。监控自己的第一次请求仍可能赶上冷启动。
+
+出货配对状态只在这一台进程的内存里。休眠、重启或扩成多实例后，要重新打开主游戏和副屏。
+
+**Render CLI**（官方，文档 [render.com/docs/cli](https://render.com/docs/cli)）
+
+Windows：
+
+```powershell
+winget install render.cli
+render login
+```
+
+登录会打开浏览器点 Authorize CLI。之后可以建服务、看日志、手动部署：
+
+```powershell
+render services create --name scrap-claw --type web_service --runtime node --build-command "" --start-command "node tools/devServer.mjs" --plan free
+render deploys create
+render logs
+```
+
+`--repo` 需要仓库已经在 GitHub 上，并且 Render 账号能读到它。第一次用网页连仓库也可以，CLI 不是必须。
 
 发布前减包：默认 `glbSet: 'good-p2'`，勿上传 `prizes-good/`（高精套）；`design/` 若不上线可剔除。
 

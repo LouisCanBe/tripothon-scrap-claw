@@ -69,6 +69,13 @@ const MIME = {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/health' || url.pathname === '/healthz') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      return res.end('{"ok":true}');
+    }
     if (await handleCollectApi(req, res, url)) return;
 
     let p = decodeURIComponent(url.pathname);
@@ -110,6 +117,7 @@ server.listen(PORT, HOST, () => {
   const q = encodeURIComponent(pair);
   const game = OPEN_GUI ? `http://127.0.0.1:${PORT}/?gui=1` : `http://127.0.0.1:${PORT}/`;
   console.log(`[collect] 默认配对口令 pair=${pair}（config.collectDisplay.pairId；书签可无参，多展台改 ?pair=）`);
+  console.log(`  健康检查 http://127.0.0.1:${PORT}/health`);
   console.log(`  主游戏  ${game}`);
   console.log(`  调参    http://127.0.0.1:${PORT}/?gui=1  (npm run game:dev / ?gui=1；此时 H 切换)`);
   console.log(`  副屏    http://127.0.0.1:${PORT}/display.html`);

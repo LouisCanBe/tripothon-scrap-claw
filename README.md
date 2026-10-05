@@ -38,6 +38,9 @@ npm run hub                      # 工具台 http://localhost:8780/
 | 概念图审阅 | http://127.0.0.1:8000/design/concepts/review.html |
 | 概念图另一套 | http://127.0.0.1:8000/design/concepts/review.html?set=cursor |
 | 工具台（另一个端口） | http://localhost:8780/ |
+| 健康检查（Render / UptimeRobot 保活） | http://127.0.0.1:8000/health |
+
+上 Render（含副屏）的启动命令、健康检查和 CLI 见 `prototype/COLLECT-DISPLAY.md` 的「带 SSE 的部署方案」。
 
 ### 键位
 
