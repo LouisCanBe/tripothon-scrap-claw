@@ -27,55 +27,56 @@ import { enqueueRendererCompile } from './renderCompile.js';
 export const VARIANT_MANIFEST = 'manifest';
 export const VARIANT_ROT = 'rot';
 
-/** 败露态的通用材质覆盖：压暗、去饱和、加粗糙（同 mesh 不做新模型时的做法）。
- *  一点自发光是为了"灯灭了还看得见" —— 不是发光，是残光，别调亮。 */
+/**
+ * 败露态的通用材质覆盖。
+ *   **tint 缺省不设** —— 败露态模型（moldy/rustcan/rot）自己带霉斑与锈迹贴图，
+ *   直接改 color 会把贴图颜色整个冲掉，那几个模型就变成一块黑疙瘩、也看不出换没换。
+ *   所以默认只压一点粗糙 + 给一点自发光，颜色交给模型本身。
+ *   emissive 是"灯灭了还看得见轮廓"的那点残光，别当发光用，别再调亮。
+ */
 const VARIANT_MAT = {
-  roughness: 0.96,
+  roughness: 0.94,
   metalness: 0.02,
-  tint: 0x7c6a52,        // 脏黄褐，乘在贴图上 → 整体压暗发霉
-  emissive: 0x2a241c,    // 残光：让"灯灭了还看得见轮廓"成立，别再往上加
+  emissive: 0x241f18,
+  emissiveIntensity: 1,
+  // 只对"材质名一看就是脏件"且没有贴图的材质生效（见 applyMaterialPreset），
+  // 有贴图的一律保持原色 —— 那才是霉斑和锈迹本身。
+  fallbackTint: 0x8a7f6c,
 };
 
 export const PRIZE_TABLE = [
-  // ==== 任务三件套：显形态（他以为的） ====
-  // 显形态与败露态是**两个独立 id**，会同时出现在池子里。
-  // 这不矛盾：池子就是同一批东西的两副面孔混在一起，他分不出哪个是哪个。
-  // 显形态不写 truthName —— 副屏只显示"他以为的"，真相是留给后续揭晓交互的。
-  { id: 'bread',   name: '面包',     category: 'food', quest: true,  gripFactor: 0.95, bounceMaterial: 'soft',
-    collider: { shape: 'box',      size: [0.18, 0.10, 0.11] }, visual: { type: 'primitive', color: 0xc8a06a } },
-  { id: 'can',     name: '罐头',     category: 'food', quest: true,  gripFactor: 0.85, bounceMaterial: 'metal',
-    collider: { shape: 'cylinder', size: [0.052, 0.13] },      visual: { type: 'primitive', color: 0xb9bec6 } },
-  { id: 'veg',     name: '青菜',     category: 'food', quest: true,  gripFactor: 0.90, bounceMaterial: 'soft',
-    collider: { shape: 'sphere',   size: [0.075, 0.65] },      visual: { type: 'primitive', color: 0x7f9c5a } },
+  // ==== 任务三件套：一件东西，两副面孔 ====
+  // 显形态装自己的干净模型；败露态（to）换成坏的模型。
+  // **不要再另开一条 `-rot` 行** —— 那等于池子里同时存在"好面包"和"坏面包"两件东西，
+  // 而规则 A 说的是：同一件东西，前四幕显形、故障后败露。
+  // truthName 是"观众知道、他还在骗自己"的那个名字，留给后续揭晓交互，不进副屏默认文案。
+  { id: 'bread',   name: '面包',   truthName: '发霉面包', category: 'food', quest: true,  gripFactor: 0.95, bounceMaterial: 'soft',
+    collider: { shape: 'box',      size: [0.18, 0.10, 0.11] }, visual: { type: 'primitive', color: 0xc8a06a },
+    variants: { rot: { to: 'moldy' } } },
+  { id: 'can',     name: '罐头',   truthName: '锈罐头',  category: 'food', quest: true,  gripFactor: 0.85, bounceMaterial: 'metal',
+    collider: { shape: 'cylinder', size: [0.052, 0.13] },      visual: { type: 'primitive', color: 0xb9bec6 },
+    variants: { rot: { to: 'rustcan' } } },
+  { id: 'veg',     name: '青菜',   truthName: '烂菜',     category: 'food', quest: true,  gripFactor: 0.90, bounceMaterial: 'soft',
+    collider: { shape: 'sphere',   size: [0.075, 0.65] },      visual: { type: 'primitive', color: 0x7f9c5a },
+    variants: { rot: { to: 'rot' } } },
 
-  // ==== 任务三件套：败露态（真实的）。collider 与显形态逐一相同 = 轮廓共用 ====
-  // glb = 显形态那一件的模型别名（两态共用同一套轮廓）；to = 这一态实际要装的 GLB。
-  // truthName 是"观众知道、他还在骗自己"的那个名字，不进副屏默认文案，留给后续揭晓按钮。
-  { id: 'bread-rot', name: '面包',   truthName: '发霉面包', category: 'food', quest: true, gripFactor: 0.90, bounceMaterial: 'soft',
-    collider: { shape: 'box',      size: [0.18, 0.10, 0.11] }, visual: { type: 'primitive', color: 0x77815f },
-    variants: { manifest: { glb: 'bread', to: 'bread' }, rot: { glb: 'bread', to: 'moldy', mat: { tint: 0x76805c, roughness: 0.97 } } } },
-  { id: 'can-rot', name: '罐头',     truthName: '锈罐头', category: 'food', quest: true, gripFactor: 0.80, bounceMaterial: 'metal',
-    collider: { shape: 'cylinder', size: [0.052, 0.13] },      visual: { type: 'primitive', color: 0x8a5f45 },
-    variants: { manifest: { glb: 'can', to: 'can' }, rot: { glb: 'can', to: 'rustcan', mat: { tint: 0x8a5f45, roughness: 0.88 } } } },
-  { id: 'veg-rot', name: '青菜',     truthName: '烂菜', category: 'food', quest: true, gripFactor: 0.85, bounceMaterial: 'soft',
-    collider: { shape: 'sphere',   size: [0.075, 0.65] },      visual: { type: 'primitive', color: 0x5c6b4a },
-    variants: { manifest: { glb: 'veg', to: 'veg' }, rot: { glb: 'veg', to: 'rot', mat: { tint: 0x5c6b4a, roughness: 0.98 } } } },
-
-  // ==== 干扰物资（不记配额）。显形态与败露态共用一套 GLB，败露态只做材质覆盖（省资产）====
+  // ==== 干扰物资（不记配额）====
+  // 有独立败露模型的优先换模型；没有的（牛奶盒/干酪/玻璃罐）只做材质覆盖，省资产。
   { id: 'carton',  name: '牛奶盒',   category: 'food', gripFactor: 0.95, bounceMaterial: 'rubber',
     collider: { shape: 'box',      size: [0.12, 0.15, 0.09] }, visual: { type: 'primitive', color: 0xd6cfc0 },
-    variants: { rot: { mat: { tint: 0x8c8578, roughness: 0.95 } } } },
+    variants: { rot: { to: 'carton', mat: { tint: 0x9c968a, roughness: 0.95 } } } },
   { id: 'cheese',  name: '干酪块',   category: 'food', gripFactor: 0.90, bounceMaterial: 'soft',
     collider: { shape: 'box',      size: [0.11, 0.08, 0.09] }, visual: { type: 'primitive', color: 0xd9b64f },
-    variants: { rot: { mat: { tint: 0x8a8558, roughness: 0.97 } } } },
+    variants: { rot: { to: 'cheese', mat: { tint: 0x9a936a, roughness: 0.97 } } } },
+  { id: 'bottle',  name: '瓶子',     category: 'food', gripFactor: 0.70, bounceMaterial: 'glass',
+    collider: { shape: 'cylinder', size: [0.045, 0.17] },      visual: { type: 'primitive', color: 0x7c93a6 },
+    variants: { rot: { to: 'bottle', mat: { tint: 0x8b948f, roughness: 0.6 } } } },
   { id: 'jar',     name: '玻璃罐',   category: 'food', gripFactor: 0.65, bounceMaterial: 'glass',
     collider: { shape: 'cylinder', size: [0.06, 0.14] },       visual: { type: 'primitive', color: 0x9fb4ac },
-    variants: { rot: { mat: { tint: 0x6f7a76, roughness: 0.5 } } } },
-
-  // ==== 保留条目：旧存档/旧事件里可能出现 'apple'，不 spawn 但仍能解析名字 ====
-  { id: 'apple',   name: '果子',     category: 'food', gripFactor: 0.75, bounceMaterial: 'soft', disabled: true,
+    variants: { rot: { to: 'jar', mat: { tint: 0x8b948f, roughness: 0.55 } } } },
+  { id: 'apple',   name: '果子',     category: 'food', gripFactor: 0.75, bounceMaterial: 'soft',
     collider: { shape: 'sphere',   size: [0.06, 0.95] },       visual: { type: 'primitive', color: 0xa8574a },
-    variants: { rot: { mat: { tint: 0x7d5a48, roughness: 0.97 } } } },
+    variants: { rot: { to: 'apple', mat: { tint: 0x8a6a5c, roughness: 0.97 } } } },
 ];
 
 /** 按 id 找物资表条目 */
@@ -85,8 +86,8 @@ export function prizeDefById(id) {
 
 /**
  * 该物品在指定态下的 GLB 别名。
- *   variants[x].glb = 显形态那一件的模型别名（写它才能两态共用轮廓）；
- *   没写就用自己的 id（干扰物资那种"同一套 GLB 只换材质"的情况）。
+ *   没写 variants[x].glb 就用自身 id（大多数情况）；
+ *   只有在"这一态的模型跟物品本身不同名"时才需要写 glb。
  */
 export function variantGlbKey(def, appearance = VARIANT_MANIFEST) {
   if (!def) return null;
@@ -94,7 +95,7 @@ export function variantGlbKey(def, appearance = VARIANT_MANIFEST) {
   return v?.glb ?? def.id;
 }
 
-/** 该物品在指定态下实际要装的 GLB（多数时候等于 glb 别名，败露态换模型时由 to 覆盖） */
+/** 该物品在指定态下实际要装的 GLB（多数时候等于 glb 别名，用 to 覆盖） */
 export function variantVisualKey(def, appearance = VARIANT_MANIFEST) {
   const key = variantGlbKey(def, appearance);
   if (!def || !key) return key;
@@ -102,7 +103,7 @@ export function variantVisualKey(def, appearance = VARIANT_MANIFEST) {
   return v?.to ?? key;
 }
 
-/** 该物品在指定态下的材质覆盖（无则回退通用败露材质） */
+/** 该物品在指定态下的材质覆盖（败露态没写 mat 也返回通用残光预设） */
 export function variantMatPreset(def, appearance = VARIANT_MANIFEST) {
   if (appearance !== VARIANT_ROT) return null;
   return { ...VARIANT_MAT, ...(def?.variants?.rot?.mat ?? {}) };
@@ -370,22 +371,43 @@ export async function preloadVariantVisuals(items, appearance = VARIANT_ROT) {
   return ok;
 }
 
-/** 给一个视觉根节点套上败露材质（保留法线/粗糙贴图，只改颜色与粗糙金属度） */
-function applyMaterialPreset(root, preset) {  root.traverse((o) => {
-    if (!o.isMesh || o.userData?.comicOutline) return;
-    const mats = Array.isArray(o.material) ? o.material : [o.material];
-    const out = mats.map((m) => {
-      if (!m) return m;
-      const n = m.clone();
-      if (n.color && preset.tint != null) n.color = new THREE.Color(preset.tint);
-      if (preset.roughness != null && 'roughness' in n) n.roughness = preset.roughness;
-      if (preset.metalness != null && 'metalness' in n) n.metalness = preset.metalness;
-      if (preset.emissive != null && n.emissive) n.emissive = new THREE.Color(preset.emissive);
-      n.needsUpdate = true;
-      return n;
+/** 给一个视觉根节点套上材质覆盖（保留原贴图，只改粗糙/金属度；有 tint 才改颜色） */
+function applyMaterialPreset(root, preset) {
+  eachRootOf(root, (r) => {
+    if (!r?.isObject3D) return;
+    r.traverse((o) => {
+      if (!o.isMesh || !o.material || o.userData?.comicOutline) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      const out = mats.map((m) => {
+        if (!m) return m;
+        const n = m.clone();
+        if (n.color && preset.tint != null) n.color = new THREE.Color(preset.tint);
+        // 没给 tint 时按材质名补一点脏色（Tripo 材质常叫 Material/Material.001 这种没意义的名字，
+        // 所以 match 不到就保持原样 —— 宁可留贴图原色，也不要把颜色冲掉）。
+        else if (n.color && !n.map && preset.fallbackTint != null) {
+          const nm = String(n.name || '');
+          if (/dirt|rust|mold|rot|junk|grim|decay|bad|worn|old/i.test(nm)) {
+            n.color = new THREE.Color(preset.fallbackTint);
+          }
+        }
+        if (preset.roughness != null && 'roughness' in n) n.roughness = preset.roughness;
+        if (preset.metalness != null && 'metalness' in n) n.metalness = preset.metalness;
+        if (preset.emissive != null && n.emissive) {
+          n.emissive = new THREE.Color(preset.emissive);
+          if (preset.emissiveIntensity != null) n.emissiveIntensity = preset.emissiveIntensity;
+        }
+        n.needsUpdate = true;
+        return n;
+      });
+      o.material = Array.isArray(o.material) ? out : out[0];
     });
-    o.material = Array.isArray(o.material) ? out : out[0];
   });
+}
+
+function eachRootOf(root, fn) {
+  if (!root) return;
+  if (Array.isArray(root)) { for (const r of root) eachRootOf(r, fn); return; }
+  fn(root);
 }
 
 // 换态完成后的外挂（main.js 注入 → 重刷漫画描边等），避免 prizePool ↔ prizeComicFx 互相 import

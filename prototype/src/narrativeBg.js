@@ -132,7 +132,7 @@ export class NarrativeBg {
     if (!el) return;
     el.hidden = true;
     el.dataset.state = '';
-    el.style.opacity = '0';
+    el.style.opacity = '';
     if (this.photoImg) this.photoImg.removeAttribute('src');
     if (this.photoCap) this.photoCap.textContent = '';
   }
@@ -142,13 +142,13 @@ export class NarrativeBg {
     const el = this.photo;
     if (!el) return;
     if (!animate || el.hidden) { this._collapseFrame(); return; }
-    el.dataset.state = '';
-    el.style.opacity = '0';
-    setTimeout(() => { if (!el.dataset.state) this._collapseFrame(); }, 420);
+    // 收场也交给 animation（out），别用内联 opacity —— 动画的 fill 会盖住它
+    el.dataset.state = 'out';
+    setTimeout(() => { if (el.dataset.state === 'out') this._collapseFrame(); }, 520);
   }
 
   /**
-   * 相框式过场图。截图放在方框画幅里，像从记忆里抽出来的一张照片。
+   * 相框式过场图。截图放在方框画幅里，像从记忆里抽出来的一张旧照片。
    * @param {string} keyOrUrl
    * @param {number} dur 秒
    * @param {{ caption?: string, hold?: number, fadeIn?: number, fadeOut?: number }} [step]
@@ -161,29 +161,24 @@ export class NarrativeBg {
     if (!ok) { await sleep(dur * 1000); return; }
 
     const gen = ++this._photoGen;
-    const fadeIn = step.fadeIn ?? 0.5;
     const fadeOut = step.fadeOut ?? 0.55;
 
     this.photoImg.src = url;
     if (this.photoCap) this.photoCap.textContent = step.caption ?? '';
     this._placePhotoFrame();
     el.hidden = false;
-    el.dataset.state = 'in';
-    el.style.transition = `opacity ${fadeIn}s ease`;
-    el.style.opacity = '0';
-    await sleep(24);
+    el.style.opacity = '';
+    // 先落位（无动画），再下一帧换成 'in' 让 animation 从下缘推上来
+    el.dataset.state = '';
+    await sleep(20);
     if (gen !== this._photoGen) return;
-    el.style.opacity = '1';
-    // photoRise 动画负责"拿起来"那一下，播完交给常态
-    setTimeout(() => { if (gen === this._photoGen) el.dataset.state = 'settled'; }, 760);
+    el.dataset.state = 'in';
 
     await sleep(dur * 1000);
     if (gen !== this._photoGen) return;
 
-    el.dataset.state = '';
-    el.style.transition = `opacity ${fadeOut}s ease`;
-    el.style.opacity = '0';
-    await sleep(fadeOut * 1000);
+    el.dataset.state = 'out';
+    await sleep(Math.max(0.46, fadeOut) * 1000);
     if (gen !== this._photoGen) return;
     this._collapseFrame();
   }

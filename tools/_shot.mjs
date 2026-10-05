@@ -73,6 +73,14 @@ for (let i = 0; i < 400; i++) {
 }
 console.log('booted');
 
+const capture = async (file, tag) => {
+  const shot = await conn.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  mkdirSync(dirname(file), { recursive: true });
+  const bytes = Buffer.from(shot.data, 'base64');
+  writeFileSync(file, bytes);
+  console.log(`saved ${file} (${tag}) ${bytes.length} bytes`);
+};
+
 try {
   const res = await evaluate(`(async () => { ${pageScript} })()`);
   console.log('script ->', typeof res === 'string' ? res : JSON.stringify(res));
@@ -81,12 +89,17 @@ try {
 }
 
 await sleep(settleMs);
-const shot = await conn.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-mkdirSync(dirname(out), { recursive: true });
-const bytes = Buffer.from(shot.data, 'base64');
-writeFileSync(out, bytes);
-console.log('saved', out, bytes.length, 'bytes');
+await capture(out, 'final');
 console.log('errs', await evaluate('JSON.stringify((window.__errs ?? []).slice(0, 5))'));
+
+// 可选：脚本里如果定义了 __shots（[{fileName, tag, afterMs}]），按顺序再各截一张
+const extra = await evaluate('JSON.stringify(window.__shots ?? null)');
+if (extra && extra !== 'null') {
+  for (const s of JSON.parse(extra)) {
+    await sleep(s.afterMs ?? 500);
+    await capture(s.fileName, s.tag ?? '');
+  }
+}
 
 conn.close();
 chrome.kill();

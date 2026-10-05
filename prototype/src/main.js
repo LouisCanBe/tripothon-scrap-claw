@@ -894,32 +894,47 @@ function collectMachineParts() {
   if (clawRoot) clawParts.push(clawRoot);
   const decorGroup = world.getObjectByName('poolDecor');
   if (decorGroup) decor.push(decorGroup);
+  // 池里的东西也一起走：它们不是"机器的一部分"，但这一幕是"眼前的东西一层层没了"
+  const prizeItems = (items ?? []).map(it => it?.mesh).filter(Boolean);
 
-  return { deck, keep, clawParts, decor };
+  return { deck, keep, clawParts, decor, items: prizeItems };
 }
 
+const sleepMsLocal = (ms) => new Promise(r => setTimeout(r, ms));
+
 /**
- * 终幕：机器一个个构件化掉。
- * 不是整块世界淡出（那样等于"切视角"），而是壳先走、里子后走，
- * 最后只剩下底座、背板和池里那几件坏掉的东西 —— 东西还在，机器没了。
+ * 终幕：机器一个个构件化掉。**镜头不动**，只是眼前的东西一层层淡掉。
+ *   stage 'shell'：只走壳（顶盖 / 立柱 / 面板）—— 视野敞开，只剩一个台子
+ *   stage 'core' ：爪子 + 池底装饰 + 池里那几件东西
+ *   stage 'all'  ：整组收掉（交给实景）
+ * 每一项都用"淡水"的时长，慢、不要有元素感。
  */
-function fadeMachineToNothing(dur = 3.6) {
-  const { deck, clawParts, decor } = collectMachineParts();
-  const hideWhenDone = (parts) => () => { for (const p of parts) p.visible = false; };
-  if (!deck.length && !clawParts.length && !decor.length) {
-    // 认不出构件（换了壳的命名）就退回整组淡出
-    return modelFade.out(world, { dur: dur + 0.6 });
+function fadeMachineStage(stage = 'shell', dur = 2.6) {
+  const { deck, clawParts, decor, items: prizeItems } = collectMachineParts();
+  const hideWhenDone = (parts) => () => { for (const p of parts) { if (p) p.visible = false; } };
+
+  if (stage === 'all') {
+    return modelFade.sequence([
+      { parts: [world], dur },
+    ]);
   }
-  const span = Math.max(0.4, dur) / 2.6;
+
+  if (stage === 'shell') {
+    if (!deck.length) return sleepMsLocal(dur * 1000);
+    return modelFade.sequence([
+      { parts: deck, dur, done: hideWhenDone(deck) },
+    ]);
+  }
+
+  // core：爪子和东西一起走。台子（底座/背板/池底/洞口）留到最后由 'all' 收。
+  const rest = [...clawParts, ...decor, ...prizeItems];
+  if (!rest.length) return sleepMsLocal(dur * 1000);
   return modelFade.sequence([
-    // 1. 壳：立柱 / 顶盖 / 面板先化掉 —— 视野一下子敞开了
-    { parts: deck, dur: span, done: hideWhenDone(deck) },
-    // 2. 里子：爪子和池底装饰跟着走
-    { parts: [...clawParts, ...decor], dur: span, gap: 0.25 },
+    { parts: rest, dur, done: hideWhenDone(rest) },
   ]);
 }
 
-// —— 终幕俯拍扫过奖池（"扫过腐败食物模型"这一拍）——
+// —— 终幕俯拍扫过奖池（备用机位；终幕现在不用它，镜头全程不动）——
 // 机位固定写成常量：同一条轨迹每次都能复现，方便和美术对图。
 // 机器内腔：X ±1.45 / Z ±1.02 / 池底 y=0，奖池逻辑边界 X ±1.30 / Z ±0.85，
 // 所以 look 一律落在池面内，不要跑到机器背后的空处去。
@@ -981,14 +996,16 @@ function cancelPoolScan() {
 // 这一拍要看的是"东西还是那些东西"，全黑就等于什么都没说。
 function applyRotLighting() {
   applyMemoryLighting({ key, fill, glow, hemi, ambient });
-  ambient.intensity *= 0.5;      // 主要靠环境残光，硬光全收掉
-  hemi.intensity *= 0.3;
-  key.intensity *= 0.12;
-  key.color.set(0x9fb0bd);
-  fill.intensity *= 0.1;
-  fill.color.set(0x7d8b96);
+  // 灯灭了，但东西要看得清 —— 这几个系数是"看得出贴图"和"不像没灭灯"的平衡点，
+  // 往低调会先丢掉的是霉斑和锈迹（那正是这几件模型的信息量）。
+  ambient.intensity *= 0.8;
+  hemi.intensity *= 0.52;
+  key.intensity *= 0.34;
+  key.color.set(0xa8b8c4);
+  fill.intensity *= 0.26;
+  fill.color.set(0x8b9aa6);
   glow.visible = false;
-  scene.environmentIntensity = (CONFIG.render.envIntensity ?? 1) * 0.55;
+  scene.environmentIntensity = (CONFIG.render.envIntensity ?? 1) * 0.85;
 }
 
 function restoreMemoryLighting() {
@@ -1241,12 +1258,7 @@ director = new Director({
     onReveal,
     onRevealTransition,
     onLightsCold: onRevealColdLighting,
-    onFadeMemoryMachine: (step) => {
-      // 构件逐个消失（见 fadeMachineToNothing）；dur 由剧本给
-      const dur = step?.dur ?? 3.6;
-      if (step?.mode === 'all') return modelFade.out(world, { dur });
-      return fadeMachineToNothing(dur);
-    },
+    onFadeMemoryMachine: (step) => fadeMachineStage(step?.stage ?? 'shell', step?.dur ?? 2.6),
     // 终幕"扫过腐败食物模型"：镜头交给专门的俯拍机位，按 dur 扫过奖池。
     // restore=false 时留在结束位置（交给后面的 fadeGhost / reveal 接住）。
     onPoolScan: (opts) => poolScanBeat(opts),    onPoolScanCancel: () => cancelPoolScan(),
@@ -1580,9 +1592,48 @@ window.__debug = {
   machineParts: () => {
     const p = collectMachineParts();
     const n = (a) => a.map(o => o.name || o.type);
-    return { deck: n(p.deck), keep: n(p.keep), claw: n(p.clawParts), decor: n(p.decor) };
+    return { deck: n(p.deck), keep: n(p.keep), claw: n(p.clawParts), decor: n(p.decor), items: p.items.length };
   },
-  fadeMachineToNothing,
+  /** 控制台/自动化：手动跑一段构件消失（'shell' | 'core' | 'all'） */
+  fadeMachineStage,
+  /** 控制台/自动化：把相机瞬间对到某个观察位（调试截图用，不等阻尼） */
+  snapCamera: (view = 'front', zoom = 1) => {
+    rig.setScan(null);
+    rig.setView(view);
+    rig.setZoom(zoom);
+    rig.setUserZoom(1);
+    for (let i = 0; i < 240; i++) rig.update(1 / 60, i / 60);
+    return [rig.pos.x, rig.pos.y, rig.pos.z].map(v => +v.toFixed(2));
+  },
+  /** 控制台/自动化：每件物资这一刻到底装的是哪个模型、有没有贴图、材质是什么颜色 */
+  visualReport: () => items.map((it) => {
+    const mats = [];
+    it.mesh?.traverse?.((o) => {
+      if (!o.isMesh || !o.material) return;
+      const list = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of list) {
+        mats.push({
+          name: m.name || '',
+          hasMap: !!m.map,
+          mapSize: m.map?.image?.width ? `${m.map.image.width}x${m.map.image.height}` : null,
+          color: m.color ? '#' + m.color.getHexString() : null,
+          emissive: m.emissive ? '#' + m.emissive.getHexString() : null,
+          roughness: m.roughness,
+        });
+      }
+    });
+    const box = new THREE.Box3().setFromObject(it.mesh);
+    return {
+      id: it.id,
+      appearance: it.appearance,
+      visualUrl: (it.visualUrl || '').split('/').pop() || null,
+      visible: !!it.mesh?.visible,
+      y: +it.mesh?.position?.y?.toFixed(3),
+      size: box.getSize(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)),
+      matCount: mats.length,
+      mats: mats.slice(0, 2),
+    };
+  }),
   /** 控制台/自动化：把奖池整体切到某一态（'manifest' | 'rot'），等价于幕间换货那一下 */
   setPoolAppearance: (appearance) => setPoolAppearance(items, appearance, { renderer, camera, parent: world, animate: false }),
   /** 控制台/自动化：看这一刻整池的显示态分布 */

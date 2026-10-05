@@ -19,8 +19,9 @@
 //     { pause, dur }          留白，dur 秒
 //     { wait: 事件名 }         等待事件：firstView / allViews / firstCollect / questComplete / cinemaWidened
 //     { synthesis }           四幕合成演出
-//     { poolScan, dur, restore? } 俯拍扫过奖池（终幕"扫过腐败食物模型"这一拍）
+//     { poolScan, dur, restore?, preset? } 俯拍扫过奖池（备用机位，终幕已经不用了）
 //     { fadeGhost, dur, hold? } 把世界淡成一层淡影（不是消失）
+//     { fadeMachine, dur, stage } stage: 'shell'（只走壳）| 'core'（爪子+装饰+池里的东西）| 'all'（整组）
 //     { restore }             把镜头交还给三观察位（扫视角收尾）
 //     { glitch, image? }      终幕故障转场；省略 image 则仅音画故障/黑场，不叠概念图
 //     { interstitial, image, dur?, fadeIn?, fadeOut?, dipBefore?, dipAfter? }
@@ -104,9 +105,8 @@ export const ACTS = [
     pity: { streak: 2, gripStep: 0.08, slipStep: 0.06, forceAfterSeconds: 90 },
     quest: ['bread', 'can', 'veg'],
     questCount: QUEST_COUNT,
-    // 配额按形状记账：败露态那三个 id 也算进对应那一格
-    // （bread-rot↔bread、can-rot↔can、veg-rot↔veg 是同 collider，抓取判定本来就是同一个）
-    questAlias: { 'bread-rot': 'bread', 'can-rot': 'can', 'veg-rot': 'veg' },
+    // 配额按形状记账：一件东西只有一条表项，败露态是它的另一副面孔（同一个 id），
+    // 所以不需要别名表 —— 抓到就是那一格。
     restockPool: true,   // 第二幕抓走的那件补回池里
     questCopy: {
       right: { bread: '面包，入账。', can: '罐头。', veg: '青菜。' },
@@ -169,8 +169,8 @@ export const ACTS = [
     hint: null,
     script: [
       { type: 'glitch' },
-      // 俯拍扫过奖池：同一块地，东西全是坏的。他一件一件念名字，不念他看见的。
-      { type: 'poolScan', dur: 6.0 },
+      // 换货 + 消失全都发生在原地：**镜头一次都不动**。
+      // 他还在用刚才那副视角看着同一个柜子，只是柜子在化、东西在变。
       { type: 'sub', text: '……灯怎么灭了。', dur: 3.0 },
       { type: 'pause', dur: 0.6 },
       { type: 'sub', text: '面包。罐头。青菜。', dur: 3.4 },
@@ -179,20 +179,17 @@ export const ACTS = [
       { type: 'pause', dur: 1.0 },
       // 把"谎言"直接说成"条件"——他不是不知道
       { type: 'sub', text: '只要灯亮着就行。', dur: 3.2 },
-      { type: 'pause', dur: 2.0 },   // 这 2 秒是留给观众的
-      // 机器一个个构件化掉：壳先走，爪子和池底装饰后走，
-      // 最后只剩底座、背板，和池里那几件坏掉的东西 —— 东西还在，机器没了。
-      { type: 'fadeMachine', dur: 3.8, mode: 'parts' },
+      { type: 'pause', dur: 1.4 },
+      // 先走壳：顶盖 / 立柱 / 面板。视野一下子敞开，只剩一个台子。
+      { type: 'fadeMachine', dur: 2.6, stage: 'shell' },
+      { type: 'pause', dur: 0.5 },
+      // 再走里子：爪子 + 池底装饰 + 池里那几件东西。台子留到最后。
+      { type: 'fadeMachine', dur: 4.0, stage: 'core' },
       { type: 'pause', dur: 0.8 },
-      // 补一个更近的低机位，把地上那几件腐败模型看清楚
-      { type: 'poolScan', dur: 4.5, restore: false, preset: 'floor' },
-      { type: 'restore' },   // 把镜头交还给三观察位（后面交给 reveal 的环视）
-      // 腐败食物模型淡成一层淡影，停在那儿，然后才收
-      { type: 'fadeGhost', dur: 3.4, hold: 0.14 },
       { type: 'revealBeat', dur: 3.4, line: '手心里只有一罐。' },
-      // 记忆里的机器先消失，破碎房间单独露出来，再进入房间本身的溶解。dir:'in' 可反向出现。
-      { type: 'fadeMachine', dur: 2.6 },
-      { type: 'pause', dur: 1.2 },
+      // 记忆里的机器消失，破碎房间单独露出来
+      { type: 'fadeMachine', dur: 2.2, stage: 'all' },
+      { type: 'pause', dur: 1.0 },
       { type: 'reveal' },
       { type: 'wait', event: 'cinemaWidened' },
       { type: 'pause', dur: 1.5 },
