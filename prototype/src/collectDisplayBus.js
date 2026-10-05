@@ -1,6 +1,6 @@
 // 出货展示屏联动：同机 BC + 跨设备 SSE（devServer /api/collect/*）
 import { CONFIG } from './config.js';
-import { prizeGlbUrlFor } from './glbManifest.js';
+import { prizeGlbUrlFor, prizeTruthGlbUrl } from './glbManifest.js';
 import { poolVisualScale } from './prizePool.js';
 import { resolveBounceMaterial } from './collectBouncePresets.js';
 import { DEFAULT_COLLECT_PAIR } from './collectPairDefault.js';
@@ -99,8 +99,10 @@ export function itemToPrizePayload(item) {
     visualScale: poolVisualScale(),
     bounceMaterial: resolveBounceMaterial(item),
   };
-  // 真相只在真的不同的时候才带上，留给后续的"揭晓"交互；默认文案不用它
+  // 真相只在真的不同的时候才带上，留给副屏的"揭晓"交互；默认文案不用它
   if (item.truthName && item.truthName !== item.name) prize.truthName = item.truthName;
+  const truthUrl = prizeTruthGlbUrl(item);
+  if (truthUrl) prize.truthGlbUrl = truthUrl;
   return prize;
 }
 

@@ -285,64 +285,78 @@ ok('没有物品被永久缩小（终态缩放都回到 1）',
 // 终幕镜头全程不动（设计上不再有切视角 / 扫视）
 const camAtStart = JSON.parse(await evaluate('JSON.stringify([__debug.rig.pos.x,__debug.rig.pos.y,__debug.rig.pos.z])'));
 
-// 机器逐个构件消失：壳走了 -> 底座/背板还在、坏掉的东西还看得见 -> 再走 core
-const SHELL_PROBE = `(() => {
-  const shell = __debug.world.getObjectByName('machineShell');
-  let vis = [], hid = [];
-  shell?.traverse?.(o => {
-    if (!o.isMesh) return;
-    const n = o.name || (o.parent && o.parent.name) || '?';
-    (o.visible ? vis : hid).push(n);
-  });
+// 溶解曲线：壳先淡 → 爪子和装饰跟上 → 台子收尾，东西最后走。
+// 采样各区域的最小不透明度，盯两件事：
+//   1. 全程 visible 都是 true（**不许 hide** —— 淡到一半硬切正是要避免的）
+//   2. 曲线是错开的：壳先到 0，东西后到 0
+const curveProbe = `(() => {
+  const pick = (res) => {
+    const out = [];
+    __debug.world.traverse(o => {
+      if (!o.isMesh) return;
+      const chain = [];
+      let p = o;
+      for (let i = 0; i < 6 && p; i++) { if (p.name) chain.push(p.name); p = p.parent; }
+      const nm = chain.join('/');
+      if (res.some(re => re.test(nm))) out.push(o);
+    });
+    return out;
+  };
+  const minOp = (roots) => {
+    let m = 1, any = false;
+    for (const r of roots) {
+      r.traverse(o => {
+        if (!o.isMesh || !o.material) return;
+        const list = Array.isArray(o.material) ? o.material : [o.material];
+        for (const mm of list) { if (mm) { any = true; m = Math.min(m, mm.opacity); } }
+      });
+    }
+    return any ? +m.toFixed(3) : null;
+  };
+  const shell = pick([/machine_(top|panel|frame|post)|EXPORT_machine_(top|panel|frame|post)/i]);
+  const base = pick([/machine_(base|back|floor|hole)|EXPORT_machine_(base|back|hole)/i]);
+  const its = __debug.items.map(i => i.mesh);
   return JSON.stringify({
-    visible: [...new Set(vis)].sort(),
-    hidden: [...new Set(hid)].sort(),
-    itemsVisible: __debug.items.filter(i => i.mesh.visible).length,
-    totalItems: __debug.items.length,
-    scanActive: !!__debug.rig.scan,
+    shell: minOp(shell), base: minOp(base), items: minOp(its),
+    shellVis: shell.every(o => o.visible),
+    itemsVis: its.filter(m => m.visible).length,
+    active: __debug.modelFade.active,
   });
 })()`;
 
-let dissolved = null;
-for (let i = 0; i < 220; i++) {
-  const p = JSON.parse(await evaluate(SHELL_PROBE));
-  if (p.hidden.some(n => /top|frame|panel/i.test(n))) { dissolved = p; break; }
-  await sleep(800);
+await sleep(2000);
+let sawStagger = null;      // 抓到"壳已淡完、东西还在"的那一帧
+let allZero = null;         // 抓到全透明
+let visAlwaysTrue = true;
+for (let i = 0; i < 260; i++) {
+  const p = JSON.parse(await evaluate(curveProbe));
+  if (!p.shellVis || p.itemsVis !== 8) visAlwaysTrue = false;
+  if (!sawStagger && p.shell === 0 && p.items != null && p.items > 0.3) sawStagger = p;
+  if (!allZero && p.shell === 0 && p.base === 0 && p.items === 0 && !p.active) { allZero = p; break; }
+  await sleep(400);
 }
-console.log('   壳消失时:', JSON.stringify(dissolved));
-ok('壳的构件（顶盖/立柱/面板）真的消失了', !!dissolved, JSON.stringify(dissolved ?? {}));
-ok('底座 / 背板还留着（不是整台机器一起没了）',
-  !!dissolved && dissolved.visible.some(n => /base|back/i.test(n)), JSON.stringify(dissolved?.visible ?? []));
-ok('壳先走、东西后走（壳没了的那一刻，坏掉的东西还看得见）',
-  !!dissolved && dissolved.itemsVisible >= 6, JSON.stringify(dissolved ?? {}));
-
-let cleared = null;
-for (let i = 0; i < 140; i++) {
-  const p = JSON.parse(await evaluate(SHELL_PROBE));
-  if (p.itemsVisible === 0) { cleared = p; break; }
-  await sleep(800);
-}
-console.log('   core 走完:', JSON.stringify(cleared));
-ok('第二段把爪子和池里的东西也收掉了', !!cleared && cleared.itemsVisible === 0, JSON.stringify(cleared ?? {}));
-
-const camAtEnd = JSON.parse(await evaluate('JSON.stringify([__debug.rig.pos.x,__debug.rig.pos.y,__debug.rig.pos.z])'));
-const camDrift = Math.hypot(camAtEnd[0] - camAtStart[0], camAtEnd[1] - camAtStart[1], camAtEnd[2] - camAtStart[2]);
-console.log('   镜头位移:', camDrift.toFixed(3), JSON.stringify({ camAtStart, camAtEnd }));
-ok('终幕镜头全程不动（没有切视角、没有扫视）',
-  camDrift < 0.6 && camAtEnd[0] === camAtStart[0], 'drift=' + camDrift.toFixed(3));
+console.log('   错开采样:', JSON.stringify(sawStagger), ' 全透明:', JSON.stringify(allZero));
+ok('溶解是错开的：壳先淡完时，池里的东西还看得见', !!sawStagger, JSON.stringify(sawStagger ?? {}));
+ok('最终整幅淡到全透明（画面自然溶解，不是硬切）', !!allZero, JSON.stringify(allZero ?? {}));
+ok('全程没有任何构件被隐藏（visible 一直是 true）', visAlwaysTrue);
 
 const lights = JSON.parse(await evaluate(`JSON.stringify({
   ambient: __debug.CONFIG.lights.ambient.intensity,
   ambientNow: __debug.lights.ambient.intensity,
   keyBase: __debug.CONFIG.lights.key.intensity,
   keyNow: __debug.lights.key.intensity,
-  env: __debug.scene.environmentIntensity,
 })`));
 console.log('   灯光:', JSON.stringify(lights));
 ok('灯灭了但留了残光（既变暗、又没到黑）',
   lights.ambientNow < lights.ambient && lights.ambientNow > lights.ambient * 0.5
   && lights.keyNow < lights.keyBase && lights.keyNow > lights.keyBase * 0.2,
   JSON.stringify(lights));
+
+const camAtEnd = JSON.parse(await evaluate('JSON.stringify([__debug.rig.pos.x,__debug.rig.pos.y,__debug.rig.pos.z])'));
+const camDrift = Math.hypot(camAtEnd[0] - camAtStart[0], camAtEnd[1] - camAtStart[1], camAtEnd[2] - camAtStart[2]);
+console.log('   镜头位移:', camDrift.toFixed(3));
+ok('终幕镜头全程不动（没有切视角、没有扫视）',
+  camDrift < 0.6 && camAtEnd[0] === camAtStart[0], 'drift=' + camDrift.toFixed(3));
 
 await sleep(30000);
 const fin = JSON.parse(await evaluate(`JSON.stringify({

@@ -60,5 +60,17 @@ for (const def of PRIZE_TABLE.filter(d => !d.disabled)) {
 }
 const covered = questIds.every(s => PRIZE_TABLE.some(d => !d.disabled && slotOf(d.id) === s));
 console.log(`\n三个配额格是否都可达成：${covered ? '是' : '否 ← BUG'}`);
+
+// 两态资产盘点：哪些是"真的换了一套模型"，哪些只是调材质
+console.log('\n两态资产盘点（真正换模型的才算一套对比）：');
+let paired = 0;
+for (const def of PRIZE_TABLE.filter(d => !d.disabled)) {
+  const to = def.variants?.rot?.to ?? null;
+  const manifestKey = def.variants?.manifest?.glb ?? def.id;
+  const distinct = !!to && to !== manifestKey;
+  if (distinct) paired++;
+  console.log(`  ${def.id.padEnd(10)} ${distinct ? `成套：${manifestKey}.glb ↔ ${to}.glb` : `只调材质：${manifestKey}.glb（没有独立败露模型）`}`);
+}
+console.log(`\n真正成套的物品：${paired} / ${PRIZE_TABLE.filter(d => !d.disabled).length}`);
 console.log(bad ? `\n${bad} 处解析失败` : '\n全部解析通过');
 process.exit(bad || !covered ? 1 : 0);

@@ -21,7 +21,9 @@
 //     { synthesis }           四幕合成演出
 //     { poolScan, dur, restore?, preset? } 俯拍扫过奖池（备用机位，终幕已经不用了）
 //     { fadeGhost, dur, hold? } 把世界淡成一层淡影（不是消失）
-//     { fadeMachine, dur, stage } stage: 'shell'（只走壳）| 'core'（爪子+装饰+池里的东西）| 'all'（整组）
+//     { fadeMachine, dur, stage } stage: 'all'（默认，整机三段交叠溶解：壳→东西→台子）
+//                                        | 'shell'（只走壳）| 'core'（爪子+装饰+池里的东西）
+//                                直到全透明为止，**不隐藏**：画面随后被 reveal 的过渡接走
 //     { restore }             把镜头交还给三观察位（扫视角收尾）
 //     { glitch, image? }      终幕故障转场；省略 image 则仅音画故障/黑场，不叠概念图
 //     { interstitial, image, dur?, fadeIn?, fadeOut?, dipBefore?, dipAfter? }
@@ -180,16 +182,11 @@ export const ACTS = [
       // 把"谎言"直接说成"条件"——他不是不知道
       { type: 'sub', text: '只要灯亮着就行。', dur: 3.2 },
       { type: 'pause', dur: 1.4 },
-      // 先走壳：顶盖 / 立柱 / 面板。视野一下子敞开，只剩一个台子。
-      { type: 'fadeMachine', dur: 2.6, stage: 'shell' },
-      { type: 'pause', dur: 0.5 },
-      // 再走里子：爪子 + 池底装饰 + 池里那几件东西。台子留到最后。
-      { type: 'fadeMachine', dur: 4.0, stage: 'core' },
-      { type: 'pause', dur: 0.8 },
+      // 整机溶解：壳先淡 → 爪子/装饰跟上 → 台子收尾，池里那几件东西**最后才走**。
+      // 一路淡到全透明，画面自然溶解进后面的实景 —— 不是淡完就隐藏，也没有切视角。
+      { type: 'fadeMachine', dur: 9.5, stage: 'all' },
+      { type: 'pause', dur: 0.4 },
       { type: 'revealBeat', dur: 3.4, line: '手心里只有一罐。' },
-      // 记忆里的机器消失，破碎房间单独露出来
-      { type: 'fadeMachine', dur: 2.2, stage: 'all' },
-      { type: 'pause', dur: 1.0 },
       { type: 'reveal' },
       { type: 'wait', event: 'cinemaWidened' },
       { type: 'pause', dur: 1.5 },

@@ -259,6 +259,7 @@ export class Director {
   }
 
   async #run(act, gen) {
+    if (this.scriptDisabled) return;   // 调试/自动化：只进幕，不跑剧本
     for (const step of act.script) {
       if (this._skip || gen !== this._runGen) return;
       switch (step.type) {

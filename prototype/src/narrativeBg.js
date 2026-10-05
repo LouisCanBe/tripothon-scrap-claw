@@ -153,6 +153,29 @@ export class NarrativeBg {
    * @param {number} dur 秒
    * @param {{ caption?: string, hold?: number, fadeIn?: number, fadeOut?: number }} [step]
    */
+  /** 每次出场重新掷一遍相纸的污渍位置 —— 不要每张照片都长在同一个地方 */
+  _randomizePaper() {
+    const card = document.getElementById('narrativePhotoCard');
+    if (!card) return;
+    const R = (a, b) => Math.round(a + Math.random() * (b - a));
+
+    // 五团污渍：整体挪几像素，位置就从"永远在左上角"变成每次都不一样
+    for (let i = 0; i < 5; i++) {
+      card.style.setProperty(`--st${i}x`, `${R(-10, 10)}px`);
+      card.style.setProperty(`--st${i}y`, `${R(-8, 8)}px`);
+    }
+
+    // 再撒几粒独立的灰点/亮点
+    const dots = (count, rgb) => Array.from({ length: count }, () => {
+      const x = R(3, 97);
+      const y = R(3, 97);
+      const a = (0.18 + Math.random() * 0.35).toFixed(2);
+      return `radial-gradient(circle at ${x}% ${y}%, ${rgb}${a}) 0 0.9px, transparent 1.2px)`;
+    }).join(', ');
+    card.style.setProperty('--speck-a', dots(3, 'rgba(92,72,44,'));
+    card.style.setProperty('--speck-b', dots(2, 'rgba(255,250,232,'));
+  }
+
   async showFrame(keyOrUrl, dur = 3, step = {}) {
     const url = narrativeSrc(keyOrUrl) ?? keyOrUrl;
     const el = this.photo;
@@ -165,6 +188,7 @@ export class NarrativeBg {
 
     this.photoImg.src = url;
     if (this.photoCap) this.photoCap.textContent = step.caption ?? '';
+    this._randomizePaper();
     this._placePhotoFrame();
     el.hidden = false;
     el.style.opacity = '';

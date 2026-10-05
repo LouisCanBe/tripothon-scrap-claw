@@ -50,6 +50,46 @@
       opacity: 0.85;
     }
     #cta[hidden] { display: none; }
+    /* 「揭晓」：把展台上的东西换成它真实的样子。
+       这是副屏唯一的交互 —— 主屏演的是"他以为的"，这里让观众亲手翻面。 */
+    #revealBtn {
+      margin-top: 0.6rem;
+      margin-left: 0.5rem;
+      padding: 0.65rem 1.2rem;
+      border: 1px solid rgba(240,196,25,.55);
+      border-radius: 6px;
+      background: rgba(240,196,25,.08);
+      color: #f0c419;
+      font: inherit;
+      font-size: 0.9rem;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      transition: background .2s ease, color .2s ease, border-color .2s ease, opacity .2s ease;
+    }
+    #revealBtn:hover { background: rgba(240,196,25,.18); }
+    #revealBtn[hidden] { display: none; }
+    #revealBtn.revealed { color: #c8bda6; border-color: rgba(200,189,166,.4); background: transparent; }
+    /* 揭晓瞬间：画面压一下暗，再亮起真相 */
+    #stage.reveal-flash::after {
+      content: '';
+      position: absolute; inset: 0; pointer-events: none;
+      background: #0a0a0c;
+      animation: revealFlash 900ms ease both;
+      z-index: 5;
+    }
+    @keyframes revealFlash {
+      0%   { opacity: 0; }
+      22%  { opacity: 1; }
+      55%  { opacity: 0.9; }
+      100% { opacity: 0; }
+    }
+    #prizeName.flip { animation: nameFlip 900ms ease both; }
+    @keyframes nameFlip {
+      0%   { opacity: 1; }
+      22%  { opacity: 0; }
+      55%  { opacity: 0; }
+      100% { opacity: 1; }
+    }
   </style>
   <script type="importmap">
   {
@@ -70,7 +110,10 @@
   <footer>
     <div id="link">同步：—</div>
     <div id="status">先开主游戏或先开本页均可；配对一致即可联动出货</div>
-    <div id="cta" hidden data-slot="promo">营销位预留 · 可按 prizeId 接文案/链接/视频</div>
+    <div id="ctaRow">
+      <button id="revealBtn" type="button" hidden>揭 晓</button>
+      <span id="cta" hidden data-slot="promo">营销位预留 · 可按 prizeId 接文案/链接/视频</span>
+    </div>
   </footer>
   <script type="module" src="./src/displayMain.js"></script>
 </body>

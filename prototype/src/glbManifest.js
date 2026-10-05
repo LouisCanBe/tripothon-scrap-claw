@@ -62,3 +62,17 @@ export function prizeGlbUrlFor(item, appearance = null) {
   const key = item.variants?.manifest?.glb ?? item.id;
   return getGlbManifest()[key] ?? prizeGlbUrl(item.id);
 }
+
+/**
+ * 败露态的模型路径：副屏"揭晓"按钮用它换模型。
+ * 只有当败露态确实**换了一套模型**时才返回（只调材质的那几件返回 null，
+ * 因为副屏拿不到那套材质覆盖，硬换会得到一个"假的"结果）。
+ */
+export function prizeTruthGlbUrl(item) {
+  if (!item) return null;
+  const to = item.variants?.rot?.to;
+  if (!to) return null;
+  const manifestKey = item.variants?.manifest?.glb ?? item.id;
+  if (to === manifestKey) return null;   // 同一个模型，只是换材质 —— 揭晓不适用
+  return getGlbManifest()[to] ?? null;
+}

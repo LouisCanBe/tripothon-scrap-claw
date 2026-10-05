@@ -28,6 +28,14 @@ const frameReady = new Set();
 const stage = document.getElementById('stage');
 const elName = document.getElementById('prizeName');
 const elMeta = document.getElementById('prizeMeta');
+const elStage = document.getElementById('stage');
+const elRevealBtn = document.getElementById('revealBtn');
+let currentPrize = null;
+
+elRevealBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+  toggleReveal();
+});
 const elStatus = document.getElementById('status');
 const elLink = document.getElementById('link');
 const elCta = document.getElementById('cta');
@@ -376,12 +384,17 @@ function disposeObject3D(obj) {
 
 /**
  * 副屏的说明行。口径（剧情设计-拾荒娃娃机.md 第六节）：
- * 副屏展出的是**他以为他拿到了什么**，所以只显示 prize.name 与它在这一幕的身份，
- * **不显示真相** —— 主屏已经演过败露态，这里越郑重，落差越成立。
- * payload 里的 truthName 留给后续的"揭晓"交互（`#cta[data-prize-id]`），不做默认文案。
+ * 默认展出的是**他以为他拿到了什么**，所以只显示 prize.name；
+ * 点了「揭晓」之后才翻面说实话（truth=true）—— 那是观众自己动手翻的。
+ * payload 里的 truthName 就是给这个按钮用的。
  */
-function displayMetaLine(prize) {
+function displayMetaLine(prize, { truth = false } = {}) {
   const kind = prize.category === 'food' ? '食物' : '杂物';
+  if (truth) {
+    const parts = [kind, '败露态'];
+    if (prize.quest) parts.push('任务物');
+    return parts.join(' · ');
+  }
   const face = prize.sourceAppearance === 'rot' ? '败露态' : '显形态';
   const parts = [kind, face];
   if (prize.quest) parts.push('任务物');
@@ -391,6 +404,8 @@ function displayMetaLine(prize) {
 function clearStage() {
   entrance = null;
   spinGroup = null;
+  prizeContent = null;
+  resetReveal();
   displaySpinRate = 0;
   for (const child of stageRoot.children) disposeObject3D(child);
   stageRoot.clear();
@@ -417,17 +432,22 @@ function fitObject(obj, targetSize = 1.1, centerY = null) {
 }
 
 function preloadGlb(prize) {
-  if (!prize?.glbUrl || glbCache.has(prize.id)) return;
-  glbCache.set(
-    prize.id,
-    new GLTFLoader().loadAsync(prize.glbUrl).then((g) => g.scene),
-  );
+  if (!prize?.glbUrl) return;
+  if (!glbCache.has(prize.id)) {
+    glbCache.set(prize.id, new GLTFLoader().loadAsync(prize.glbUrl).then((g) => g.scene));
+  }
+  // 真相模型也预热一次：揭晓那一下要立刻出，不能等下载
+  const truthKey = `${prize.id}#truth`;
+  if (prize.truthGlbUrl && !glbCache.has(truthKey)) {
+    glbCache.set(truthKey, new GLTFLoader().loadAsync(prize.truthGlbUrl).then((g) => g.scene));
+  }
 }
 
-async function loadPrizeScene(prize) {
-  if (!prize?.glbUrl) return null;
+async function loadPrizeScene(prize, { truth = false } = {}) {
+  const url = truth ? prize?.truthGlbUrl : prize?.glbUrl;
+  if (!url) return null;
   preloadGlb(prize);
-  const p = glbCache.get(prize.id);
+  const p = glbCache.get(truth ? `${prize.id}#truth` : prize.id);
   if (!p) return null;
   const scene = await p;
   return scene.clone(true);
@@ -479,12 +499,85 @@ function mountPrizeVisual(model, prize) {
   lift.add(tumble);
   spinGroup.add(lift);
   stageRoot.add(spinGroup);
+  // 揭晓时换掉的只是 tumble 里那个 model
+  prizeContent = tumble;
 
   if (FRAME) lightenFrameMaterials(model);
   else if (entCfg.comicFx !== false) {
     applyComicStyle(model, true, { outline: entCfg.outline ?? 0.022 });
   }
   entrance = createCollectEntrance(lift, tumble, prize);
+}
+
+// ---------------- 揭晓：把展台上的东西翻成它真实的样子 ----------------
+// 主屏演的是"他以为的"（显形态），副屏让观众亲手翻面 ——
+// 这是副屏唯一的交互，也是整个 demo 通向完整产品的那一步。
+
+let prizeContent = null;    // 当前奖品的挂载点（tumble）
+let revealed = false;
+
+function resetReveal() {
+  revealed = false;
+  if (!elRevealBtn) return;
+  elRevealBtn.hidden = true;
+  elRevealBtn.classList.remove('revealed');
+  elRevealBtn.textContent = '揭 晓';
+}
+
+function setupReveal(prize) {
+  if (!elRevealBtn) return;
+  // 只有"败露态确实换了另一套模型"的才给揭晓按钮；
+  // 只调材质的那几件，副屏拿不到那套覆盖，硬翻会得到一个假结果。
+  const can = !!prize?.truthGlbUrl;
+  elRevealBtn.hidden = !can;
+  elRevealBtn.dataset.prizeId = prize?.id ?? '';
+  elRevealBtn.classList.remove('revealed');
+  elRevealBtn.textContent = '揭 晓';
+  if (can) elRevealBtn.dataset.truth = prize.truthName ?? '';
+  void prize;
+}
+
+async function toggleReveal() {
+  const prize = currentPrize;
+  if (!prize?.truthGlbUrl || !prizeContent) return;
+  const gen = showGeneration;
+  const wantTruth = !revealed;
+  elRevealBtn.disabled = true;
+  elStage?.classList.add('reveal-flash');
+  elName?.classList.add('flip');
+  try {
+    const model = await loadPrizeScene(prize, { truth: wantTruth });
+    if (gen !== showGeneration) { if (model) disposeObject3D(model); return; }
+    if (!model) return;
+    // 换模型：保持同样的归一化尺寸，摆位与旋转交给现有的一组 Group
+    const targetSize = FRAME ? frameTargetSize() : 1.15 * (prize.visualScale ?? 1) * 0.4;
+    fitObject(model, targetSize, FRAME ? camera.position.y : null);
+    if (FRAME) lightenFrameMaterials(model);
+    else if (getEntranceConfig().comicFx !== false) {
+      applyComicStyle(model, true, { outline: getEntranceConfig().outline ?? 0.022 });
+    }
+    for (const child of [...prizeContent.children]) {
+      prizeContent.remove(child);
+      disposeObject3D(child);
+    }
+    prizeContent.add(model);
+    revealed = wantTruth;
+    // 文案翻面：标题用败露态那个名字（副屏终于说实话了）
+    elName.textContent = (wantTruth ? (prize.truthName ?? prize.name) : prize.name) ?? prize.id;
+    elMeta.textContent = displayMetaLine(prize, { truth: wantTruth });
+    elRevealBtn.classList.toggle('revealed', wantTruth);
+    elRevealBtn.textContent = wantTruth ? '放 回 去' : '揭 晓';
+    elCta.hidden = !wantTruth;   // 翻面之后才给动销位
+    if (wantTruth) elCta.dataset.prizeId = prize.id ?? '';
+  } catch (e) {
+    console.warn('[reveal]', e);
+  } finally {
+    elRevealBtn.disabled = false;
+    setTimeout(() => {
+      elStage?.classList.remove('reveal-flash');
+      elName?.classList.remove('flip');
+    }, 950);
+  }
 }
 
 async function showPrize(prize, { fromDropHint = false } = {}) {
@@ -502,10 +595,13 @@ async function showPrize(prize, { fromDropHint = false } = {}) {
 
   elName.textContent = prize.name ?? prize.id ?? '—';
   elMeta.textContent = displayMetaLine(prize);
-  elCta.hidden = false;
+  elCta.hidden = true;              // 动销位等"揭晓"之后再给
   elCta.dataset.prizeId = prize.id ?? '';
 
   clearStage();
+  // 注意顺序：clearStage 里会 resetReveal()，所以揭晓按钮必须在那之后再设
+  currentPrize = prize;
+  setupReveal(prize);
   elStatus.textContent = cached?.drop?.length
     ? '读取缓存…'
     : (fromDropHint ? '出货中 · 准备展示…' : '加载模型…');
@@ -775,11 +871,15 @@ function renderPng() {
   });
 }
 
-async function stageForBake(prize) {  elName.textContent = prize.name ?? prize.id ?? '—';
+async function stageForBake(prize) {
+  elName.textContent = prize.name ?? prize.id ?? '—';
   elMeta.textContent = displayMetaLine(prize);
-  elCta.hidden = false;
+  elCta.hidden = true;
   elStatus.textContent = '已出货';
   clearStage();
+  // 同 showPrize：揭晓按钮要在 clearStage 之后设，否则被 resetReveal 抹掉
+  currentPrize = prize;
+  setupReveal(prize);
   paintFrameLabels();
   const targetSize = frameTargetSize();
   let model = prize.glbUrl ? await loadPrizeScene(prize) : null;

@@ -887,8 +887,9 @@ function collectMachineParts() {
     group.push(o);
     used.add(o);
   }
-  // 一个都没认出来（换了壳的命名）：整组交出去，至少还能整体淡掉
-  if (!deck.length && !keep.length && root) deck.push(root);
+  // 一个都没认出来（换了壳的命名）：返回空 deck，由调用方决定整组淡。
+  // 注意**不要**把 root 塞进来 —— 那会和它自己的子 mesh 重复 traverse，不透明度被平方。
+  void root;
 
   const clawRoot = claw?.comicVisualRoot;
   if (clawRoot) clawParts.push(clawRoot);
@@ -903,35 +904,47 @@ function collectMachineParts() {
 const sleepMsLocal = (ms) => new Promise(r => setTimeout(r, ms));
 
 /**
- * 终幕：机器一个个构件化掉。**镜头不动**，只是眼前的东西一层层淡掉。
- *   stage 'shell'：只走壳（顶盖 / 立柱 / 面板）—— 视野敞开，只剩一个台子
- *   stage 'core' ：爪子 + 池底装饰 + 池里那几件东西
- *   stage 'all'  ：整组收掉（交给实景）
- * 每一项都用"淡水"的时长，慢、不要有元素感。
+ * 终幕：机器一层层化掉。**镜头不动**，只是眼前的东西渐次淡去，最后整幅溶解。
+ *
+ * 实现要点（踩过两个坑）：
+ *   1. **不 hide()**。淡完就 visible=false 等于淡到一半硬切一刀。
+ *   2. **壳/东西/台子不是三段轮着淡**，而是一条**各自起点不同、终点都是 0** 的连续曲线：
+ *      壳最先开始、东西稍后跟上、台子收尾，全程交叠。
+ *      用 modelFade 的 stageCurve 一次算完，避免"同一批 mesh 被 traverse 两次"（不透明度会被平方）。
+ *
+ * @param {'all'|'shell'|'core'} stage
+ * @param {number} dur 整段时长（秒）
  */
-function fadeMachineStage(stage = 'shell', dur = 2.6) {
+function fadeMachineStage(stage = 'all', dur = 7.5, overlap = 0.5) {
   const { deck, clawParts, decor, items: prizeItems } = collectMachineParts();
-  const hideWhenDone = (parts) => () => { for (const p of parts) { if (p) p.visible = false; } };
-
-  if (stage === 'all') {
-    return modelFade.sequence([
-      { parts: [world], dur },
-    ]);
-  }
+  const rest = [...clawParts, ...decor, ...prizeItems];
 
   if (stage === 'shell') {
     if (!deck.length) return sleepMsLocal(dur * 1000);
-    return modelFade.sequence([
-      { parts: deck, dur, done: hideWhenDone(deck) },
-    ]);
+    return modelFade.sequence([{ parts: deck, dur }], { overlap });
+  }
+  if (stage === 'core') {
+    if (!rest.length) return sleepMsLocal(dur * 1000);
+    return modelFade.sequence([{ parts: rest, dur }], { overlap });
   }
 
-  // core：爪子和东西一起走。台子（底座/背板/池底/洞口）留到最后由 'all' 收。
-  const rest = [...clawParts, ...decor, ...prizeItems];
-  if (!rest.length) return sleepMsLocal(dur * 1000);
-  return modelFade.sequence([
-    { parts: rest, dur, done: hideWhenDone(rest) },
-  ]);
+  // 'all'：壳 → 东西 → 台子，三段起点错开、终点都是 0，整段交叠成一次溶解。
+  // 每段用 match 按名字认自己的范围（名字沿父级向上找，爪子和装饰只有组名）。
+  if (!deck.length) {
+    // 认不出构件（换了壳的命名）：整组一起淡
+    return modelFade.sequence([{ parts: [world], dur }], { overlap });
+  }
+  const shellRe = /machine_(top|panel|frame|post)|EXPORT_machine_(top|panel|frame|post)/i;
+  const coreRe = /poolDecor|claw|prize/i;
+  const baseRe = /machine_(base|back|floor|hole)|EXPORT_machine_(base|back|hole)/i;
+  return modelFade.out(world, {
+    dur,
+    ease: modelFade.stageCurve([
+      { start: 0,            dur: dur * 0.30, match: (n) => shellRe.test(n) },
+      { start: dur * 0.12,   dur: dur * 0.62, match: (n) => coreRe.test(n) },
+      { start: dur * 0.50,   dur: dur * 0.50, match: (n) => baseRe.test(n) },
+    ]),
+  });
 }
 
 // —— 终幕俯拍扫过奖池（备用机位；终幕现在不用它，镜头全程不动）——

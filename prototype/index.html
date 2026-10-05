@@ -104,13 +104,15 @@
   #narrativePhotoCard { width: 100%; height: 100%; box-sizing: border-box; position: relative;
     /* 相纸本色：明显发黄发灰的旧纸，不是白边 */
     background-color: #cbb894;
-    /* 纤维纹 + 陈年污渍 + 边角磨白：纯 CSS，不需要贴图 */
+    /* 纤维纹 + 陈年污渍 + 边角磨白：纯 CSS，不需要贴图。
+       污渍位置挂 CSS 变量，每次 showFrame 由 JS 随机一遍，不会每张都长在同一个地方。 */
     background-image:
-      radial-gradient(ellipse 46% 34% at 12% 8%, rgba(88,64,34,.55), transparent 68%),
-      radial-gradient(ellipse 38% 30% at 94% 88%, rgba(80,58,30,.5), transparent 70%),
-      radial-gradient(ellipse 26% 20% at 78% 22%, rgba(96,72,40,.34), transparent 72%),
-      radial-gradient(ellipse 30% 22% at 22% 76%, rgba(92,70,38,.3), transparent 72%),
-      radial-gradient(ellipse 60% 40% at 66% 4%, rgba(255,250,232,.5), transparent 68%),
+      radial-gradient(ellipse 46% 34% at calc(12% + var(--st0x, 0px)) calc(8% + var(--st0y, 0px)), rgba(88,64,34,.55), transparent 68%),
+      radial-gradient(ellipse 38% 30% at calc(94% + var(--st1x, 0px)) calc(88% + var(--st1y, 0px)), rgba(80,58,30,.5), transparent 70%),
+      radial-gradient(ellipse 26% 20% at calc(78% + var(--st2x, 0px)) calc(22% + var(--st2y, 0px)), rgba(96,72,40,.34), transparent 72%),
+      radial-gradient(ellipse 30% 22% at calc(22% + var(--st3x, 0px)) calc(76% + var(--st3y, 0px)), rgba(92,70,38,.3), transparent 72%),
+      radial-gradient(ellipse 60% 40% at calc(66% + var(--st4x, 0px)) calc(4% + var(--st4y, 0px)), rgba(255,250,232,.5), transparent 68%),
+      var(--speck-a, none), var(--speck-b, none),
       repeating-linear-gradient(96deg, rgba(96,72,40,.16) 0 1px, transparent 1px 3px),
       repeating-linear-gradient(4deg, rgba(96,72,40,.12) 0 1px, transparent 1px 5px),
       repeating-linear-gradient(52deg, rgba(255,250,232,.07) 0 2px, transparent 2px 7px);
