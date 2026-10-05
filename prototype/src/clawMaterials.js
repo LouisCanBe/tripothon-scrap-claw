@@ -15,8 +15,10 @@ export function tameClawMaterials(root) {
     const next = [];
     for (const m of mats) {
       if (useLambert && (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial)) {
+        const tint = new THREE.Color(c.albedoTint ?? 0x7a7268);
+        const color = (m.color?.clone?.() ?? new THREE.Color(0xffffff)).multiply(tint);
         const lambert = new THREE.MeshLambertMaterial({
-          color: m.color?.clone?.() ?? new THREE.Color(0x9aa0a8),
+          color,
           map: m.map ?? null,
           transparent: m.transparent,
           opacity: m.opacity ?? 1,

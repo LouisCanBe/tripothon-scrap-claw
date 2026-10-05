@@ -9,6 +9,45 @@ function ac() {
 export function unlockAudio() {
   const c = ac();
   if (c.state === 'suspended') c.resume().catch(() => {});
+  preloadClawSamples();
+}
+
+// Kenney Impact Sounds（CC0）：整包才有下载，这里只留开、合、落地三下金属。
+const CLAW_SAMPLE = {
+  open: 'assets/audio/claw-open.ogg',
+  close: 'assets/audio/claw-close.ogg',
+  thud: 'assets/audio/claw-thud.ogg',
+};
+const clawSample = {};
+
+function preloadClawSamples() {
+  const c = ac();
+  for (const [key, url] of Object.entries(CLAW_SAMPLE)) {
+    if (clawSample[key] || clawSample[key] === null) continue;
+    clawSample[key] = null;
+    fetch(url)
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); })
+      .then(buf => c.decodeAudioData(buf))
+      .then(audio => { clawSample[key] = audio; })
+      .catch(() => { delete clawSample[key]; });
+  }
+}
+
+function playClawSample(key, gain, fallback, { rate = 1, dur = 0.1 } = {}) {
+  unlockAudio();
+  const buf = clawSample[key];
+  if (!buf) { fallback?.(); return; }
+  const c = ac();
+  const t = c.currentTime;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = rate;
+  const g = c.createGain();
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(g).connect(c.destination);
+  src.start(t);
+  src.stop(t + dur + 0.02);
 }
 
 function noiseBurst({ dur = 0.06, gain = 0.08, filterHz = 800 } = {}) {
@@ -144,6 +183,191 @@ export function playRevealDrone() {
   o.connect(g).connect(c.destination);
   o.start();
   o.stop(c.currentTime + 4.2);
+}
+
+function tone({ freq = 440, type = 'sine', dur = 0.08, gain = 0.05, slide } = {}) {
+  const c = ac();
+  const t = c.currentTime;
+  const o = c.createOscillator();
+  const g = c.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, slide), t + dur);
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(c.destination);
+  o.start(t);
+  o.stop(t + dur + 0.02);
+}
+
+let _travel = null;
+let _room = null;
+
+function loopNoise(filterHz, q = 0.8) {
+  const c = ac();
+  const len = Math.max(1, (c.sampleRate * 1) | 0);
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  const filt = c.createBiquadFilter();
+  filt.type = 'bandpass';
+  filt.frequency.value = filterHz;
+  filt.Q.value = q;
+  const g = c.createGain();
+  g.gain.value = 0;
+  src.connect(filt).connect(g).connect(c.destination);
+  src.start();
+  return { src, filt, g };
+}
+
+function fadeOutNode(node, seconds = 0.2) {
+  if (!node) return;
+  try {
+    const c = ac();
+    const t = c.currentTime;
+    node.g.gain.cancelScheduledValues(t);
+    node.g.gain.setValueAtTime(node.g.gain.value, t);
+    node.g.gain.linearRampToValueAtTime(0, t + seconds);
+    node.src.stop(t + seconds + 0.05);
+  } catch { /* already stopped */ }
+}
+
+/** 按住移动时的低滚。amount 0 松开。 */
+export function setClawTravel(amount) {
+  unlockAudio();
+  const on = amount > 0.2;
+  if (on && !_travel) {
+    const c = ac();
+    const len = Math.max(1, (c.sampleRate * 1) | 0);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const filt = c.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.value = 420;
+    const g = c.createGain();
+    g.gain.value = 0;
+    src.connect(filt).connect(g).connect(c.destination);
+    src.start();
+    g.gain.linearRampToValueAtTime(0.03, c.currentTime + 0.06);
+    _travel = { src, g };
+  } else if (!on && _travel) {
+    fadeOutNode(_travel, 0.1);
+    _travel = null;
+  }
+}
+
+export function playClawClose() {
+  playClawSample('close', 0.46, () => tone({ freq: 140, type: 'sine', dur: 0.06, gain: 0.04 }), { rate: 1.08, dur: 0.09 });
+}
+
+export function playClawOpen() {
+  playClawSample('open', 0.4, () => tone({ freq: 160, type: 'sine', dur: 0.05, gain: 0.035 }), { rate: 1.12, dur: 0.08 });
+}
+
+/** 落到奖池底：一下，不在下落过程里滑音 */
+export function playClawThud() {
+  playClawSample('thud', 0.44, () => tone({ freq: 78, type: 'sine', dur: 0.07, gain: 0.05 }), { rate: 1.05, dur: 0.1 });
+}
+
+export function playSlip() {
+  playClawSample('open', 0.28, () => tone({ freq: 150, type: 'sine', dur: 0.05, gain: 0.03 }), { rate: 1.2, dur: 0.06 });
+}
+
+export function playFloorHit() {
+  playClawSample('thud', 0.22, () => tone({ freq: 70, type: 'sine', dur: 0.06, gain: 0.04 }), { dur: 0.07 });
+}
+
+/** 落入出货口 */
+export function playHoleDrop() {
+  playClawSample('thud', 0.3, () => tone({ freq: 90, type: 'sine', dur: 0.07, gain: 0.04 }), { rate: 0.92, dur: 0.09 });
+}
+
+/** 字幕逐字：很轻的一下，跟在每个字后面 */
+export function playTypeTick() {
+  unlockAudio();
+  const c = ac();
+  const t = c.currentTime;
+  const o = c.createOscillator();
+  o.type = 'square';
+  o.frequency.setValueAtTime(80 + Math.random() * 24, t);
+  const filt = c.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = 1200;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.04, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.016);
+  o.connect(filt).connect(g).connect(c.destination);
+  o.start(t);
+  o.stop(t + 0.018);
+}
+
+/** 字幕或操作提示落下时的一下打印头，很短，不连打 */
+export function playPrinterTick() {
+  unlockAudio();
+  const c = ac();
+  const t = c.currentTime;
+  const o = c.createOscillator();
+  o.type = 'square';
+  o.frequency.setValueAtTime(120, t);
+  o.frequency.exponentialRampToValueAtTime(55, t + 0.028);
+  const filt = c.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = 1800;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.14, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  o.connect(filt).connect(g).connect(c.destination);
+  o.start(t);
+  o.stop(t + 0.045);
+}
+
+/** 相纸抽出 / 菜单翻开：闷一点的摩擦，不要高频噪声 */
+export function playPaper() {
+  unlockAudio();
+  const c = ac();
+  const dur = 0.28;
+  const len = Math.max(1, (c.sampleRate * dur) | 0);
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    const fade = 1 - i / len;
+    data[i] = (Math.random() * 2 - 1) * fade * fade;
+  }
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const filt = c.createBiquadFilter();
+  filt.type = 'lowpass';
+  const t = c.currentTime;
+  filt.frequency.setValueAtTime(900, t);
+  filt.frequency.exponentialRampToValueAtTime(280, t + dur);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.022, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(filt).connect(g).connect(c.destination);
+  src.start(t);
+}
+
+/** 黑幕淡开后的房间底噪，很低，盖过突然的静音 */
+export function startRoomReturn(seconds = 1.6) {
+  unlockAudio();
+  if (_room) fadeOutNode(_room, 0.2);
+  _room = loopNoise(220, 0.5);
+  const c = ac();
+  const t = c.currentTime;
+  _room.g.gain.setValueAtTime(0, t);
+  _room.g.gain.linearRampToValueAtTime(0.02, t + seconds);
+}
+
+export function stopRoomReturn() {
+  fadeOutNode(_room, 0.4);
+  _room = null;
 }
 
 /** 走调八音盒三音（约 3s） */

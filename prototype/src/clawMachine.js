@@ -14,6 +14,9 @@ import { CONFIG } from './config.js';
 import { nearestItem, capTextures, enableShadows, poolVisualScale, clampItemToPoolBounds } from './prizePool.js';
 import { tameClawMaterials } from './clawMaterials.js';
 import { enqueueRendererCompile } from './renderCompile.js';
+import {
+  setClawTravel, playSlip, playFloorHit, playHoleDrop,
+} from './gameAudio.js';
 
 const C = () => CONFIG.claw;
 
@@ -112,10 +115,14 @@ export class ClawMachine {
 
     this.gripped = null;             // 当前抓住的物品
     this.slipPlanned = false;        // 本次上升是否安排滑落
+    this._prevX = 0;
+    this._prevZ = 0;
     this.slipAtY = 0;                // 滑落发生高度
     this.controlEnabled = true;      // 流程编排的输入总闸（Director 控制）
 
     this.#build(scene);
+    this._prevX = this.rig.position.x;
+    this._prevZ = this.rig.position.z;
   }
 
   #build(scene) {
@@ -318,6 +325,7 @@ export class ClawMachine {
       const skip = this.hooks.shouldSkipCollectLine?.(it);
       if (!skip) this.#say(it.category === 'food' ? 'food' : 'junk');
     } else {
+      playSlip();
       this.#say('slip');
       this.hooks.onGrabFail?.('slip');
     }
@@ -335,10 +343,12 @@ export class ClawMachine {
       const floorY = it.state === 'delivering' ? holeY : it.restY;
       if (it.mesh.position.y <= floorY) {
         if (it.state === 'delivering') {
+          playHoleDrop();
           it.mesh.visible = false;
           it.state = 'collected';
           this.hooks.onVended?.(it);
         } else if (it.vy < -1.0) {
+          playFloorHit();
           it.mesh.position.y = floorY;   // 一次小反弹
           it.vy = -it.vy * 0.3;
         } else {
@@ -380,6 +390,12 @@ export class ClawMachine {
     }
 
     this.#updateFalling(dt);
+
+    const moved = Math.hypot(this.rig.position.x - this._prevX, this.rig.position.z - this._prevZ);
+    this._prevX = this.rig.position.x;
+    this._prevZ = this.rig.position.z;
+    const traveling = this.state === S.IDLE || this.state === S.RETURN;
+    setClawTravel(traveling && moved > 0.0008 ? 1 : 0);
 
     switch (this.state) {
       case S.IDLE: break;

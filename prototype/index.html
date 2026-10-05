@@ -344,7 +344,7 @@
   #collectPairPanel .pair-err-text { font-size: 9px; line-height: 1.45; color: var(--color-ink-dim);
                                      text-align: left; padding-top: 8px; }
 
-  /* —— 字幕条：底条背板（打字机逻辑在 director.msg）—— */
+  /* —— 字幕：靠下居中的半透明底（打字机逐字在 director.msg）—— */
   #msg { position: fixed; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 10;
          max-width: 82%; padding: 9px 24px; text-align: center;
          font-size: var(--font-size-msg); color: var(--color-ink); text-shadow: var(--text-shadow);
@@ -365,17 +365,36 @@
           letter-spacing: var(--letter-spacing); pointer-events: none; transition: opacity .5s;
           text-shadow: 0 1px 8px rgba(0,0,0,.85); }
 
-  /* —— 漫画旁白框（二/三幕两侧）—— */
-  .panel { position: fixed; top: 50%; left: 5%; transform: translateY(-50%) rotate(-.8deg);
-           width: 24%; max-width: 330px; padding: 18px 20px; z-index: 8; pointer-events: none;
-           background: #efe9dc; color: #26241f; font-size: 15px; line-height: 1.9;
-           white-space: pre-line; border: 2px solid #26241f; box-shadow: 4px 4px 0 rgba(0,0,0,.45);
-           opacity: 0; transition: opacity .6s; }
-  .panel.right { left: auto; right: 5%; transform: translateY(-50%) rotate(.7deg); }
+  /* —— 页边旁白：漫画框。字不旋转、不平移，避免楷体被斜着采样发糊 —— */
+  .panel { position: fixed; bottom: 14%; left: 4%; transform: none;
+           width: min(360px, 32%); padding: 14px 16px 16px; z-index: 8; pointer-events: none;
+           background: #f6f0e4; color: #1c1a16;
+           font-family: "KaiTi", "STKaiti", "KaiTi_GB2312", serif;
+           font-size: 20px; line-height: 1.55;
+           white-space: pre-line; border: none; border-radius: 2px 16px 4px 18px;
+           outline: 2px solid #1c1a16; box-shadow: 5px 5px 0 #1c1a16;
+           opacity: 0; transition: opacity .45s; }
+  .panel.right { left: auto; right: 4%; bottom: auto; top: 16%;
+                 transform: none;
+                 border-radius: 16px 3px 18px 4px; }
+  .panel.comic::before { content: ''; position: absolute; left: 18px; bottom: -9px;
+                         width: 14px; height: 14px; background: #f6f0e4;
+                         border-right: 2px solid #1c1a16; border-bottom: 2px solid #1c1a16;
+                         transform: rotate(28deg); }
+  .panel.right.comic::before { left: auto; right: 20px; }
+  .panel.print { top: 16%; bottom: auto; left: 2.5%; width: min(200px, 16%);
+                 font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+                 font-size: 16px; letter-spacing: .5px; line-height: 1.55;
+                 background: rgba(246,240,228,.9); color: #1a1814;
+                 border-radius: 2px; outline: none; box-shadow: none;
+                 transform: none; padding: 8px 10px; }
+  .panel.right.print { top: 16%; right: 2.5%; left: auto; transform: none; }
+  .panel.print::before { display: none; }
   .panel.show { opacity: 1; }
   .panel.await-continue { pointer-events: auto; cursor: pointer; }
   .panel.await-continue::after { content: '点击继续'; display: block; margin-top: 10px;
-    font-size: 11px; letter-spacing: 2px; opacity: .5; }
+    font-size: 11px; letter-spacing: 2px; opacity: .5; font-family: var(--font-main); }
+  .panel.print.await-continue::after { color: rgba(26,24,20,.55); opacity: 1; }
 
   /* —— 幕标题卡（两侧细线装饰）—— */
   #actLabel { position: fixed; top: 8%; width: 100%; text-align: center; z-index: 9;

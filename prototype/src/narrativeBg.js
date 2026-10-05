@@ -1,4 +1,5 @@
 import { CONFIG } from './config.js';
+import { playPaper } from './gameAudio.js';
 import { getNarrative, narrativeSrc } from './narrativeAssets.js';
 import { applyPresentAct } from './present.js';
 
@@ -197,6 +198,7 @@ export class NarrativeBg {
     await sleep(20);
     if (gen !== this._photoGen) return;
     el.dataset.state = 'in';
+    playPaper();
 
     await sleep(dur * 1000);
     if (gen !== this._photoGen) return;

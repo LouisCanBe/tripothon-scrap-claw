@@ -115,6 +115,7 @@ export const CONFIG = {
     deliverDropBase: 0.75,
     meshVisualScale: 1.0,    // 爪模型展示倍率（≠ pool.visualScale）
     useLambertMaterials: true, // 爪组用 Lambert，切断 IBL 镜面闪
+    albedoTint: 0x7a7268,      // 乘在爪贴图上，压掉 Tripo 的白膜
     envMapIntensity: 0,        // 若仍用 Standard 时环境反射
     metalRoughness: 0.88,
     metalness: 0.12,

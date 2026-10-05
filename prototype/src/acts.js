@@ -13,8 +13,9 @@ import { QUEST_MENU } from './prizeTableData.js';
 //   restockPool 进幕把已入洞物品放回池里（第三幕补第二幕抓走的那件）
 //   hint    底部操作提示（null=隐藏）
 //   script  步骤序列：
-//     { sub, dur }            底部字幕，dur 秒
-//     { panel, side, text, dur? }  漫画旁白框；text:'' 收起；无 dur 常驻
+//     { sub, dur }            底部字幕（半透明底，逐字），dur 秒
+//     { panel, side, text, dur?, voice? }  页边旁白；text:'' 收起；无 dur 常驻
+//       voice:'print' 操作提示（蒙版里的白底黑字）；缺省是漫画旁白
 //       continue + continueAfter：先只显示本侧，点击该框或到时再往下走（也可派发 window 事件 narrative:continue）
 //       hideAfter：本步结束后收起，避免左右同时占屏
 //     { hint }                改底部提示
@@ -58,14 +59,16 @@ export const ACTS = [
     appearance: 'manifest',
     zoom: 0.95,   // 幕级变焦；near 模式再 ×0.7 → 有效 0.67，贴近玻璃柜的近景
     framing: 'near',   // 右布局必须 near（投影绑定画幅中心；far 不绑定会只露个边）
-    hint: '按 1 / 2 / 3（或 Q / E）转动视线，看看柜子里。',
+    hint: null,
     script: [
       { type: 'sub', text: '资源枯竭纪元 21 年。', dur: 3 },
       { type: 'sub', text: '配给制度崩坏，人们靠"采集"活下去。', dur: 4 },
+      { type: 'panel', side: 'right', voice: 'print', text: '按 1 / 2 / 3\n看看柜子里。' },
       // 过场图默认走相框式：在方框里"拿出一张照片"，不硬切全屏
       { type: 'interstitial', image: 'act1Open', dur: 2.8, caption: '干净得不像话。' },
-      { type: 'panel', side: 'left', text: '他还记得那台机器。\n那时候，食物是装在玻璃柜里的。', dur: 4.5 },
+      { type: 'panel', side: 'left', text: '他还记得那台机器。\n那时候，食物是装在玻璃柜里的。', dur: 4.5, hideAfter: true },
       { type: 'wait', event: 'firstView' },
+      { type: 'panel', side: 'right', text: '' },
       { type: 'sub', text: '左边……右边……都一样。都是吃的。', dur: 4 },
       { type: 'wait', event: 'allViews' },
       // 落灰：同一台机器旧下去 → 第二幕的锈蚀柜（对位卡，和第一幕同机位）
@@ -82,10 +85,10 @@ export const ACTS = [
     appearance: 'manifest',
     framing: 'far',   // 中远景站远抓（首版构图）；V 键可切 near 凑近看
     tuning: { gripStrength: 1.0, baseSlipProb: 0 },   // 教学：首抓必成
-    hint: DEFAULT_HINT,
+    hint: null,
     script: [
-      { type: 'panel', side: 'left', text: '移动爪子。\n对准。', continue: true, continueAfter: 3.4, hideAfter: true },
-      { type: 'panel', side: 'right', text: '按下空格。\n落爪。' },
+      { type: 'panel', side: 'left', voice: 'print', text: '方向键移动。\n对准。', continue: true, continueAfter: 3.4, hideAfter: true },
+      { type: 'panel', side: 'right', voice: 'print', text: '空格。\n落爪。' },
       { type: 'wait', event: 'firstCollect' },
       { type: 'panel', side: 'right', text: '' },
       // 闪回：记忆里那只按按钮的手（终幕现实里的手是同一只）
@@ -118,10 +121,9 @@ export const ACTS = [
       wrong: '……这不是今天的配额。',
       wrongJunk: '垃圾也进洞了。不算数。',
     },
-    hint: DEFAULT_HINT,
+    hint: null,
     script: [
       { type: 'interstitial', image: 'rationNotice', dur: 3.0, caption: '今天的配额。' },
-      { type: 'panel', side: 'left', text: '配额写在墙上了。\n今天也是三样。', continue: true, continueAfter: 3.6, hideAfter: true },
       { type: 'panel', side: 'right', text: '抓够之前，\n别去想机器外面是什么。' },
       // 题眼：与第一幕同机位的一闪，柜里其实是腐败的。玩家会以为自己看错了。
       // 这一张故意切得快、淡得浅 —— 它要像"看错了"，不像"给你看张图"。
@@ -129,6 +131,7 @@ export const ACTS = [
       { type: 'wait', event: 'questComplete' },
       // 集齐瞬间：过曝 + 耳鸣 + 灯泡骤亮，整池东西"看起来"又是新鲜的了
       { type: 'interstitial', image: 'act3LightLie', dur: 1.4, fadeIn: 0.1, fadeOut: 0.4, caption: '' },
+      { type: 'panel', side: 'right', text: '' },
       { type: 'sub', text: '……齐了。今天能吃了。', dur: 2.5 },
     ],
   },

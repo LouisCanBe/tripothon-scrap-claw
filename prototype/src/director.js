@@ -14,6 +14,10 @@ import {
   setGlitchBedMorph,
   playGlitchBlackout,
   endGlitchAudio,
+  playPaper,
+  playTypeTick,
+  stopRoomReturn,
+  setClawTravel,
 } from './gameAudio.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -97,7 +101,7 @@ export class Director {
         } else {
           const line = copy?.wrongJunk ?? copy?.wrong ?? '……配额不认这个。';
           this.msg(line);
-          this.#panel('right', line);
+          this.#panel('right', line, 'print');
           setTimeout(() => this.#panel('right', ''), 2200);
         }
       } else if (q?.includes(payload.id) && !this._questDone.has(payload.id)) {
@@ -146,6 +150,8 @@ export class Director {
 
   async restart() {
     unlockAudio();
+    stopRoomReturn();
+    setClawTravel(0);
     this._runGen += 1;
     this._skip = true;
     if (this._waiter) { this._waiter.resolve(); this._waiter = null; }
@@ -288,7 +294,7 @@ export class Director {
       switch (step.type) {
         case 'sub':   await this.#sub(step); break;
         case 'panel':
-          this.#panel(step.side, step.text);
+          this.#panel(step.side, step.text, step.voice);
           if (step.continue && step.text) await this.#untilContinue(step, gen);
           else if (step.dur) await sleep(step.dur * 1000);
           if (step.hideAfter) this.#panel(step.side, '');
@@ -326,39 +332,50 @@ export class Director {
     return new Promise(resolve => (this._waiter = { event, resolve }));
   }
 
-  msg(text) {
-    this.elMsg.classList.remove('stinger');
+  msg(text, { tick = false } = {}) {
+    this.elMsg.classList.remove('stinger', 'typing');
     clearTimeout(this._msgTimer);
     clearInterval(this._typeTimer);
     this.elMsg.style.opacity = '1';
     const chars = [...text];
-    if (chars.length > 6) {
+    if (!tick) {
+      this.elMsg.textContent = text;
+    } else {
       let i = 0;
       this.elMsg.textContent = '';
+      this.elMsg.classList.add('typing');
       this._typeTimer = setInterval(() => {
-        this.elMsg.textContent = chars.slice(0, ++i).join('');
-        if (i >= chars.length) clearInterval(this._typeTimer);
-      }, 34);
-    } else {
-      this.elMsg.textContent = text;
+        const ch = chars[i++];
+        this.elMsg.textContent = chars.slice(0, i).join('');
+        if (ch && !/\s/.test(ch)) playTypeTick();
+        if (i >= chars.length) {
+          clearInterval(this._typeTimer);
+          this.elMsg.classList.remove('typing');
+        }
+      }, 46);
     }
-    this._msgTimer = setTimeout(() => (this.elMsg.style.opacity = '0'), 2400);
+    this._msgTimer = setTimeout(() => {
+      this.elMsg.style.opacity = '0';
+      this.elMsg.classList.remove('typing');
+    }, 2400);
   }
 
   async #sub({ text, dur = 3 }) {
-    this.msg(text);
+    this.msg(text, { tick: true });
     await sleep(dur * 1000);
     this.elMsg.style.opacity = '0';
+    this.elMsg.classList.remove('typing');
     await sleep(400);
   }
 
-  #panel(side, text) {
+  #panel(side, text, voice = 'comic') {
     const el = this.elPanel[side];
     if (!el) return;
-    el.classList.remove('await-continue');
+    el.classList.remove('await-continue', 'print', 'comic');
     if (!text) { el.classList.remove('show'); return; }
     el.textContent = text;
-    el.classList.add('show');
+    const print = voice === 'print';
+    el.classList.add('show', print ? 'print' : 'comic');
   }
 
   /** 旁白闸门：点当前框、派发 narrative:continue、或 continueAfter 秒后继续。 */
@@ -417,6 +434,7 @@ export class Director {
       await sleep(100);
     }
 
+    playPaper();
     const synth = document.getElementById('synth');
     const cards = [...synth.querySelectorAll('.syn-card')];
     cards.forEach((c, i) => {
