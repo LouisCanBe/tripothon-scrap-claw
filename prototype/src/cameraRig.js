@@ -7,6 +7,16 @@ import { CONFIG } from './config.js';
 
 const damp = (a, b, tau, dt) => a + (b - a) * (1 - Math.exp(-dt / Math.max(tau, 1e-4)));
 const ORDER = ['left', 'front', 'right'];
+const smooth01 = (t) => t * t * (3 - 2 * t);
+
+/** 三元插值：c = mix(a, b, k)。传 out 时写进 out，否则返回新数组（热路径上用 out）。 */
+function mix3(a, b, k, out) {
+  const o = out ?? [0, 0, 0];
+  o[0] = a[0] + (b[0] - a[0]) * k;
+  o[1] = a[1] + (b[1] - a[1]) * k;
+  o[2] = a[2] + (b[2] - a[2]) * k;
+  return o;
+}
 
 /** 左—前—右 一字排开：Q/E 与甩手只走相邻位，不右↔左跨跳 */
 function adjacentView(cur, dir) {
@@ -34,7 +44,8 @@ export class CameraRig {
     this.userZoom = 1;      // 用户缩放（滚轮/双指），与上两者相乘、互不覆盖
     this._userZoomMax = cfg.userZoomMax ?? 1.6;
     this._afterFront = null; // 数字键左↔右时先到正面再到位
-    this._m = new THREE.Matrix4();
+    this.scan = null;        // 临时接管相机（终幕俯拍扫过奖池，见 setScan）
+    this._scanDone = false;    this._m = new THREE.Matrix4();
     this._q = new THREE.Quaternion();
     this._e = new THREE.Euler();
     this._tmpTarget = new THREE.Vector3();
@@ -76,6 +87,55 @@ export class CameraRig {
     this.cur = adjacentView(this.cur, dir);
   }
 
+  /**
+   * 临时接管相机（终幕俯拍扫过奖池用）。传 null 归还给三观察位。
+   * 只在这里写 pos/look，避免和 update() 的阻尼打架。
+   */
+  setScan(scan) {
+    this.scan = scan ?? null;
+    this._scanDone = false;
+    if (this.scan) {
+      if (this.scan.fromPos) this.pos.set(...this.scan.fromPos);
+      if (this.scan.fromLook) this.look.set(...this.scan.fromLook);
+    }
+    return !!this.scan;
+  }
+
+  /** @returns {boolean} true = 本帧由扫视角接管，update() 不要再碰相机 */
+  _updateScan(dt) {
+    const s = this.scan;
+    if (!s) return false;
+    const posA = s.fromPos ?? this.pos.toArray();
+    const lookA = s.fromLook ?? this.look.toArray();
+    const p0 = s.startPos ?? posA;
+    const l0 = s.startLook ?? lookA;
+    const p1 = s.endPos ?? p0;
+    const l1 = s.endLook ?? l0;
+    // 起手 easeDur 秒滑到扫描起点：黑场出来是一个"移过去"，不是"切过去"
+    s.ease = Math.min(1, (s.ease ?? 0) + dt / (s.easeDur ?? 1.6));
+    const e = smooth01(s.ease);
+    s.t = Math.min(1, (s.t ?? 0) + dt / Math.max(s.dur ?? 1, 0.01));
+    const u = smooth01(s.t);
+    const p = mix3(posA, p0, e);
+    const l = mix3(lookA, l0, e);
+    if (e >= 1) { mix3(p1, p, u, p); mix3(l1, l, u, l); }
+    this.pos.set(p[0], p[1], p[2]);
+    this.look.set(l[0], l[1], l[2]);
+    const fov = s.fov ?? this.cfg.fov;
+    this.camera.position.copy(this.pos);
+    if (this.camera.fov !== fov) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    this._m.lookAt(this.pos, this.look, this.camera.up);
+    this.camera.quaternion.setFromRotationMatrix(this._m);
+    if (e >= 1 && s.t >= 1 && !this._scanDone) {
+      this._scanDone = true;
+      s.onDone?.();
+    }
+    return true;
+  }
+
   _viewTau(cfg) {
     return cfg.viewTau ?? cfg.tau;
   }
@@ -93,6 +153,7 @@ export class CameraRig {
   }
 
   update(dt, t) {
+    if (this._updateScan(dt)) return;
     const cfg = this.cfg;
     const v = cfg.views[this.cur];
     const tau = this._viewTau(cfg);

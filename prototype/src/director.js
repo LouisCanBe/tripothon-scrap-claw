@@ -3,7 +3,7 @@
 // ============================================================
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { ACTS, DEFAULT_HINT } from './acts.js';
+import { ACTS } from './acts.js';
 import {
   playGlitchTick,
   playRevealDrone,
@@ -33,9 +33,11 @@ export class Director {
     this.happened = new Set();
     this._waiter = null;
     this._skip = false;
-    this._questDone = new Set();
+    this._questDone = new Map();
     this._startActIndex = 0;
     this._ended = false;
+    this._scanActive = false;   // 俯拍扫视角期间，锁住用户视角输入
+    this._appearance = null;    // 奖池当前显示态（manifest | rot），换货去重用
 
     this.elMsg = document.getElementById('msg');
     this.elHint = document.getElementById('hint');
@@ -58,6 +60,8 @@ export class Director {
 
   get act() { return ACTS[this.idx]; }
   allow(what) { return this.act?.control?.[what] !== false; }
+  /** 俯拍扫视角 / 终幕演出期间：用户输入一律不生效 */
+  get interactive() { return !this._scanActive; }
 
   setStartActIndex(i) {
     this._startActIndex = Math.max(0, Math.min(i, ACTS.length - 1));
@@ -74,28 +78,28 @@ export class Director {
       const copy = this.act?.questCopy;
       const slot = this.#questSlot(payload.id);
       if (this.act?.id === 3 && q) {
-        if (slot && !this._questDone.has(slot)) {
-          this._questDone.add(slot);
-          document.getElementById('q-' + slot)?.classList.add('done');
+        const need = Math.max(1, this.act.questCount ?? 1);
+        const got = this._questDone.get(slot) ?? 0;
+        if (slot && got < need) {
+          this._questDone.set(slot, got + 1);
+          if (got + 1 >= need) document.getElementById('q-' + slot)?.classList.add('done');
           this.#syncQuestHud();
           const line = copy?.right?.[slot];
           if (line) this.msg(line);
-          if (q.every(id => this._questDone.has(id))) {
+          if (q.every(id => (this._questDone.get(id) ?? 0) >= need)) {
             this.mask.pulse(undefined, 160);
             setTimeout(() => this.notify('questComplete'), 700);
           }
         } else if (slot) {
           if (copy?.dup) this.msg(copy.dup);
         } else {
-          const line = payload.category === 'junk'
-            ? (copy?.wrongJunk ?? copy?.wrong)
-            : (copy?.wrong ?? '……配额不认这个。');
+          const line = copy?.wrongJunk ?? copy?.wrong ?? '……配额不认这个。';
           this.msg(line);
           this.#panel('right', line);
           setTimeout(() => this.#panel('right', ''), 2200);
         }
       } else if (q?.includes(payload.id) && !this._questDone.has(payload.id)) {
-        this._questDone.add(payload.id);
+        this._questDone.set(payload.id, 1);
         document.getElementById('q-' + payload.id)?.classList.add('done');
         if (q.every(id => this._questDone.has(id))) {
           this.mask.pulse(undefined, 160);
@@ -143,6 +147,13 @@ export class Director {
     this._runGen += 1;
     this._skip = true;
     if (this._waiter) { this._waiter.resolve(); this._waiter = null; }
+    this._scanActive = false;
+    this._appearance = null;   // 重开：下一幕的 appearance 一定要重新应用一次
+    // 如果是在故障段的全黑里按的重开，#glitch 的收尾（淡出黑场）已经被 gen 守卫跳过，
+    // 这里必须自己把黑幕撤掉，否则重开后会一直黑到第三幕。
+    this.elFlash.style.transition = '';
+    this.elFlash.style.opacity = '0';
+    this.hooks.onPoolScanCancel?.();
     await this.hooks.onRestart?.();
     this._ended = false;
     this.#enter(this._startActIndex);
@@ -150,10 +161,12 @@ export class Director {
 
   // ---------------- 内部 ----------------
 
-  /** 奖品 id → 配额格（questAccepts 里认的别名；没有就只认同名 id） */
+  /** 奖品 id → 配额格。先查 questAlias（败露态 id 指向它对应的那格），再走 questAccepts */
   #questSlot(id) {
     const q = this.act?.quest;
     if (!q || !id) return null;
+    const alias = this.act.questAlias;
+    if (alias?.[id]) return alias[id];
     const accepts = this.act.questAccepts;
     if (accepts) {
       for (const slot of q) if (accepts[slot]?.includes(id)) return slot;
@@ -165,7 +178,10 @@ export class Director {
   #syncQuestHud() {
     if (!this.elQuestProg) return;
     const q = this.act?.quest;
-    this.elQuestProg.textContent = q ? String(this._questDone.size) : '0';
+    const need = Math.max(1, this.act?.questCount ?? 1);
+    let done = 0;
+    for (const id of q ?? []) done += Math.min(need, this._questDone.get(id) ?? 0);
+    this.elQuestProg.textContent = q ? String(done) : '0';
   }
 
   async #enter(i) {
@@ -176,7 +192,7 @@ export class Director {
     this._skip = false;
     this.#hideReplayCue();
     this.happened = new Set();
-    this._questDone = new Set();
+    this._questDone = new Map();   // 配额格 → 已抓数量（questCount > 1 时是计数不是布尔）
     this._viewsSeen = null;
     this.#syncQuestHud();
 
@@ -209,6 +225,18 @@ export class Director {
     this.elHud.style.display = act.quest ? 'block' : 'none';
     if (this.elGlobalGrabStat) this.elGlobalGrabStat.hidden = true;
     if (act.quest) for (const id of act.quest) document.getElementById('q-' + id)?.classList.remove('done');
+
+    // 两态：进幕切奖池的显示态（'manifest' 他以为的 / 'rot' 真实的）。
+    // 终幕那次 rot 切换不在这里做 —— 它被 #glitch 抢在全黑里执行（见 #glitch 的换货段）。
+    if (act.appearance && act.appearance !== this._appearance) {
+      await this.hooks.onPoolAppearance?.(act.appearance, act);
+      if (gen !== this._runGen) return;
+      this._appearance = act.appearance;
+    }
+    if (act.restockPool) {
+      await this.hooks.onRestockPool?.(act);
+      if (gen !== this._runGen) return;
+    }
 
     this.elHint.style.opacity = act.hint === null ? '0' : '1';
     if (act.hint) this.elHint.textContent = act.hint;
@@ -249,6 +277,12 @@ export class Director {
           await this.narrativeBg?.showInterstitial(step.image, step.dur ?? 2.5, step);
           break;
         case 'glitch': await this.#glitch(step); break;
+        case 'poolScan': await this.#poolScan(step); break;
+        case 'restore':
+          this._scanActive = false;
+          this.hooks.onPoolScanCancel?.();
+          break;
+        case 'fadeGhost': await this.hooks.onFadeGhost?.(step); break;
         case 'revealBeat': await this.#revealBeat(step); break;
         case 'fadeMachine':
           // dur 秒。dir 缺省消失；dir:'in' 从看不见出现。根节点由钩子决定，换 GLB 不用改剧本。
@@ -377,6 +411,7 @@ export class Director {
   }
 
   async #glitch(step = {}) {
+    const gen = this._runGen;   // 演出中途可能被 Y 重开；重开后这一段不许再改世界状态
     const glitchOverlay = step.image
       ? this.narrativeBg?.pulseGlitchOverlay(step.image, 2400)
       : Promise.resolve();
@@ -422,7 +457,18 @@ export class Director {
         act: this.act,
       });
     }
+    // —— 换货：就放在这一片全黑里 ——
+    // 本幕（终幕）声明了 appearanceAfter 就表示"这一幕的显示态要等黑场之后再换"：
+    // 同一批东西、同一套 collider，只是"他看见的"变回真实的样子。
+    // 注意读的是 this.act —— glitch 步骤写在终幕自己的 script 里。
+    // gen 守卫：这中间玩家按了 Y 重开的话，绝不能把 rot 再扣回世界（新一轮已经在跑 manifest 了）。
+    const want = this.act?.appearanceAfter;
+    if (want && want !== this._appearance && gen === this._runGen) {
+      await this.hooks.onPoolAppearance?.(want, this.act);
+      if (gen === this._runGen) this._appearance = want;
+    }
     await sleep(280);
+    if (gen !== this._runGen) return;   // 重开了：灯光与收尾都交给新一轮
     this.hooks.onLightsCold?.();
     await sleep(700);
     this.elFlash.style.transition = 'opacity 1.4s';
@@ -430,7 +476,24 @@ export class Director {
     await sleep(1400);
     this.elFlash.style.transition = '';
     endGlitchAudio();
+    this.hooks.onGlitchEnd?.(this.act);
     await glitchOverlay;
+  }
+
+  /**
+   * 俯拍扫过奖池：终幕"扫过腐败食物模型"这一拍。
+   * 镜头交给 onPoolScan 钩子（main.js 里做位置/朝向插值），这里只管时长与收尾。
+   *   restore   true（默认）扫完把镜头交还给原来的取景；false 则停在终点，
+   *             等后面的 { type: 'restore' } 步骤收（终幕就是这条路径）
+   */
+  async #poolScan({ dur = 6, restore = true, preset = 'sweep' } = {}) {
+    if (!this.hooks.onPoolScan) { await sleep(dur * 1000); return; }
+    this._scanActive = true;
+    try {
+      await this.hooks.onPoolScan({ dur, restore, preset });
+    } finally {
+      if (restore) this._scanActive = false;
+    }
   }
 
   async #revealBeat({ line, dur = 4, image }) {

@@ -8,8 +8,19 @@
 <script>
   // 调试钩子：收集运行时错误，便于自动化验证
   window.__errs = [];
-  addEventListener('error', e => __errs.push(String(e.message)));
-  addEventListener('unhandledrejection', e => __errs.push(String(e.reason)));
+  window.__boot = { started: false, booted: false };
+  addEventListener('error', e => {
+    const src = e.target && e.target !== window && (e.target.src || e.target.href);
+    __errs.push(src ? `RESOURCE_FAIL ${src}` : String(e.message || e.type));
+  }, true);
+  addEventListener('unhandledrejection', e => __errs.push(`REJECT ${String(e.reason && e.reason.stack || e.reason)}`));
+  // 自动化验收用：把这些字段挂到 <html> 上，headless --dump-dom 就能读到
+  const __publish = () => {
+    document.documentElement.dataset.dshErrs = JSON.stringify(__errs.slice(0, 12));
+    document.documentElement.dataset.dshBoot = JSON.stringify(__boot);
+  };
+  setInterval(__publish, 400);
+  addEventListener('load', __publish);
 </script>
 <link rel="stylesheet" href="./theme.css" />
 <style>
@@ -79,6 +90,39 @@
     box-shadow: 0 20px 56px rgba(0,0,0,.75);
     filter: contrast(1.04) saturate(0.92);
     transform-origin: 50% 48%; will-change: transform, opacity; }
+
+  /* 相框式过场图：1:1 记忆画幅里"拿出一张照片"。
+     整块框由 JS 按 #stage 的矩形定位（见 narrativeBg.showFrame），
+     所以画幅从 1:1 拉到 16:9 时它会跟着变大，而不是硬切。 */
+  #narrativePhoto { position: fixed; z-index: 19; pointer-events: none;
+    transform-origin: 50% 62%; will-change: opacity, transform;
+    transition: left 1.15s cubic-bezier(.65,0,.25,1), top 1.15s cubic-bezier(.65,0,.25,1),
+                width 1.15s cubic-bezier(.65,0,.25,1), height 1.15s cubic-bezier(.65,0,.25,1); }
+  #narrativePhoto[hidden] { display: none !important; opacity: 0 !important; }
+  #narrativePhoto.no-anim { transition: none !important; }
+  #narrativePhotoCard { width: 100%; height: 100%; box-sizing: border-box; position: relative;
+    background: #efe6d4;
+    padding: clamp(7px, 1.1vmin, 13px) clamp(7px, 1.1vmin, 13px) clamp(22px, 3.4vmin, 40px);
+    box-shadow: 0 18px 48px rgba(0,0,0,.72), 0 2px 0 rgba(255,255,255,.28) inset;
+    transform: rotate(-1.7deg); display: flex; align-items: center; justify-content: center; }
+  #narrativePhotoCard img { width: 100%; height: 100%; object-fit: cover; display: block;
+    background: #12100e; box-shadow: 0 0 0 1px rgba(0,0,0,.4) inset;
+    filter: contrast(1.05) saturate(0.9); }
+  #narrativePhotoCaption { position: absolute; left: 0; right: 0; bottom: 0.55vmin;
+    padding: 0 6%; text-align: center; color: #75695a;
+    font-family: var(--font-hand); font-size: clamp(11px, 1.5vmin, 17px); letter-spacing: 1.5px;
+    text-shadow: 0 1px 0 rgba(255,255,255,.45); }
+  /* 底片齿孔：轻描一下"这是从记忆里抽出来的一张" */
+  #narrativePhotoCard::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,.10) 0 22%, transparent 23%);
+    background-size: 26px 26px; background-position: -13px -13px; opacity: .5; mix-blend-mode: soft-light; }
+  #narrativePhoto[data-state="in"] { animation: photoRise 700ms cubic-bezier(.22,.9,.24,1) both; }
+  @keyframes photoRise {
+    from { opacity: 0; transform: translateY(16px) scale(.965); }
+    to   { opacity: 1; transform: none; }
+  }
+  html.game-booting #narrativePhoto { transition: none !important; }
+
   #hud.hud-ration-decor { background-image: linear-gradient(rgba(9,9,12,.82), rgba(9,9,12,.82)),
     var(--hud-decor-url, none); background-size: cover; background-position: center top; }
 
@@ -397,6 +441,13 @@
   <div id="presentGrain" aria-hidden="true"></div>
   <div id="narrativeInterstitial" hidden>
     <img id="narrativeInterstitialImg" alt="" width="1280" height="720" decoding="async" />
+  </div>
+  <!-- 相框式过场图（记忆幕用）：位置由 narrativeBg.showFrame 按画幅矩形写入 -->
+  <div id="narrativePhoto" hidden>
+    <div id="narrativePhotoCard">
+      <img id="narrativePhotoImg" alt="" decoding="async" />
+      <div id="narrativePhotoCaption"></div>
+    </div>
   </div>
   <div id="stage"></div>
   <div id="narrativeDip" aria-hidden="true"></div>

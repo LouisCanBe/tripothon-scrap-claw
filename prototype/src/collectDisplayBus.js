@@ -1,6 +1,6 @@
 // 出货展示屏联动：同机 BC + 跨设备 SSE（devServer /api/collect/*）
 import { CONFIG } from './config.js';
-import { prizeGlbUrl } from './glbManifest.js';
+import { prizeGlbUrlFor } from './glbManifest.js';
 import { poolVisualScale } from './prizePool.js';
 import { resolveBounceMaterial } from './collectBouncePresets.js';
 import { DEFAULT_COLLECT_PAIR } from './collectPairDefault.js';
@@ -82,18 +82,26 @@ export function shouldUseRemoteSubscribe() {
   return isCollectDisplayPage();
 }
 
-/** @param {object} item prizePool 条目 */
+/** @param {object} item prizePool 条目（也可传 PRIZE_TABLE 原始表项） */
 export function itemToPrizePayload(item) {
   const id = item.id;
-  return {
+  const prize = {
     id,
     name: item.name,
     category: item.category,
     quest: !!item.quest,
-    glbUrl: prizeGlbUrl(id),
+    // 副屏口径：永远送出显形态（他以为的）。
+    // 观众在主屏刚看过败露态，再看到展台上这副"好"的样子，落差就是这一屏的意义。
+    // 所以 glbUrl 也走 manifest，不跟 item.visualUrl（那可能是败露态的模型）。
+    appearance: 'manifest',
+    sourceAppearance: item.appearance ?? 'manifest',
+    glbUrl: prizeGlbUrlFor(item, 'manifest'),
     visualScale: poolVisualScale(),
     bounceMaterial: resolveBounceMaterial(item),
   };
+  // 真相只在真的不同的时候才带上，留给后续的"揭晓"交互；默认文案不用它
+  if (item.truthName && item.truthName !== item.name) prize.truthName = item.truthName;
+  return prize;
 }
 
 function envelope(type, prize, extra = {}) {

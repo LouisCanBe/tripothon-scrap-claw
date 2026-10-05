@@ -8,6 +8,17 @@ function transitionCfg() {
   return CONFIG.present?.transition ?? {};
 }
 
+/** 记忆幕里"拿出一张照片"的观感参数（要调相框，改这里） */
+export const PHOTO_FRAME = {
+  fillX: 0.72,    // 相框占画幅宽的比例
+  fillY: 0.7,     // 占画幅高的比例
+  maxW: 560,      // 上限，避免大屏糊成一块
+  anchorY: 0.54,  // 在画幅内的垂直重心（0.5 正中标，>0.5 偏下）
+  squash: 0.62,   // 图片还没 load 时先按画框估一版，避免尺寸跳
+};
+
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
 function preloadImage(url) {
   return new Promise((resolve, reject) => {
     const im = new Image();
@@ -29,6 +40,19 @@ export class NarrativeBg {
     this.shade = document.getElementById('narrativeViewportShade');
     this.inter = document.getElementById('narrativeInterstitial');
     this.interImg = document.getElementById('narrativeInterstitialImg');
+    // 相框式过场图（记忆幕）：位置随时跟画幅矩形走
+    this.photo = document.getElementById('narrativePhoto');
+    this.photoImg = document.getElementById('narrativePhotoImg');
+    this.photoCap = document.getElementById('narrativePhotoCaption');
+    this._photoGen = 0;
+    this._photoAspect = 16 / 9;
+    this.photoImg?.addEventListener('load', () => {
+      const im = this.photoImg;
+      if (im.naturalWidth && im.naturalHeight) {
+        this._photoAspect = im.naturalWidth / im.naturalHeight;
+        this._placePhotoFrame();
+      }
+    });
     this._active = 0;
     this._cur = '';
     this._viewport = null;
@@ -36,6 +60,7 @@ export class NarrativeBg {
     this._backdropGen = 0;
     window.addEventListener('framemask:apply', (e) => this.syncViewport(e.detail));
     this.hideInterstitial();
+    this.hideFrame();
   }
 
   _activeLayer() {
@@ -73,8 +98,99 @@ export class NarrativeBg {
     }
   }
 
+  // ---------------- 相框式过场图（记忆幕） ----------------
+  // 观感：从画幅下方"拿出一张照片"，落在方框里偏下的位置，纸边、微斜、有投影。
+  // 硬切没有了：照片是在方框内出现的，画幅从 1:1 拉到 16:9 时它跟着画幅一起放大。
+
+  /** 按当前画幅矩形算相框的位置与尺寸（画幅变 → 调用它） */
+  _placePhotoFrame() {
+    const el = this.photo;
+    if (!el || el.hidden) return;
+    const d = this._viewport;
+    if (!d) return;
+    const { fillX, fillY, maxW, anchorY, squash } = PHOTO_FRAME;
+    const wMax = Math.min(d.w * fillX, maxW);
+    const hMax = d.h * fillY;
+    // 先按画框定一版（图片还没 load 时也不会跳），加载完再按真实比例收敛
+    let w = wMax;
+    let h = w / this._photoAspect;
+    if (h > hMax) { h = hMax; w = h * this._photoAspect; }
+    if (!this.photoImg?.naturalWidth) { w = wMax * 0.86; h = Math.min(hMax * squash, w / this._photoAspect); }
+    const cx = d.x + d.w / 2;
+    const cy = d.y + d.h * clamp01(anchorY);
+    Object.assign(el.style, {
+      left: `${Math.round(cx - w / 2)}px`,
+      top: `${Math.round(cy - h / 2)}px`,
+      width: `${Math.round(w)}px`,
+      height: `${Math.round(h)}px`,
+    });
+  }
+
+  /** 把相框收起来（不改 _photoGen，供 hideFrame 与内部复用） */
+  _collapseFrame() {
+    const el = this.photo;
+    if (!el) return;
+    el.hidden = true;
+    el.dataset.state = '';
+    el.style.opacity = '0';
+    if (this.photoImg) this.photoImg.removeAttribute('src');
+    if (this.photoCap) this.photoCap.textContent = '';
+  }
+
+  hideFrame({ animate = false } = {}) {
+    this._photoGen += 1;
+    const el = this.photo;
+    if (!el) return;
+    if (!animate || el.hidden) { this._collapseFrame(); return; }
+    el.dataset.state = '';
+    el.style.opacity = '0';
+    setTimeout(() => { if (!el.dataset.state) this._collapseFrame(); }, 420);
+  }
+
+  /**
+   * 相框式过场图。截图放在方框画幅里，像从记忆里抽出来的一张照片。
+   * @param {string} keyOrUrl
+   * @param {number} dur 秒
+   * @param {{ caption?: string, hold?: number, fadeIn?: number, fadeOut?: number }} [step]
+   */
+  async showFrame(keyOrUrl, dur = 3, step = {}) {
+    const url = narrativeSrc(keyOrUrl) ?? keyOrUrl;
+    const el = this.photo;
+    if (!el || !this.photoImg || !url) { await sleep(dur * 1000); return; }
+    const ok = await preloadImage(url).then(() => true).catch(() => false);
+    if (!ok) { await sleep(dur * 1000); return; }
+
+    const gen = ++this._photoGen;
+    const fadeIn = step.fadeIn ?? 0.5;
+    const fadeOut = step.fadeOut ?? 0.55;
+
+    this.photoImg.src = url;
+    if (this.photoCap) this.photoCap.textContent = step.caption ?? '';
+    this._placePhotoFrame();
+    el.hidden = false;
+    el.dataset.state = 'in';
+    el.style.transition = `opacity ${fadeIn}s ease`;
+    el.style.opacity = '0';
+    await sleep(24);
+    if (gen !== this._photoGen) return;
+    el.style.opacity = '1';
+    // photoRise 动画负责"拿起来"那一下，播完交给常态
+    setTimeout(() => { if (gen === this._photoGen) el.dataset.state = 'settled'; }, 760);
+
+    await sleep(dur * 1000);
+    if (gen !== this._photoGen) return;
+
+    el.dataset.state = '';
+    el.style.transition = `opacity ${fadeOut}s ease`;
+    el.style.opacity = '0';
+    await sleep(fadeOut * 1000);
+    if (gen !== this._photoGen) return;
+    this._collapseFrame();
+  }
+
   syncViewport(detail) {
     this._viewport = detail;
+    this._placePhotoFrame();
     const root = this.root;
     const el = this.shade;
     const p = CONFIG.present ?? {};
@@ -143,6 +259,7 @@ export class NarrativeBg {
   /** 只藏 HTML 叙事层，不动 three scene.background（定格娃娃机后再切全景） */
   hideDomOnly() {
     this.hideInterstitial();
+    this.hideFrame();
     if (this.root) this.root.classList.remove('on', 'in-viewport');
     document.documentElement.classList.remove('narrative-backdrop');
   }
@@ -166,6 +283,7 @@ export class NarrativeBg {
    */
   async applyAct(act, { immediate = false, skipBackdrop = false } = {}) {
     this.hideInterstitial();
+    this.hideFrame();
     if (!act) return;
     const hud = document.getElementById('hud');
     if (hud) {
@@ -250,6 +368,10 @@ export class NarrativeBg {
   }
 
   async showInterstitial(keyOrUrl, dur = 2.5, step = {}) {
+    // 记忆幕默认走相框式（方框内"拿出一张照片"，不硬切全屏）；
+    // 终幕的真相图走满屏 —— 那一下本来就该是"掀开画幅"。
+    const mode = step.mode ?? transitionCfg().interstitialMode ?? 'photo';
+    if (mode === 'photo') return this.showFrame(keyOrUrl, dur, step);
     const url = narrativeSrc(keyOrUrl) ?? keyOrUrl;
     const tc = transitionCfg();
     const fadeIn = step.fadeIn ?? tc.interstitialFadeIn ?? 0.7;
@@ -269,8 +391,10 @@ export class NarrativeBg {
       if (gen !== this._interGen) return;
     }
 
-    try { await preloadImage(url); } catch { /* ignore */ }
+    // 图还没出（规划里的 TODO 键先挂在别的图上，或临时路径写错）时，宁可不出图也不要糊一张裂图。
+    const ok = await preloadImage(url).then(() => true).catch(() => false);
     if (gen !== this._interGen) return;
+    if (!ok) { await sleep(dur * 1000); return; }
 
     this.interImg.src = url;
     this.inter.hidden = false;

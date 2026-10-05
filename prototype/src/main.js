@@ -12,6 +12,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CONFIG } from './config.js';
 import {
   spawnPool, upgradeVisuals, tickUpgrades, enableShadows, resetAllPoolItems, groundIdlePrizesToFloor,
+  setPoolAppearance, setAppearanceChangeHook, preloadVariantVisuals, VARIANT_ROT,
 } from './prizePool.js';
 import { spawnPoolDecor, upgradePoolDecor, restackPoolDecorWithPrizes } from './prizePoolDecor.js';
 import { attachPoolDecorPhysics } from './prizePoolDecorPhysics.js';
@@ -59,6 +60,7 @@ loadPoolDevOverrides();
 resolveViewportEdgeFromQuery();
 syncViewportEdgeToDom();
 preloadNarrativeImages();
+if (window.__boot) window.__boot.started = true;   // 自动化验收标记：模块已执行
 initPresent();
 const narrativeBg = new NarrativeBg();
 const narrativeSceneBgCache = new Map();
@@ -198,6 +200,13 @@ const prizesReady = upgradeVisuals(world, items, renderer, camera, (d, t) => {
   restackPoolDecorWithPrizes(poolDecor, items);
   poolDecorSim?.rebuild?.(poolDecor);
   refreshPrizeComicFx(items, { renderer, key, scene }, poolDecor);
+});
+
+// 两态换货后重刷漫画描边（换的是模型/材质，描边子网格得跟着重建）。
+// 注册点放在 items / poolDecor / renderer 都声明之后，避免时序误读。
+setAppearanceChangeHook(() => {
+  try { refreshPrizeComicFx(items, { renderer, key, scene }, poolDecor); }
+  catch (e) { console.warn('[两态] 描边刷新失败', e); }
 });
 
 // —— 飘字 toast（收集反馈 / 模式切换提示）——
@@ -842,6 +851,164 @@ async function setRevealWorld(id) {
 // 整组模型淡入淡出。终幕用来让娃娃机消失；换 GLB 后同一接口还能用，dir:'in' 是反向出现。
 const modelFade = createModelFade();
 
+// —— 终幕"机器逐个构件消失"的分组 ——
+// 留着：底座 + 背板 + 洞口暗腔 + 池底（机器塌了还剩个台子），
+//       以及爪子和池里的物资（坏掉的东西才是这一幕要看的东西）。
+// 先走：立柱 / 顶盖 / 面板（"壳"）；再走：爪子 + 池底装饰（"里子"）。
+// 写成函数声明（不立刻求值）：world / claw 都在下面才声明。
+// post 也要收进来：灰盒件的命名是 machine_post_*，装了 Tripo 壳之后它们虽然被隐藏，
+// 但沿用的还是同一套名字，露出来会穿帮。
+const SHELL_TOP_RE = /machine_(top|panel|frame|post)|EXPORT_machine_(top|panel|frame|post)/i;
+const SHELL_CORE_RE = /machine_(base|back|floor|hole)|EXPORT_machine_(base|back|hole)/i;
+
+function collectMachineParts() {
+  const deck = [];      // 先消失：顶盖 / 立柱 / 面板
+  const keep = [];      // 最后剩下来的：底座 / 背板 / 洞
+  const clawParts = [];
+  const decor = [];
+  const used = new Set();
+
+  const root = machineShellBuilt?.shell;
+  // 先按"最深优先"排序再归属，否则 machineShellProcedural 这种容器会把它里面
+  // 真正的构件（立柱 / 顶盖 / 面板）整包吞掉，导致一个都认不出来。
+  const matched = [];
+  root?.traverse?.((o) => {
+    if (!o.isMesh) return;
+    const n = o.name || '';
+    const group = SHELL_TOP_RE.test(n) ? deck : SHELL_CORE_RE.test(n) ? keep : null;
+    if (!group) return;
+    let depth = 0;
+    for (let p = o.parent; p && p !== root; p = p.parent) depth += 1;
+    matched.push({ o, group, depth });
+  });
+  matched.sort((a, b) => b.depth - a.depth);
+  for (const { o, group } of matched) {
+    if (used.has(o)) continue;
+    group.push(o);
+    used.add(o);
+  }
+  // 一个都没认出来（换了壳的命名）：整组交出去，至少还能整体淡掉
+  if (!deck.length && !keep.length && root) deck.push(root);
+
+  const clawRoot = claw?.comicVisualRoot;
+  if (clawRoot) clawParts.push(clawRoot);
+  const decorGroup = world.getObjectByName('poolDecor');
+  if (decorGroup) decor.push(decorGroup);
+
+  return { deck, keep, clawParts, decor };
+}
+
+/**
+ * 终幕：机器一个个构件化掉。
+ * 不是整块世界淡出（那样等于"切视角"），而是壳先走、里子后走，
+ * 最后只剩下底座、背板和池里那几件坏掉的东西 —— 东西还在，机器没了。
+ */
+function fadeMachineToNothing(dur = 3.6) {
+  const { deck, clawParts, decor } = collectMachineParts();
+  const hideWhenDone = (parts) => () => { for (const p of parts) p.visible = false; };
+  if (!deck.length && !clawParts.length && !decor.length) {
+    // 认不出构件（换了壳的命名）就退回整组淡出
+    return modelFade.out(world, { dur: dur + 0.6 });
+  }
+  const span = Math.max(0.4, dur) / 2.6;
+  return modelFade.sequence([
+    // 1. 壳：立柱 / 顶盖 / 面板先化掉 —— 视野一下子敞开了
+    { parts: deck, dur: span, done: hideWhenDone(deck) },
+    // 2. 里子：爪子和池底装饰跟着走
+    { parts: [...clawParts, ...decor], dur: span, gap: 0.25 },
+  ]);
+}
+
+// —— 终幕俯拍扫过奖池（"扫过腐败食物模型"这一拍）——
+// 机位固定写成常量：同一条轨迹每次都能复现，方便和美术对图。
+// 机器内腔：X ±1.45 / Z ±1.02 / 池底 y=0，奖池逻辑边界 X ±1.30 / Z ±0.85，
+// 所以 look 一律落在池面内，不要跑到机器背后的空处去。
+// 这一段是"灯灭了，只剩地上那几件坏东西"，所以压得低、收得近，看得清轮廓。
+const POOL_SCAN = {
+  startPos: [2.55, 2.20, 1.85],
+  startLook: [-0.55, 0.05, 0.10],
+  endPos: [-2.05, 1.95, 2.10],
+  endLook: [0.35, 0.03, -0.10],
+  fov: 58,
+};
+
+// 构件化掉之后补的那一镜：低机位贴近池面，盯着剩下的几件
+const POOL_FLOOR_SCAN = {
+  startPos: [0.55, 0.98, 2.25],
+  startLook: [0.15, 0.02, 0.20],
+  endPos: [-0.95, 0.86, 2.05],
+  endLook: [-0.35, 0.02, 0.05],
+  fov: 62,
+};
+
+let poolScanResolve = null;
+
+/**
+ * 镜头扫过奖池；restore=true 时扫完把镜头交还三观察位。
+ * preset='floor' 用"贴着池面看剩下的东西"那条更近的轨迹（构件化掉之后那一镜）。
+ */
+function poolScanBeat({ dur = 6, restore = true, preset = 'sweep' } = {}) {
+  cancelPoolScan();
+  const path = preset === 'floor' ? POOL_FLOOR_SCAN : POOL_SCAN;
+  return new Promise((resolve) => {
+    poolScanResolve = resolve;
+    const finish = () => {
+      if (restore) rig.setScan(null);
+      poolScanResolve = null;
+      resolve();
+    };
+    rig.setScan({
+      ...path,
+      fromPos: rig.pos.toArray(),
+      fromLook: rig.look.toArray(),
+      dur,
+      easeDur: Math.min(1.6, dur * 0.3),
+      onDone: finish,
+    });
+  });
+}
+
+function cancelPoolScan() {
+  rig.setScan(null);
+  const r = poolScanResolve;
+  poolScanResolve = null;
+  r?.();
+}
+
+// —— 败露态灯光：不是"终幕冷光"，是"灯灭了" ——
+// 但**不能真的黑**：地上那几件坏掉的东西要还看得见，
+// 全靠一点环境残光 + 败露材质自带的一点点自发光（见 prizePool 的 VARIANT_MAT）。
+// 这一拍要看的是"东西还是那些东西"，全黑就等于什么都没说。
+function applyRotLighting() {
+  applyMemoryLighting({ key, fill, glow, hemi, ambient });
+  ambient.intensity *= 0.5;      // 主要靠环境残光，硬光全收掉
+  hemi.intensity *= 0.3;
+  key.intensity *= 0.12;
+  key.color.set(0x9fb0bd);
+  fill.intensity *= 0.1;
+  fill.color.set(0x7d8b96);
+  glow.visible = false;
+  scene.environmentIntensity = (CONFIG.render.envIntensity ?? 1) * 0.55;
+}
+
+function restoreMemoryLighting() {
+  applyMemoryLighting({ key, fill, glow, hemi, ambient });
+  scene.environmentIntensity = CONFIG.render.envIntensity ?? 1;
+}
+
+// —— 败露态模型预算：第四幕空闲时偷偷取回来 ——
+// 终幕换货在全黑 1.4s 里做，那会儿不能再等下载，否则黑屏会被拖长。
+const idle = window.requestIdleCallback?.bind(window) ?? ((fn) => setTimeout(fn, 900));
+let rotPreloadStarted = false;
+function preloadRotVisuals() {
+  if (rotPreloadStarted) return;
+  rotPreloadStarted = true;
+  const run = () => preloadVariantVisuals(items, VARIANT_ROT)
+    .then(n => console.info(`[两态] 败露态模型已预算 ${n} 件`))
+    .catch(() => {});
+  try { idle(run, { timeout: 4000 }); } catch { run(); }
+}
+
 function disableRevealControls() {
   revealCtl.stopOrbitSweep();
   revealCtl.resetWalkFeel();
@@ -856,6 +1023,7 @@ function disableRevealControls() {
   applyMemoryLighting({ key, fill, glow, hemi, ambient });
   document.documentElement.classList.remove('narrative-scene-bg');
   modelFade.restore();
+  cancelPoolScan();
   revealWalkUnlocked = false;
   revealWalkAfterOrbit = false;
   revealPictureGate = null;
@@ -1074,13 +1242,34 @@ director = new Director({
     onRevealTransition,
     onLightsCold: onRevealColdLighting,
     onFadeMemoryMachine: (step) => {
-      const dur = step?.dur ?? 2.6;
-      return step?.dir === 'in' ? modelFade.in(world, { dur }) : modelFade.out(world, { dur });
+      // 构件逐个消失（见 fadeMachineToNothing）；dur 由剧本给
+      const dur = step?.dur ?? 3.6;
+      if (step?.mode === 'all') return modelFade.out(world, { dur });
+      return fadeMachineToNothing(dur);
+    },
+    // 终幕"扫过腐败食物模型"：镜头交给专门的俯拍机位，按 dur 扫过奖池。
+    // restore=false 时留在结束位置（交给后面的 fadeGhost / reveal 接住）。
+    onPoolScan: (opts) => poolScanBeat(opts),    onPoolScanCancel: () => cancelPoolScan(),
+    // 腐败食物模型淡成一层淡影，停在那儿不彻底消失
+    onFadeGhost: (step) => modelFade.ghost(world, { dur: step?.dur ?? 3.4, hold: step?.hold ?? 0.16 }),
+    // 两态换货：manifest（他以为的）↔ rot（真实的）
+    // 换模型发生在 #glitch 的全黑里；灯光另外走 onGlitchEnd，
+    // 因为故障段自己会在黑场后把灯光切冷（onLightsCold），谁后谁说了算。
+    onPoolAppearance: async (appearance) => {
+      await setPoolAppearance(items, appearance, { renderer, camera, parent: world, animate: false });
+      groundIdlePrizesToFloor(items, 0);
+      if (appearance !== VARIANT_ROT) restoreMemoryLighting();
+    },
+    onGlitchEnd: () => { applyRotLighting(); },
+    onRestockPool: async () => {
+      resetAllPoolItems(items.filter(it => it.state === 'collected'));
+      if (poolDecor) restackPoolDecorWithPrizes(poolDecor, items);
+      poolDecorSim?.rebuild?.(poolDecor);
     },
     setFisheyeFade: (v) => post.setFisheyeFade(v),
     onActEnter: (act) => {
-      if (act?.restockPool) resetAllPoolItems(items.filter(it => it.state === 'collected'));
-      if ((act?.id ?? 0) >= 4) startRevealMarblePreload();
+      // 第四幕（最暖的一幕）就该开始为终幕的换货备料
+      if ((act?.id ?? 0) >= 4) { startRevealMarblePreload(); preloadRotVisuals(); }
     },
     onRestart: onGameplayRestart,
   },
@@ -1088,11 +1277,12 @@ director = new Director({
 startCollectDisplayPairPanel(director);
 startCollectGamePing();
 
-// —— 输入接线（带幕间权限闸）——
-input.on('drop', () => { if (director.allow('drop')) claw.startDrop(); });
-input.on('view', (v) => { if (director.allow('view')) { rig.setView(v); director.notify('view', v); } });
+// —— 输入接线（带幕间权限闸 + 演出锁）——
+// director.interactive：俯拍扫视角 / 终幕演出期间为 false，用户输入一律不生效。
+input.on('drop', () => { if (director.interactive && director.allow('drop')) claw.startDrop(); });
+input.on('view', (v) => { if (director.interactive && director.allow('view')) { rig.setView(v); director.notify('view', v); } });
 input.on('cycle', (d) => {
-  if (revealControlsOn) return;
+  if (revealControlsOn || !director.interactive) return;
   if (director.allow('view')) { rig.cycle(d); director.notify('view', rig.cur); }
 });
 input.on('next', () => director.skip());
@@ -1382,8 +1572,26 @@ input.on('gui', () => {
 
 // —— 调试钩子（控制台/自动化用）——
 window.__debug = {
-  claw, rig, director, mask, items, CONFIG, toast, world, modelFade,
+  claw, rig, director, mask, items, CONFIG, toast, world, modelFade, scene, narrativeBg,
+  lights: { key, fill, glow, hemi, ambient },
   revealCtl, enableRevealControls, revealPreview, onReveal, setRevealWorld, unlockRevealWalk,
+  preloadRotVisuals, poolScanBeat, applyRotLighting, restoreMemoryLighting,
+  /** 控制台/自动化：看终幕"构件分组"认出来哪些（顶盖/立柱/面板 vs 底座/背板） */
+  machineParts: () => {
+    const p = collectMachineParts();
+    const n = (a) => a.map(o => o.name || o.type);
+    return { deck: n(p.deck), keep: n(p.keep), claw: n(p.clawParts), decor: n(p.decor) };
+  },
+  fadeMachineToNothing,
+  /** 控制台/自动化：把奖池整体切到某一态（'manifest' | 'rot'），等价于幕间换货那一下 */
+  setPoolAppearance: (appearance) => setPoolAppearance(items, appearance, { renderer, camera, parent: world, animate: false }),
+  /** 控制台/自动化：看这一刻整池的显示态分布 */
+  appearanceStats: () => items.reduce((m, it) => {
+    const k = it.appearance ?? 'none';
+    m[k] = (m[k] ?? 0) + 1;
+    if (it.appearance === 'rot') m.rotIds = [...(m.rotIds ?? []), it.id];
+    return m;
+  }, {}),
   get revealImmersive() { return revealImmersive; },
   openCollectDisplay: openCollectDisplayWindow,
 };
@@ -1442,6 +1650,8 @@ function boot() {
   director.start();
   startRevealMarblePreload();
   if (startIdx > 0) toast(`从「${ACTS[startIdx]?.label ?? '第三幕'}」试玩`);
+  // 自动化验收标记（headless --dump-dom 读 <html data-dsh-boot>）
+  if (window.__boot) window.__boot.booted = true;
 }
 Promise.allSettled([prizesReady, clawReady]).then(boot);
 setTimeout(boot, 30000);   // 兜底：30 秒无论如何开演（个别资产失败不应卡死）

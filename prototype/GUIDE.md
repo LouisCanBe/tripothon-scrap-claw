@@ -58,7 +58,41 @@
 
 ### 3. 文案 / 时长 / 幕流程
 
-**全在 `src/acts.js`**——每幕是声明式数据：`sub`（字幕+dur）、`panel`（旁白框）、`wait`（等事件）、`zoom`（变焦）、`framing`（近/远）、`tuning`（爪力）等。改文案不用动引擎。
+**全在 `src/acts.js`**——每幕是声明式数据：`sub`（字幕+dur）、`panel`（旁白框）、`wait`（等事件）、`zoom`（变焦）、`framing`（近/远）、`tuning`（爪力）、`interstitial`（过场图）等。改文案不用动引擎。
+
+**过场图**：清单与 prompt 见仓库根的 `过场图规划.md`。接图只改两处——
+`src/narrativeAssets.js` 加一行路径，`acts.js` 那幕加一步：
+
+```js
+{ type: 'interstitial', image: 'act3Dark', dur: 2.0, fadeIn: 0.3, fadeOut: 0.4, caption: '' },
+```
+
+- **记忆幕默认走「相框式」**：不铺满全屏，而是在方框画幅里当成一张照片拿出来（纸边 / 微斜 / 投影 /
+  下缘可带一行手写 `caption`）。画幅从 1:1 拉到 16:9 时照片跟着放大，所以不会有硬切感。
+- 要满屏就写 `mode: 'full'`（终幕的真相图才这么用）。
+- 位置/尺寸逻辑在 `src/narrativeBg.js` 的 `showFrame()` / `_placePhotoFrame()`，
+  观感参数在 `PHOTO_FRAME`（`fillX / fillY / maxW / anchorY / squash`）；DOM 是 `index.html` 的 `#narrativePhoto`。
+- 图没出之前先挂占位路径也能跑（加载失败会静默跳过，不会糊一张裂图）。
+
+### 3.5 两态物资（显形态 / 败露态）
+
+**剧情规则**：同一件东西有「他以为的样子」和「真实的样子」两副面孔。规则与台词见 `剧情设计-拾荒娃娃机.md`。
+
+| 位置 | 说明 |
+|---|---|
+| `prizePool.js` → `PRIZE_TABLE` | 每件物资一条；`variants.rot` 写败露态的模型别名与材质覆盖 |
+| `variants.*.to` | 该态实际装哪个 GLB（显形态与 GLB 名不一致时用，如 `bread-rot` 显形态装 `bread.glb`） |
+| `variants.*.mat` | 只换材质时用：`tint / roughness / metalness`，套在（克隆的）原材质上 |
+| `acts.js` → `appearance` | 该幕奖池显示哪一态：`'manifest'`（默认） / `'rot'` |
+| `acts.js` → `appearanceAfter` | 换态推迟到**上一幕的 `#glitch` 全黑里**执行（终幕用，玩家看不到换的过程） |
+| `main.js` → `onPoolAppearance` | 真正调 `setPoolAppearance()` 的地方；顺带切灯光 |
+| `main.js` → `applyRotLighting()` | 败露态灯光：不是"终幕冷光"，是"灯灭了"（留一点底面余光） |
+
+**换模型不换判定**：`collider` 从头到尾只写一次，两态共用；抓取/滑落逻辑读的永远是它。
+加一件物资的两态：表里加两行（显形态 + `-rot`），`-rot` 那条的 `collider` 与显形态**逐字相同**。
+
+**加一件新的败露态模型**：把 GLB 放进 `assets/prizes/`，在 `assets.manifest.js` 加一行 `id: '路径'`，
+再在 `PRIZE_TABLE` 那条的 `variants.rot.to` 里写这个 id。任务三件套就是这么接的（`moldy` / `rustcan` / `rot`）。
 
 ### 4. 交互键位
 
@@ -88,6 +122,10 @@ tools/prompts.json 写/改 prompt
 → node tools/generate.mjs --only <id>   （生成到 assets/prizes/，manifest 自动重建）
 → 刷新页面即生效
 ```
+
+**两态物资要生成两套模型时**：任务三件套就是两套（`bread`↔`moldy`、`can`↔`rustcan`、`veg`↔`rot`）。
+生成完在 `prizePool.js` 的 `PRIZE_TABLE` 里，把 `-rot` 那条的 `variants.rot.to` 写成新 GLB 的 id 即可。
+不想多花积分就给 `variants.rot.mat` 只调材质（压暗 + 加粗糙），轮廓自带 100% 一致。
 
 - `normalizeGLB()` 自动做归一化：缩放到 collider 尺寸 + pivot 底面对齐到 `restY`。Tripo 输出的任意比例/朝向都能接住。
 - 手工换模型也行：把 `.glb` 放进 `assets/prizes/`，在 `src/assets.manifest.js` 加一行 `id: '路径'`。
