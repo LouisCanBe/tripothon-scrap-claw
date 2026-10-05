@@ -59,6 +59,15 @@ function ipv4Lan() {
   return out;
 }
 
+// Render 会注入 PORT。只有线上才给大资源长缓存，本地开发仍 no-store，换模型刷新即见。
+const LONG_CACHE = Boolean(process.env.PORT);
+const LONG_CACHE_EXT = new Set([
+  '.glb', '.gltf', '.obj', '.spz',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico',
+  '.mp3', '.ogg', '.wav',
+  '.woff2', '.woff',
+]);
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -98,9 +107,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('404');
     }
+    const ext = path.extname(file).toLowerCase();
+    const cache = LONG_CACHE && LONG_CACHE_EXT.has(ext)
+      ? 'public, max-age=31536000, immutable'
+      : 'no-store';
     res.writeHead(200, {
-      'Content-Type': MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream',
-      'Cache-Control': 'no-store',   // 关键：禁一切缓存（含 ES module 启发式缓存）
+      'Content-Type': MIME[ext] ?? 'application/octet-stream',
+      'Cache-Control': cache,
     });
     createReadStream(file).pipe(res);
   } catch (e) {
