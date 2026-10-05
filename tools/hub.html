@@ -38,6 +38,19 @@
                  border-bottom: 1px solid #1e1e24; }
   #pairs .row:last-child { border: none; }
   #pairs .h { color: var(--dim); font-size: 11px; }
+  #prizePanel { padding: 20px 24px; overflow-y: auto; max-width: 980px; }
+  #prizePanel h2 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 0 0 8px; }
+  #prizeSummary { color: var(--ink); margin-bottom: 14px; }
+  #prizeSummary .warn { color: #d7b15a; }
+  #prizeSummary .ok { color: var(--accent); }
+  #prizeTable { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #prizeTable th, #prizeTable td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #1e1e24; vertical-align: top; }
+  #prizeTable th { color: var(--dim); font-weight: normal; font-size: 11px; }
+  #prizeTable .miss { color: var(--dim); }
+  #prizeTable .st-paired { color: var(--accent); }
+  #prizeTable .st-rot-pending { color: #d7b15a; }
+  #prizeTable .st-missing, #prizeTable .st-memory-missing { color: var(--err); }
+  #prizeOrphans { margin-top: 18px; color: var(--dim); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -50,12 +63,21 @@
   <button type="button" class="on" data-tab="tripo">Tripo 模型<span class="tab-credits" id="hubTripoCredits"></span></button>
   <button type="button" data-tab="marble">Marble 世界<span class="tab-credits" id="hubMarbleCredits"></span></button>
   <button type="button" data-tab="pixverse">PixVerse 视频<span class="tab-credits" id="hubPixverseCredits"></span></button>
+  <button type="button" data-tab="prizes">奖池</button>
   <button type="button" data-tab="art">剪影对照</button>
 </nav>
 <main>
   <div class="panel on" id="p-tripo"><iframe title="Tripo" src="/tripo/"></iframe></div>
   <div class="panel" id="p-marble"><iframe title="Marble" src="/marble/"></iframe></div>
   <div class="panel" id="p-pixverse"><iframe title="PixVerse" src="/pixverse/"></iframe></div>
+  <div class="panel" id="p-prizes">
+    <div id="prizePanel">
+      <h2>奖池 · 发布套 good-p2</h2>
+      <p id="prizeSummary">加载中…</p>
+      <table id="prizeTable"></table>
+      <p id="prizeOrphans"></p>
+    </div>
+  </div>
   <div class="panel" id="p-art">
     <div id="artPanel">
       <h2>记忆 / 现实 对照原则</h2>
@@ -81,7 +103,20 @@
 </main>
 <script>
 const tabs = document.querySelectorAll('nav button');
-const panels = { tripo: 'p-tripo', marble: 'p-marble', pixverse: 'p-pixverse', art: 'p-art' };
+const panels = { tripo: 'p-tripo', marble: 'p-marble', pixverse: 'p-pixverse', prizes: 'p-prizes', art: 'p-art' };
+const PRIZE_STATUS = {
+  paired: '成套',
+  'rot-pending': '待生成败露态',
+  missing: '未生成',
+  material: '只调材质',
+  'memory-missing': '缺显形态',
+};
+function kb(n) { return n ? `${Math.round(n / 1024)}KB` : '缺'; }
+function fileCell(f) {
+  return f.exists
+    ? `${f.file} ${kb(f.bytes)}`
+    : `<span class="miss">${f.file} 缺</span>`;
+}
 function tabCreditsText(n) {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '';
   return ` · ${Number(n).toLocaleString()} 积分`;
@@ -157,6 +192,20 @@ fetch('/api/hub/status').then(r => r.json()).then(d => {
   };
   el.innerHTML = chip('Tripo', d.services.tripo) + chip('Marble', d.services.marble) + chip('PixVerse', d.services.pixverse);
 }).catch(() => { document.getElementById('status').textContent = 'Hub 异常'; });
+
+fetch('/api/prizes').then(r => r.json()).then(data => {
+  const c = data.counts || {};
+  const summary = document.getElementById('prizeSummary');
+  summary.innerHTML = `奖池 ${c.total ?? 0} 件 · 成套 ${c.paired ?? 0} · <span class="warn">待生成败露态 ${c.rotPending ?? 0}</span> · <span class="warn">未生成 ${c.missing ?? 0}</span> · 配额 ${(data.quests || []).join(' / ') || '—'}`;
+  const rows = data.items || [];
+  document.getElementById('prizeTable').innerHTML =
+    '<tr><th>物品</th><th>显形态</th><th>败露态</th><th>状态</th></tr>'
+    + rows.map(it => `<tr><td>${it.name}<br><span class="miss">${it.id}${it.quest ? ' · 配额' : ''}</span></td><td>${fileCell(it.memory)}<br><span class="miss">${it.memory.label}</span></td><td>${fileCell(it.rot)}<br><span class="miss">${it.rot.label}</span></td><td class="st-${it.status}">${PRIZE_STATUS[it.status] || it.status}</td></tr>`).join('');
+  const unused = (data.orphans || []).filter(o => o.exists).map(o => `${o.id} ${kb(o.bytes)}`);
+  document.getElementById('prizeOrphans').textContent = unused.length
+    ? `未进池子：${unused.join(' · ')}`
+    : '';
+}).catch(() => { document.getElementById('prizeSummary').textContent = '读不到 /api/prizes'; });
 
 fetch('/art-pairs.json').then(r => r.json()).then(data => {
   const box = document.getElementById('pairs');

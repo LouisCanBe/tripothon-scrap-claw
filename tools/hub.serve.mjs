@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sendFile, json, corsPreflight } from './http-util.mjs';
 import { loadEnvFile, hasProxyEnv } from './env-bootstrap.mjs';
+import { prizeOverview } from './prize-lib.mjs';
 
 loadEnvFile();
 
@@ -83,6 +84,10 @@ export function serve(port = 8780, ctx) {
     try {
       if (hubStatic(req, res, u, dirs)) return;
 
+      if (u.pathname === '/api/prizes' && req.method === 'GET') {
+        return json(res, 200, prizeOverview());
+      }
+
       if (u.pathname === '/api/hub/status' && req.method === 'GET') {
         return json(res, 200, {
           ok: true,
@@ -106,7 +111,7 @@ export function serve(port = 8780, ctx) {
       if (u.pathname.startsWith('/api/pixverse/') && !pixverse.client) {
         return json(res, 503, { error: 'PixVerse 未配置', hint: pixverse.error });
       }
-      if (u.pathname.startsWith('/api/') && !u.pathname.startsWith('/api/hub') && !tripo.client) {
+      if (u.pathname.startsWith('/api/') && !u.pathname.startsWith('/api/hub') && u.pathname !== '/api/prizes' && !tripo.client) {
         return json(res, 503, { error: 'Tripo 未配置', hint: tripo.error });
       }
 
