@@ -30,11 +30,13 @@ function hubStatic(req, res, u, dirs) {
   if (p === '/' || p === '/index.html') return sendFile(res, TOOLS, 'hub.html');
   if (p === '/console-theme.css') return sendFile(res, TOOLS, 'console-theme.css');
   if (p === '/comic-render.mjs') return sendFile(res, TOOLS, 'comic-render.mjs');
+  if (p === '/prize-view.mjs') return sendFile(res, TOOLS, 'prize-view.mjs');
 
   const panel = {
     '/tripo': 'ui.html', '/tripo/': 'ui.html',
     '/marble': 'world.html', '/marble/': 'world.html',
     '/pixverse': 'video.html', '/pixverse/': 'video.html',
+    '/prizes': 'prize.html', '/prizes/': 'prize.html',
   };
   if (panel[p]) return sendFile(res, TOOLS, panel[p]);
 

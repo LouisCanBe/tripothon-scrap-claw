@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>奖池</title>
+<link rel="stylesheet" href="/console-theme.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #0a0a0c; color: var(--ink);
+    font: 13px/1.5 ui-monospace, "Courier New", monospace; }
+  body { display: grid; grid-template-columns: minmax(0, 1fr) 420px; min-height: 0; }
+  #list { overflow: auto; padding: 16px 18px 28px; }
+  h2 { font-size: 12px; letter-spacing: 3px; color: var(--dim); margin: 0 0 8px; font-weight: normal; }
+  #prizeSummary { margin-bottom: 12px; }
+  #prizeSummary .warn { color: #d7b15a; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid #1e1e24; vertical-align: top; }
+  th { color: var(--dim); font-weight: normal; font-size: 11px; }
+  .miss { color: var(--dim); }
+  .st-paired { color: var(--accent); }
+  .st-rot-pending { color: #d7b15a; }
+  .st-missing, .st-memory-missing { color: var(--err); }
+  .thumb { width: 112px; height: 112px; padding: 0; border: 1px solid #2a2a32; background: #141418;
+    display: block; cursor: pointer; position: relative; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .thumb.on { border-color: var(--accent); }
+  .thumb:disabled { cursor: default; }
+  .thumb .ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); font-size: 11px; }
+  #stage { border-left: 1px solid #222228; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    position: sticky; top: 0; height: 100vh; }
+  #preview { width: 100%; height: 360px; background: #141418; border: 1px solid #2a2a32; touch-action: none; }
+  #stageMeta { color: var(--dim); min-height: 3em; }
+  #flash { align-self: flex-start; background: transparent; color: var(--ink); border: 1px solid #3a3a44;
+    border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  #flash:disabled { opacity: 0.4; cursor: default; }
+  #prizeOrphans { margin-top: 16px; color: var(--dim); font-size: 12px; }
+</style>
+</head>
+<body>
+  <div id="list">
+    <h2>奖池 · 发布套 good-p2</h2>
+    <p id="prizeSummary">加载中…</p>
+    <table id="prizeTable"></table>
+    <p id="prizeOrphans"></p>
+  </div>
+  <aside id="stage">
+    <h2>预览</h2>
+    <canvas id="preview" width="360" height="360"></canvas>
+    <p id="stageMeta">点一行里的缩略图。同一机位，按 collider 缩到槽位。</p>
+    <button id="flash" type="button" disabled>并排闪切</button>
+  </aside>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/vendor/three.module.js",
+      "three/addons/": "/vendor/addons/"
+    }
+  }
+  </script>
+  <script type="module" src="/prize-view.mjs"></script>
+</body>
+</html>

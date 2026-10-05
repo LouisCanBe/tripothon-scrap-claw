@@ -40,6 +40,7 @@ export function prizeOverview() {
       inGame: !!item.inGame,
       awaiting: item.awaiting ?? null,
       todo: item.todo ?? '',
+      collider: item.collider ?? null,
       memory,
       rot,
       status: itemStatus(item.memory.id, item.rot.id, memory, rot),
