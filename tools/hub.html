@@ -150,6 +150,8 @@ tabs.forEach(btn => btn.addEventListener('click', () => {
   if (frame && !frame.getAttribute('src')) frame.src = frame.dataset.src;
   refreshHubCredits();
 }));
+const startTab = new URLSearchParams(location.search).get('tab');
+if (startTab && panels[startTab]) document.querySelector(`nav button[data-tab="${startTab}"]`)?.click();
 refreshHubCredits();
 
 fetch('/api/hub/status').then(r => r.json()).then(d => {

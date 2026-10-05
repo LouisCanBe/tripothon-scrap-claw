@@ -1,3 +1,5 @@
+import { QUEST_MENU } from './prizeTableData.js';
+
 // ============================================================
 // 分幕数据（剧情设计-拾荒娃娃机.md 的代码化；文案/时长都在这改，不动引擎）
 //
@@ -105,7 +107,7 @@ export const ACTS = [
     tuning: { gripStrength: 0.78, baseSlipProb: 0.45, decayPerGrab: 0.06 },  // 爪力开始不稳
     // 兜底：连续失败 streak 次后每次回升抓力；进幕 forceAfterSeconds 秒后抓到即成、不滑
     pity: { streak: 2, gripStep: 0.08, slipStep: 0.06, forceAfterSeconds: 90 },
-    quest: ['bread', 'can', 'veg'],
+    quest: QUEST_MENU.ids,
     questCount: QUEST_COUNT,
     // 配额按形状记账：一件东西只有一条表项，败露态是它的另一副面孔（同一个 id），
     // 所以不需要别名表 —— 抓到就是那一格。
@@ -139,7 +141,7 @@ export const ACTS = [
     control: { move: false, drop: false, view: false },
     appearance: 'manifest',
     hint: null,
-    menu: { cards: ['面包汤', '罐头', '烫青菜'], line: '今日菜单\n面包汤 · 罐头 · 烫青菜' },
+    menu: { cards: QUEST_MENU.cards, line: QUEST_MENU.line },
     script: [
       { type: 'panel', side: 'left', text: '' },
       { type: 'panel', side: 'right', text: '' },

@@ -15,6 +15,7 @@ import { CONFIG } from './config.js';
 import { getGlbManifest } from './glbManifest.js';
 import { markItemVisualScale } from './poolDevPersist.js';
 import { enqueueRendererCompile } from './renderCompile.js';
+import { PRIZE_ROWS } from './prizeTableData.js';
 
 // shape: 'box' [w,h,d] | 'cylinder' [r,h] | 'sphere' [r, y压扁系数]
 // gripFactor: 0~1，越小越滑/越重
@@ -44,40 +45,9 @@ const VARIANT_MAT = {
   fallbackTint: 0x8a7f6c,
 };
 
-export const PRIZE_TABLE = [
-  // ==== 任务三件套：一件东西，两副面孔 ====
-  // 显形态装自己的干净模型；败露态（to）换成坏的模型。
-  // **不要再另开一条 `-rot` 行** —— 那等于池子里同时存在"好面包"和"坏面包"两件东西，
-  // 而规则 A 说的是：同一件东西，前四幕显形、故障后败露。
-  // truthName 是"观众知道、他还在骗自己"的那个名字，留给后续揭晓交互，不进副屏默认文案。
-  { id: 'bread',   name: '面包',   truthName: '发霉面包', category: 'food', quest: true,  gripFactor: 0.95, bounceMaterial: 'soft',
-    collider: { shape: 'box',      size: [0.18, 0.10, 0.11] }, visual: { type: 'primitive', color: 0xc8a06a },
-    variants: { rot: { to: 'moldy' } } },
-  { id: 'can',     name: '罐头',   truthName: '锈罐头',  category: 'food', quest: true,  gripFactor: 0.85, bounceMaterial: 'metal',
-    collider: { shape: 'cylinder', size: [0.052, 0.13] },      visual: { type: 'primitive', color: 0xb9bec6 },
-    variants: { rot: { to: 'rustcan' } } },
-  { id: 'veg',     name: '青菜',   truthName: '烂菜',     category: 'food', quest: true,  gripFactor: 0.90, bounceMaterial: 'soft',
-    collider: { shape: 'sphere',   size: [0.075, 0.65] },      visual: { type: 'primitive', color: 0x7f9c5a },
-    variants: { rot: { to: 'rot' } } },
-
-  // ==== 干扰物资（不记配额）====
-  // 有独立败露模型的优先换模型；没有的（牛奶盒/干酪/玻璃罐）只做材质覆盖，省资产。
-  { id: 'carton',  name: '牛奶盒',   category: 'food', gripFactor: 0.95, bounceMaterial: 'rubber',
-    collider: { shape: 'box',      size: [0.12, 0.15, 0.09] }, visual: { type: 'primitive', color: 0xd6cfc0 },
-    variants: { rot: { to: 'carton', mat: { tint: 0x9c968a, roughness: 0.95 } } } },
-  { id: 'cheese',  name: '干酪块',   category: 'food', gripFactor: 0.90, bounceMaterial: 'soft',
-    collider: { shape: 'box',      size: [0.11, 0.08, 0.09] }, visual: { type: 'primitive', color: 0xd9b64f },
-    variants: { rot: { to: 'cheese', mat: { tint: 0x9a936a, roughness: 0.97 } } } },
-  { id: 'bottle',  name: '瓶子',     category: 'food', gripFactor: 0.70, bounceMaterial: 'glass',
-    collider: { shape: 'cylinder', size: [0.045, 0.17] },      visual: { type: 'primitive', color: 0x7c93a6 },
-    variants: { rot: { to: 'bottle', mat: { tint: 0x8b948f, roughness: 0.6 } } } },
-  { id: 'jar',     name: '玻璃罐',   category: 'food', gripFactor: 0.65, bounceMaterial: 'glass',
-    collider: { shape: 'cylinder', size: [0.06, 0.14] },       visual: { type: 'primitive', color: 0x9fb4ac },
-    variants: { rot: { to: 'jar', mat: { tint: 0x8b948f, roughness: 0.55 } } } },
-  { id: 'apple',   name: '果子',     category: 'food', gripFactor: 0.75, bounceMaterial: 'soft',
-    collider: { shape: 'sphere',   size: [0.06, 0.95] },       visual: { type: 'primitive', color: 0xa8574a },
-    variants: { rot: { to: 'apple', mat: { tint: 0x8a6a5c, roughness: 0.97 } } } },
-];
+// 物品表由 tools/prize-pairs.json 发布到 prizeTableData.js。
+// 一件东西一行：显形态是自己的 id，败露态是 variants.rot.to，不要再另开一条坏物品。
+export const PRIZE_TABLE = PRIZE_ROWS;
 
 /** 按 id 找物资表条目 */
 export function prizeDefById(id) {

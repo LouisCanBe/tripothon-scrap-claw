@@ -9,9 +9,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sendFile, json, corsPreflight } from './http-util.mjs';
+import { sendFile, json, readBody, corsPreflight } from './http-util.mjs';
 import { loadEnvFile, hasProxyEnv } from './env-bootstrap.mjs';
-import { prizeOverview } from './prize-lib.mjs';
+import {
+  prizeOverview, completePrizePair, previewPrizeGenerate, startPrizePair, saveQuestSettings,
+  savePrizeUpload, prizeJobStatus,
+} from './prize-lib.mjs';
 
 loadEnvFile();
 
@@ -88,6 +91,32 @@ export function serve(port = 8780, ctx) {
 
       if (u.pathname === '/api/prizes' && req.method === 'GET') {
         return json(res, 200, prizeOverview());
+      }
+      if (u.pathname === '/api/prizes/job' && req.method === 'GET') {
+        return json(res, 200, prizeJobStatus());
+      }
+      if (u.pathname === '/api/prizes/complete' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)).toString() || '{}');
+        return json(res, 200, completePrizePair(body.text));
+      }
+      if (u.pathname === '/api/prizes/preview' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)).toString() || '{}');
+        return json(res, 200, previewPrizeGenerate(body));
+      }
+      if (u.pathname === '/api/prizes/generate' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)).toString() || '{}');
+        try { return json(res, 200, startPrizePair(body)); }
+        catch (e) { return json(res, 400, { error: e.message ?? String(e) }); }
+      }
+      if (u.pathname === '/api/prizes/quest' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)).toString() || '{}');
+        try { return json(res, 200, saveQuestSettings(body.items)); }
+        catch (e) { return json(res, 400, { error: e.message ?? String(e) }); }
+      }
+      if (u.pathname === '/api/prizes/upload' && req.method === 'POST') {
+        const name = u.searchParams.get('filename') ?? 'ref.png';
+        try { return json(res, 200, { image: savePrizeUpload(name, await readBody(req)) }); }
+        catch (e) { return json(res, 400, { error: e.message ?? String(e) }); }
       }
 
       if (u.pathname === '/api/hub/status' && req.method === 'GET') {

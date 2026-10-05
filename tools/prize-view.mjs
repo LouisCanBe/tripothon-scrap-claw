@@ -1,3 +1,5 @@
+if (window.top === window) document.getElementById('openAlone')?.remove();
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -22,9 +24,13 @@ const previewRenderer = new THREE.WebGLRenderer({
   antialias: true,
   alpha: false,
 });
-previewRenderer.setSize(360, 360, false);
 if ('outputColorSpace' in previewRenderer && THREE.SRGBColorSpace) {
   previewRenderer.outputColorSpace = THREE.SRGBColorSpace;
+}
+function fitPreview() {
+  const canvas = previewRenderer.domElement;
+  const size = Math.max(1, Math.round(canvas.clientWidth));
+  if (canvas.width !== size || canvas.height !== size) previewRenderer.setSize(size, size, false);
 }
 
 const scene = new THREE.Scene();
@@ -95,6 +101,7 @@ function show(group) {
   if (!group) return;
   pose(group);
   if (group.parent !== scene) scene.add(group);
+  fitPreview();
   paint(previewRenderer, true);
 }
 
@@ -120,10 +127,102 @@ function renderTable(data) {
   const rows = data.items || [];
   document.getElementById('prizeTable').innerHTML =
     '<tr><th>物品</th><th>显形态</th><th>败露态</th><th>状态</th></tr>'
-    + rows.map(it => `<tr data-id="${esc(it.id)}"><td>${esc(it.name)}<br><span class="miss">${esc(it.id)}${it.quest ? ' · 配额' : ''}</span></td><td>${thumbButton(it.memory, it.id, 'memory')}</td><td>${thumbButton(it.rot, it.id, 'rot')}</td><td class="st-${esc(it.status)}">${esc(STATUS[it.status] || it.status)}</td></tr>`).join('');
+    + rows.map(it => `<tr data-id="${esc(it.id)}"><td>${esc(it.name)}<div class="quest-line"><input type="checkbox" data-quest="${esc(it.id)}" ${it.quest ? 'checked' : ''} ${it.inGame ? '' : 'disabled'}><input type="text" data-dish="${esc(it.id)}" value="${esc(it.dish || '')}" placeholder="做成的菜"></div><span class="miss">${esc(it.id)}</span></td><td>${thumbButton(it.memory, it.id, 'memory')}</td><td>${thumbButton(it.rot, it.id, 'rot')}</td><td class="st-${esc(it.status)}">${esc(STATUS[it.status] || it.status)}</td></tr>`).join('');
   const unused = (data.orphans || []).filter(o => o.exists).map(o => `${o.id} ${kb(o.bytes)}`);
   document.getElementById('prizeOrphans').textContent = unused.length ? `未进池子：${unused.join(' · ')}` : '';
+  publishedGame = data.published || [];
+  renderQuest(rows);
   return rows;
+}
+
+let publishedGame = [];
+
+function liveFaces(items) {
+  const table = document.getElementById('prizeTable');
+  return (items || []).filter(it => it.inGame).map(it => ({
+    id: it.id,
+    quest: !!table.querySelector(`[data-quest="${CSS.escape(it.id)}"]`)?.checked,
+    dish: (table.querySelector(`[data-dish="${CSS.escape(it.id)}"]`)?.value ?? '').trim(),
+    name: it.name || '',
+    rotTo: it.rot?.id || '',
+  }));
+}
+
+function syncReasons(items) {
+  const live = liveFaces(items);
+  const game = publishedGame;
+  const reasons = [];
+  const liveIds = new Set(live.map(r => r.id));
+  const gameIds = new Set(game.map(r => r.id));
+  const missing = [...liveIds].filter(id => !gameIds.has(id));
+  const extra = [...gameIds].filter(id => !liveIds.has(id));
+  if (missing.length) reasons.push(`游戏里还没有 ${missing.join('、')}`);
+  if (extra.length) reasons.push(`游戏里多了 ${extra.join('、')}`);
+  let quest = false;
+  let dish = false;
+  let other = false;
+  for (const row of live) {
+    const g = game.find(x => x.id === row.id);
+    if (!g) continue;
+    if (!!row.quest !== !!g.quest) quest = true;
+    if ((row.dish || '') !== (g.dish || '')) dish = true;
+    if (row.name !== (g.name || '') || row.rotTo !== (g.rotTo || '')) other = true;
+  }
+  if (quest) reasons.push('配额勾选还没写入');
+  if (dish) reasons.push('菜名还没写入');
+  if (other) reasons.push('名称或败露态还没写入');
+  return reasons;
+}
+
+function paintSave(items) {
+  const reasons = syncReasons(items);
+  const btn = document.getElementById('saveQuest');
+  const state = document.getElementById('syncState');
+  const dirty = reasons.length > 0;
+  btn.classList.toggle('dirty', dirty);
+  btn.textContent = dirty ? '保存到游戏' : '已与游戏一致';
+  if (state) {
+    state.classList.toggle('dirty', dirty);
+    state.textContent = dirty ? `与游戏不一致：${reasons.join('，')}` : '与游戏一致';
+  }
+}
+
+function renderQuest(items) {
+  const table = document.getElementById('prizeTable');
+  const preview = () => {
+    const dishes = [...table.querySelectorAll('[data-quest]:checked')].map(el => {
+      const dish = table.querySelector(`[data-dish="${CSS.escape(el.dataset.quest)}"]`);
+      return dish?.value.trim() || el.dataset.quest;
+    });
+    const el = document.getElementById('menuPreview');
+    if (el) el.textContent = dishes.length ? `今日菜单：${dishes.join(' · ')}` : '还没有配额';
+    paintSave(items);
+  };
+  table.querySelectorAll('[data-quest]').forEach(el => el.addEventListener('change', preview));
+  table.querySelectorAll('[data-dish]').forEach(el => el.addEventListener('input', preview));
+  preview();
+  document.getElementById('saveQuest').onclick = async () => {
+    const payload = (items || []).filter(it => it.inGame).map(it => ({
+      id: it.id,
+      quest: !!table.querySelector(`[data-quest="${CSS.escape(it.id)}"]`)?.checked,
+      dish: table.querySelector(`[data-dish="${CSS.escape(it.id)}"]`)?.value ?? '',
+      questLabel: it.questLabel || it.name,
+    }));
+    const res = await fetch('/api/prizes/quest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: payload }),
+    }).then(r => r.json());
+    if (res.error) { note(res.error); return; }
+    if (res.published) publishedGame = res.published;
+    for (const row of payload) {
+      const it = (items || []).find(x => x.id === row.id);
+      if (!it) continue;
+      it.quest = row.quest;
+      it.dish = row.dish.trim();
+    }
+    note(res.line ? `已写入游戏。\n${res.line}` : '已写入游戏');
+    preview();
+  };
 }
 
 async function drawThumbs(rows) {
@@ -217,11 +316,101 @@ preview.addEventListener('pointermove', (e) => {
   yaw = drag.yaw + (e.clientX - drag.x) * 0.01;
   pitch = drag.pitch + (e.clientY - drag.y) * 0.01;
   pose(shown);
+  fitPreview();
   paint(previewRenderer);
 });
 preview.addEventListener('pointerup', () => { drag = null; });
+addEventListener('resize', () => { if (shown) show(shown); });
 
-const data = await fetch('/api/prizes').then(r => r.json());
-window.__prizeItems = data.items || [];
-const rows = renderTable(data);
-await drawThumbs(rows);
+const genNote = document.getElementById('genNote');
+function note(text) { genNote.textContent = text; }
+
+document.getElementById('genFill').addEventListener('click', async () => {
+  const text = document.getElementById('genText').value;
+  const res = await fetch('/api/prizes/complete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  }).then(r => r.json());
+  if (res.error) { note(res.error); return; }
+  if (!res.blocked && res.id) document.getElementById('genId').value = res.id;
+  if (res.blocked) document.getElementById('genId').value = res.id || '';
+  document.getElementById('genMemory').value = res.memoryPrompt || '';
+  document.getElementById('genRot').value = res.rotPrompt || '';
+  note(res.note || '已补全');
+});
+
+async function uploadRef() {
+  const file = document.getElementById('genFile').files?.[0];
+  if (!file) return null;
+  const res = await fetch('/api/prizes/upload?filename=' + encodeURIComponent(file.name), {
+    method: 'POST', body: file,
+  }).then(r => r.json());
+  if (res.error) throw new Error(res.error);
+  return res.image;
+}
+
+function genBody(image) {
+  return {
+    id: document.getElementById('genId').value.trim(),
+    name: document.getElementById('genText').value.trim(),
+    memoryPrompt: document.getElementById('genMemory').value.trim(),
+    rotPrompt: document.getElementById('genRot').value.trim(),
+    image,
+  };
+}
+
+document.getElementById('genRun').addEventListener('click', async () => {
+  try {
+    const image = await uploadRef();
+    const body = genBody(image);
+    if (!body.id || !body.memoryPrompt || !body.rotPrompt) {
+      note('先补全，并填英文 id');
+      return;
+    }
+    const ok = confirm(`生成新的一对 ${body.id} 和 ${body.id}-rot？会花两次积分，并写进游戏。已有的不会覆盖。`);
+    if (!ok) return;
+    const res = await fetch('/api/prizes/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json());
+    if (res.error) { note(res.error); return; }
+    note(`已开始生成 ${res.ids.join(' 和 ')}，并写入游戏池子`);
+  } catch (err) { note(String(err.message ?? err)); }
+});
+
+let refreshing = false;
+let seenJob = null;
+
+async function refreshList() {
+  if (refreshing) return;
+  refreshing = true;
+  const scroll = document.getElementById('listScroll');
+  const top = scroll?.scrollTop ?? 0;
+  try {
+    const data = await fetch('/api/prizes').then(r => r.json());
+    window.__prizeItems = data.items || [];
+    const rows = renderTable(data);
+    if (scroll) scroll.scrollTop = top;
+    await drawThumbs(rows);
+  } finally {
+    refreshing = false;
+  }
+}
+
+async function pollJob() {
+  try {
+    const job = await fetch('/api/prizes/job').then(r => r.json());
+    if (!job.ids?.length) return;
+    const line = job.running
+      ? `正在生成：${(job.pending || []).join(', ')}`
+      : `生成结束：完成 ${(job.done || []).join(', ') || '无'}${job.pending?.length ? '；还没有 ' + job.pending.join(', ') : ''}`;
+    document.getElementById('genJob').textContent = line;
+    const sig = `${job.running ? 1 : 0}|${(job.pending || []).join(',')}|${(job.done || []).join(',')}`;
+    if (seenJob !== null && sig !== seenJob) await refreshList();
+    seenJob = sig;
+  } catch { /* 面板还没重启时忽略 */ }
+}
+setInterval(pollJob, 4000);
+pollJob();
+
+await refreshList();

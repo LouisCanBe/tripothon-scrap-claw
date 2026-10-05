@@ -12,7 +12,10 @@
   },
   "sets": {
     "release": "good-p2",
-    "legacy": ["default", "good"],
+    "legacy": [
+      "default",
+      "good"
+    ],
     "preferLightweight": true
   },
   "items": [
@@ -21,13 +24,31 @@
       "name": "面包",
       "category": "food",
       "shape": "box",
-      "collider": { "shape": "box", "size": [0.18, 0.10, 0.11] },
+      "collider": {
+        "shape": "box",
+        "size": [
+          0.18,
+          0.1,
+          0.11
+        ]
+      },
       "gripFactor": 0.95,
       "bounceMaterial": "soft",
       "quest": true,
       "questLabel": "面包",
-      "memory": { "id": "bread", "label": "面包", "prompt": "a loaf of bread, clean label", "kind": "text2model" },
-      "rot": { "id": "moldy", "label": "发霉面包", "prompt": "a moldy loaf of bread, green-grey mold patches, same silhouette", "kind": "text2model" },
+      "dish": "面包汤",
+      "memory": {
+        "id": "bread",
+        "label": "面包",
+        "prompt": "a loaf of bread, clean label",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "moldy",
+        "label": "发霉面包",
+        "prompt": "a moldy loaf of bread, green-grey mold patches, same silhouette",
+        "kind": "text2model"
+      },
       "paired": true,
       "inGame": true
     },
@@ -36,13 +57,30 @@
       "name": "罐头",
       "category": "food",
       "shape": "cylinder",
-      "collider": { "shape": "cylinder", "size": [0.052, 0.13] },
+      "collider": {
+        "shape": "cylinder",
+        "size": [
+          0.052,
+          0.13
+        ]
+      },
       "gripFactor": 0.85,
       "bounceMaterial": "metal",
       "quest": true,
       "questLabel": "罐头",
-      "memory": { "id": "can", "label": "豆子罐头", "prompt": "a tin can of beans, clean label", "kind": "text2model" },
-      "rot": { "id": "rustcan", "label": "锈罐头", "prompt": "a rusted dented tin can, peeled label, same silhouette", "kind": "text2model" },
+      "dish": "罐头",
+      "memory": {
+        "id": "can",
+        "label": "豆子罐头",
+        "prompt": "a tin can of beans, clean label",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "rustcan",
+        "label": "锈罐头",
+        "prompt": "a rusted dented tin can, peeled label, same silhouette",
+        "kind": "text2model"
+      },
       "paired": true,
       "inGame": true
     },
@@ -51,13 +89,30 @@
       "name": "青菜",
       "category": "food",
       "shape": "sphere",
-      "collider": { "shape": "sphere", "size": [0.075, 0.65] },
-      "gripFactor": 0.90,
+      "collider": {
+        "shape": "sphere",
+        "size": [
+          0.075,
+          0.65
+        ]
+      },
+      "gripFactor": 0.9,
       "bounceMaterial": "soft",
       "quest": true,
       "questLabel": "蔬菜",
-      "memory": { "id": "veg", "label": "青菜", "prompt": "a bunch of leafy green vegetables", "kind": "text2model" },
-      "rot": { "id": "rot", "label": "烂菜", "prompt": "rotting slimy leafy vegetables, brown wilted, same silhouette", "kind": "text2model" },
+      "dish": "烫青菜",
+      "memory": {
+        "id": "veg",
+        "label": "青菜",
+        "prompt": "a bunch of leafy green vegetables",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "rot",
+        "label": "烂菜",
+        "prompt": "rotting slimy leafy vegetables, brown wilted, same silhouette",
+        "kind": "text2model"
+      },
       "paired": true,
       "inGame": true
     },
@@ -66,94 +121,189 @@
       "name": "牛奶盒",
       "category": "food",
       "shape": "box",
-      "collider": { "shape": "box", "size": [0.12, 0.15, 0.09] },
+      "collider": {
+        "shape": "box",
+        "size": [
+          0.12,
+          0.15,
+          0.09
+        ]
+      },
       "gripFactor": 0.95,
       "bounceMaterial": "rubber",
       "quest": false,
-      "memory": { "id": "carton", "label": "牛奶盒", "prompt": "a milk carton, clean label", "kind": "text2model" },
-      "rot": { "id": "carton-rot", "label": "空盒", "prompt": "a crushed empty milk carton, stained", "kind": "text2model" },
-      "paired": false,
-      "awaiting": "rot",
-      "inGame": true,
-      "todo": "待生成 carton-rot.glb。只提交 rot.id，不要覆盖 carton.glb。接入后 variants.rot.to 改为 carton-rot，并去掉 tint。"
+      "dish": "热牛奶",
+      "memory": {
+        "id": "carton",
+        "label": "牛奶盒",
+        "prompt": "a milk carton, clean label",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "carton-rot",
+        "label": "空盒",
+        "prompt": "one crushed empty milk carton, stained and dented cardboard, still a standing rectangular carton, no straw no splash",
+        "kind": "text2model"
+      },
+      "paired": true,
+      "inGame": true
     },
     {
       "id": "cheese",
       "name": "干酪块",
       "category": "food",
       "shape": "box",
-      "collider": { "shape": "box", "size": [0.11, 0.08, 0.09] },
-      "gripFactor": 0.90,
+      "collider": {
+        "shape": "box",
+        "size": [
+          0.11,
+          0.08,
+          0.09
+        ]
+      },
+      "gripFactor": 0.9,
       "bounceMaterial": "soft",
       "quest": false,
-      "memory": { "id": "cheese", "label": "干酪块", "prompt": "a wedge of cheese, clean", "kind": "text2model" },
-      "rot": { "id": "cheese-rot", "label": "霉斑块", "prompt": "a moldy cheese wedge, blue-green spots", "kind": "text2model" },
-      "paired": false,
-      "awaiting": "rot",
-      "inGame": true,
-      "todo": "待生成 cheese-rot.glb。只提交 rot.id，不要覆盖 cheese.glb。接入后去掉 tint。"
+      "dish": "烤干酪",
+      "memory": {
+        "id": "cheese",
+        "label": "干酪块",
+        "prompt": "a wedge of cheese, clean",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "cheese-rot",
+        "label": "霉斑块",
+        "prompt": "one wedge of cheese with blue-green mold spots, dirty cut faces, single wedge, no knife",
+        "kind": "text2model"
+      },
+      "paired": true,
+      "inGame": true
     },
     {
       "id": "bottle",
       "name": "瓶子",
       "category": "food",
       "shape": "cylinder",
-      "collider": { "shape": "cylinder", "size": [0.045, 0.17] },
-      "gripFactor": 0.70,
+      "collider": {
+        "shape": "cylinder",
+        "size": [
+          0.045,
+          0.17
+        ]
+      },
+      "gripFactor": 0.7,
       "bounceMaterial": "glass",
       "quest": false,
-      "memory": { "id": "bottle", "label": "瓶子", "prompt": "a glass bottle, clean", "kind": "text2model" },
-      "rot": { "id": "bottle-rot", "label": "裂瓶", "prompt": "a cracked dirty glass bottle, murky contents", "kind": "text2model" },
-      "paired": false,
-      "awaiting": "rot",
-      "inGame": true,
-      "todo": "待生成 bottle-rot.glb。只提交 rot.id，不要覆盖 bottle.glb。接入后去掉 tint。"
+      "dish": "热糖水",
+      "memory": {
+        "id": "bottle",
+        "label": "瓶子",
+        "prompt": "a glass bottle, clean",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "bottle-rot",
+        "label": "裂瓶",
+        "prompt": "one cracked dirty glass bottle with a narrow neck, murky contents, standing upright, no puddle",
+        "kind": "text2model"
+      },
+      "paired": true,
+      "inGame": true
     },
     {
       "id": "jar",
       "name": "玻璃罐",
       "category": "food",
       "shape": "cylinder",
-      "collider": { "shape": "cylinder", "size": [0.06, 0.14] },
+      "collider": {
+        "shape": "cylinder",
+        "size": [
+          0.06,
+          0.14
+        ]
+      },
       "gripFactor": 0.65,
       "bounceMaterial": "glass",
       "quest": false,
-      "memory": { "id": "jar", "label": "玻璃罐", "prompt": "a glass jar, clean", "kind": "text2model" },
-      "rot": { "id": "jar-rot", "label": "裂罐", "prompt": "a cracked glass jar, grimy", "kind": "text2model" },
-      "paired": false,
-      "awaiting": "rot",
-      "inGame": true,
-      "todo": "待生成 jar-rot.glb。只提交 rot.id，不要覆盖 jar.glb。接入后去掉 tint。"
+      "dish": "果酱",
+      "memory": {
+        "id": "jar",
+        "label": "玻璃罐",
+        "prompt": "a glass jar, clean",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "jar-rot",
+        "label": "裂罐",
+        "prompt": "one cracked grimy glass jar with a dull metal lid, stained glass, no spilled contents",
+        "kind": "text2model"
+      },
+      "paired": true,
+      "inGame": true
     },
     {
       "id": "apple",
       "name": "果子",
       "category": "food",
       "shape": "sphere",
-      "collider": { "shape": "sphere", "size": [0.06, 0.95] },
+      "collider": {
+        "shape": "sphere",
+        "size": [
+          0.06,
+          0.95
+        ]
+      },
       "gripFactor": 0.75,
       "bounceMaterial": "soft",
       "quest": false,
-      "memory": { "id": "apple", "label": "苹果", "prompt": "a fresh apple", "kind": "text2model" },
-      "rot": { "id": "apple-rot", "label": "瘪果", "prompt": "a shrivelled rotten apple, dark spots", "kind": "text2model" },
-      "paired": false,
-      "awaiting": "rot",
-      "inGame": true,
-      "todo": "待生成 apple-rot.glb。只提交 rot.id，不要覆盖 apple.glb。接入后去掉 tint。"
+      "dish": "糖水果",
+      "memory": {
+        "id": "apple",
+        "label": "苹果",
+        "prompt": "a fresh apple",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "apple-rot",
+        "label": "瘪果",
+        "prompt": "one shrivelled rotten apple with dark soft spots, still one round fruit, no leaves",
+        "kind": "text2model"
+      },
+      "paired": true,
+      "inGame": true
     },
     {
       "id": "fish",
       "name": "咸鱼",
       "category": "food",
       "shape": "box",
-      "collider": { "shape": "box", "size": [0.20, 0.06, 0.09] },
+      "collider": {
+        "shape": "box",
+        "size": [
+          0.2,
+          0.06,
+          0.09
+        ]
+      },
       "gripFactor": 0.85,
       "bounceMaterial": "soft",
       "quest": false,
-      "memory": { "id": "fish", "label": "咸鱼干", "prompt": "a dried salted fish, flat", "kind": "text2model" },
-      "rot": { "id": "fish-rot", "label": "腐烂的咸鱼", "prompt": "a rotting dried fish, dull and spoiled", "kind": "text2model" },
+      "dish": "蒸咸鱼",
+      "memory": {
+        "id": "fish",
+        "label": "咸鱼干",
+        "prompt": "one dried salted fish, flat and stiff, single fish, no plate",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "fish-rot",
+        "label": "腐烂的咸鱼",
+        "prompt": "one rotting dried fish, dull and spoiled, still one flat fish, no plate",
+        "kind": "text2model"
+      },
       "paired": false,
-      "inGame": false,
+      "inGame": true,
       "todo": "新增两态。同一条咸鱼的两种样子，不要求轮廓严丝合缝。"
     },
     {
@@ -161,14 +311,31 @@
       "name": "口粮袋",
       "category": "food",
       "shape": "sphere",
-      "collider": { "shape": "sphere", "size": [0.09, 0.8] },
+      "collider": {
+        "shape": "sphere",
+        "size": [
+          0.09,
+          0.8
+        ]
+      },
       "gripFactor": 0.9,
       "bounceMaterial": "rubber",
       "quest": false,
-      "memory": { "id": "ration", "label": "口粮袋", "prompt": "a sealed emergency ration bag, printed label", "kind": "text2model" },
-      "rot": { "id": "ration-rot", "label": "空瘪袋", "prompt": "an empty flattened ration bag, torn", "kind": "text2model" },
+      "dish": "口粮粥",
+      "memory": {
+        "id": "ration",
+        "label": "口粮袋",
+        "prompt": "one sealed emergency ration bag, printed label, puffed packet, single bag",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "ration-rot",
+        "label": "空瘪袋",
+        "prompt": "one empty flattened torn ration bag, stained, still one packet, no spilled food",
+        "kind": "text2model"
+      },
       "paired": false,
-      "inGame": false,
+      "inGame": true,
       "todo": "新增两态"
     },
     {
@@ -176,14 +343,32 @@
       "name": "饼干盒",
       "category": "food",
       "shape": "box",
-      "collider": { "shape": "box", "size": [0.16, 0.07, 0.12] },
+      "collider": {
+        "shape": "box",
+        "size": [
+          0.16,
+          0.07,
+          0.12
+        ]
+      },
       "gripFactor": 0.9,
       "bounceMaterial": "rubber",
       "quest": false,
-      "memory": { "id": "cracker", "label": "饼干盒", "prompt": "a flat biscuit tin, clean label", "kind": "text2model" },
-      "rot": { "id": "cracker-rot", "label": "受潮纸盒", "prompt": "a damp warped biscuit tin, mould stains", "kind": "text2model" },
+      "dish": "饼干",
+      "memory": {
+        "id": "cracker",
+        "label": "饼干盒",
+        "prompt": "one flat rectangular biscuit tin, clean label, closed lid",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "cracker-rot",
+        "label": "受潮纸盒",
+        "prompt": "one damp warped biscuit tin, mould stains, still a flat tin, closed",
+        "kind": "text2model"
+      },
       "paired": false,
-      "inGame": false,
+      "inGame": true,
       "todo": "新增两态（比牛奶盒更扁更宽，避免撞轮廓）"
     },
     {
@@ -191,14 +376,31 @@
       "name": "油瓶",
       "category": "food",
       "shape": "cylinder",
-      "collider": { "shape": "cylinder", "size": [0.042, 0.19] },
+      "collider": {
+        "shape": "cylinder",
+        "size": [
+          0.042,
+          0.19
+        ]
+      },
       "gripFactor": 0.6,
       "bounceMaterial": "glass",
       "quest": false,
-      "memory": { "id": "oil", "label": "食用油", "prompt": "a tall slim cooking oil bottle", "kind": "text2model" },
-      "rot": { "id": "oil-rot", "label": "浑浊油瓶", "prompt": "a cloudy dirty oil bottle, sediment", "kind": "text2model" },
+      "dish": "油拌饭",
+      "memory": {
+        "id": "oil",
+        "label": "食用油",
+        "prompt": "one tall slim cooking oil bottle, golden oil, standing upright, no puddle",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "oil-rot",
+        "label": "浑浊油瓶",
+        "prompt": "one cloudy dirty cooking oil bottle, sediment, same tall slim bottle, standing upright",
+        "kind": "text2model"
+      },
       "paired": false,
-      "inGame": false,
+      "inGame": true,
       "todo": "新增两态（细长圆柱，抓起来最滑的那一类）"
     },
     {
@@ -206,20 +408,75 @@
       "name": "青果",
       "category": "food",
       "shape": "sphere",
-      "collider": { "shape": "sphere", "size": [0.058, 0.9] },
+      "collider": {
+        "shape": "sphere",
+        "size": [
+          0.058,
+          0.9
+        ]
+      },
       "gripFactor": 0.75,
       "bounceMaterial": "soft",
       "quest": false,
-      "memory": { "id": "fruit2", "label": "青果", "prompt": "a small green fruit", "kind": "text2model" },
-      "rot": { "id": "fruit2-rot", "label": "烂青果", "prompt": "a rotten green fruit, shrivelled", "kind": "text2model" },
+      "dish": "煮青果",
+      "memory": {
+        "id": "fruit2",
+        "label": "青果",
+        "prompt": "one small green fruit, smooth skin, single round fruit, no leaves",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "fruit2-rot",
+        "label": "烂青果",
+        "prompt": "one rotten green fruit, shrivelled dark spots, still one round fruit, no leaves",
+        "kind": "text2model"
+      },
       "paired": false,
-      "inGame": false,
+      "inGame": true,
       "todo": "新增两态（凑 13 件用，可随时替换）"
+    },
+    {
+      "id": "drumstick",
+      "name": "鸡腿",
+      "category": "food",
+      "shape": "box",
+      "collider": {
+        "shape": "box",
+        "size": [
+          0.12,
+          0.1,
+          0.1
+        ]
+      },
+      "gripFactor": 0.85,
+      "bounceMaterial": "soft",
+      "quest": false,
+      "memory": {
+        "id": "drumstick",
+        "label": "鸡腿",
+        "prompt": "one 鸡腿, clean and intact, single solid object, centered upright on ground",
+        "kind": "text2model"
+      },
+      "rot": {
+        "id": "drumstick-rot",
+        "label": "鸡腿（败露）",
+        "prompt": "one worn spoiled version of 鸡腿, stained and damaged, still one single object, centered upright",
+        "kind": "text2model"
+      },
+      "paired": false,
+      "inGame": true,
+      "dish": "照烧鸡腿"
     }
   ],
   "orphanModels": {
     "_note": "磁盘上有、但没进池子的旧资产。没有记忆态，直接加进池子会破坏「两副面孔」规则。",
-    "ids": ["bone", "brick", "cloth", "foil", "stone"],
+    "ids": [
+      "bone",
+      "brick",
+      "cloth",
+      "foil",
+      "stone"
+    ],
     "options": [
       "当纯垃圾干扰物：给它们加个 junk 标记，永不进配额，也不参与两态",
       "配一个记忆态：每个都做一套「看着像食物」的版本（成本 ×2）",
@@ -229,11 +486,31 @@
   "checks": {
     "_note": "Hub 面板按这几条给出红/黄/绿。e2e 里也已经断言了其中几条。",
     "rules": [
-      { "id": "pair", "label": "两态成套", "detail": "rot.id 与 memory.id 不同，且两个 GLB 都在发布套目录里。只派了文件名、文件还没有 = 待生成败露态，不算成套。" },
-      { "id": "silhouette", "label": "轮廓参考", "detail": "不挡生成、不挡接入。两态是同一件东西的两种样子即可。载入时会缩到 collider，比归一化后的最大边没有意义。" },
-      { "id": "onDisk", "label": "文件存在", "detail": "assets/prizes-good-p2/<该态 id>.glb 存在。补败露态时只查 rot.id，不要把缺文件当成该覆盖显形态。" },
-      { "id": "lightweight", "label": "轻量化", "detail": "单件 ≤ 1.5MB、贴图 ≤ 2K（超了标黄，提示可以压）" },
-      { "id": "questCover", "label": "配额可达成", "detail": "quest 为 true 的每一件在池子里都有实例" }
+      {
+        "id": "pair",
+        "label": "两态成套",
+        "detail": "rot.id 与 memory.id 不同，且两个 GLB 都在发布套目录里。只派了文件名、文件还没有 = 待生成败露态，不算成套。"
+      },
+      {
+        "id": "silhouette",
+        "label": "轮廓参考",
+        "detail": "不挡生成、不挡接入。两态是同一件东西的两种样子即可。载入时会缩到 collider，比归一化后的最大边没有意义。"
+      },
+      {
+        "id": "onDisk",
+        "label": "文件存在",
+        "detail": "assets/prizes-good-p2/<该态 id>.glb 存在。补败露态时只查 rot.id，不要把缺文件当成该覆盖显形态。"
+      },
+      {
+        "id": "lightweight",
+        "label": "轻量化",
+        "detail": "单件 ≤ 1.5MB、贴图 ≤ 2K（超了标黄，提示可以压）"
+      },
+      {
+        "id": "questCover",
+        "label": "配额可达成",
+        "detail": "quest 为 true 的每一件在池子里都有实例"
+      }
     ]
   }
 }

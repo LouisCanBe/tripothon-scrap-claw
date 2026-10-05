@@ -1,6 +1,7 @@
 {
   "name": "tripothon-scrap-claw",
   "private": true,
+  "type": "module",
   "description": "TripoThon 拾荒娃娃机 — dev tooling only (game runs without npm install)",
   "devDependencies": {
     "pixverse": "^1.4.6"

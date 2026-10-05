@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { ACTS } from './acts.js';
+import { PRIZE_TABLE } from './prizePool.js';
 import {
   playGlitchTick,
   playRevealDrone,
@@ -84,7 +85,8 @@ export class Director {
           this._questDone.set(slot, got + 1);
           if (got + 1 >= need) document.getElementById('q-' + slot)?.classList.add('done');
           this.#syncQuestHud();
-          const line = copy?.right?.[slot];
+          const row = PRIZE_TABLE.find(p => p.id === slot);
+          const line = copy?.right?.[slot] ?? (row ? `${row.questLabel || row.name}，入账。` : '');
           if (line) this.msg(line);
           if (q.every(id => (this._questDone.get(id) ?? 0) >= need)) {
             this.mask.pulse(undefined, 160);
@@ -182,6 +184,26 @@ export class Director {
     let done = 0;
     for (const id of q ?? []) done += Math.min(need, this._questDone.get(id) ?? 0);
     this.elQuestProg.textContent = q ? String(done) : '0';
+    const needEl = document.getElementById('questNeed');
+    if (needEl) needEl.textContent = String((q?.length ?? 0) * need);
+  }
+
+  #paintQuestHud() {
+    const hud = this.elHud;
+    if (!hud) return;
+    hud.querySelectorAll('.quest').forEach(el => el.remove());
+    const q = this.act?.quest ?? [];
+    const count = hud.querySelector('.hud-count');
+    const need = Math.max(1, this.act?.questCount ?? 1);
+    for (const id of q) {
+      const row = PRIZE_TABLE.find(p => p.id === id);
+      const el = document.createElement('div');
+      el.className = 'quest';
+      el.id = 'q-' + id;
+      el.textContent = `${row?.questLabel || row?.name || id} ×${need}`;
+      if (count) count.before(el);
+      else hud.appendChild(el);
+    }
   }
 
   async #enter(i) {
@@ -194,6 +216,7 @@ export class Director {
     this.happened = new Set();
     this._questDone = new Map();   // 配额格 → 已抓数量（questCount > 1 时是计数不是布尔）
     this._viewsSeen = null;
+    this.#paintQuestHud();
     this.#syncQuestHud();
 
     this.mask.syncFromAct(act, i > 0);
@@ -396,7 +419,11 @@ export class Director {
 
     const synth = document.getElementById('synth');
     const cards = [...synth.querySelectorAll('.syn-card')];
-    act.menu?.cards.forEach((name, i) => { if (cards[i]) cards[i].textContent = name; });
+    cards.forEach((c, i) => {
+      const name = act.menu?.cards?.[i];
+      c.hidden = !name;
+      if (name) c.textContent = name;
+    });
     synth.hidden = false;
     cards.forEach((c, i) => setTimeout(() => c.classList.add('show'), i * 450));
     await sleep(2200);
