@@ -144,6 +144,20 @@ const NAMES = {
 let lang = 'zh';
 const listeners = new Set();
 
+/** 浏览器语言：zh* 用中文，其余用英文；读不到则中文 */
+function langFromBrowser() {
+  let list = [];
+  try {
+    if (navigator.languages?.length) list = [...navigator.languages];
+    else if (navigator.language) list = [navigator.language];
+  } catch {
+    return 'zh';
+  }
+  const tag = String(list[0] || '').toLowerCase();
+  if (!tag) return 'zh';
+  return tag.startsWith('zh') ? 'zh' : 'en';
+}
+
 function readInitialLang() {
   const q = new URLSearchParams(location.search).get('lang');
   if (q === 'en' || q === 'zh') return q;
@@ -151,7 +165,7 @@ function readInitialLang() {
     const saved = localStorage.getItem('claw-lang');
     if (saved === 'en' || saved === 'zh') return saved;
   } catch { /* private mode */ }
-  return 'zh';
+  return langFromBrowser();
 }
 
 export function getLang() { return lang; }
