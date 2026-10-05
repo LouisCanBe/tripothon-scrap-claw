@@ -1,6 +1,13 @@
 {
   "title": "《拾荒娃娃机》美术资产总表",
   "updated": "2026-09-29",
+  "_STATUS": "历史文档 —— 本表按「四幕 + 独立垃圾池」那版设计写的，和现在的代码已经对不上（现在是「同一件东西两副面孔」的两态制）。以 tools/prize-pairs.json 为准；本文件只当 2D 概念图 / UI 线框的索引继续用。",
+  "_successor": {
+    "资产台账": "tools/prize-pairs.json",
+    "进度与缺口": "PROGRESS.md",
+    "Hub 奖池面板计划": "PRIZE-PANEL-PLAN.md",
+    "剧情定稿": "剧情设计-拾荒娃娃机.md"
+  },
   "pixverse_image": { "model": "seedream-5.0-pro", "quality": "1080p", "credits_each": 15, "note": "CLI 返回 cost_credits；1440p/I2I 可能更高" },
   "status": {
     "done": "已有文件或已接入游戏",

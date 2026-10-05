@@ -1,5 +1,6 @@
 {
   "_note": "剪影对照配对表：memory/reality 各对应 Tripo 资产 id 或 prototype/assets/prizes 文件名，status 随手填 todo/done",
+  "_STATUS": "内容已过期，只有 4 对且 apple/carton 的状态与现实不符。权威表是 tools/prize-pairs.json（13 件、含 paired 字段）；本文件计划改成由它生成，见 PRIZE-PANEL-PLAN.md 第七节 P7。",
   "silhouette_dir": "概念设定/silhouettes",
   "pairs": [
     {

@@ -78,10 +78,15 @@
 
 **剧情规则**：同一件东西有「他以为的样子」和「真实的样子」两副面孔。规则与台词见 `剧情设计-拾荒娃娃机.md`。
 
+> **资产台账在 `tools/prize-pairs.json`**（单一事实来源）：13 件物品的 id / 名字 / collider /
+> 抓感 / 是否配额 / 两态各自的文件名与 prompt / 配对状态，全在里面。
+> 要加物品、查缺哪件、看配对进度，先看那张表；`PRIZE_TABLE` 是它的人工落地版。
+> Hub 的「奖池」面板会读它（计划见 `PRIZE-PANEL-PLAN.md`）。
+
 | 位置 | 说明 |
 |---|---|
 | `prizePool.js` → `PRIZE_TABLE` | 每件物资一条；`variants.rot` 写败露态的模型别名与材质覆盖 |
-| `variants.*.to` | 该态实际装哪个 GLB（显形态与 GLB 名不一致时用，如 `bread-rot` 显形态装 `bread.glb`） |
+| `variants.*.to` | 该态实际装哪个 GLB（**文件名 = id**，由 `prize-pairs.json` 约定） |
 | `variants.*.mat` | 只换材质时用：`tint / roughness / metalness`，套在（克隆的）原材质上 |
 | `acts.js` → `appearance` | 该幕奖池显示哪一态：`'manifest'`（默认） / `'rot'` |
 | `acts.js` → `appearanceAfter` | 换态推迟到**上一幕的 `#glitch` 全黑里**执行（终幕用，玩家看不到换的过程） |
@@ -89,10 +94,16 @@
 | `main.js` → `applyRotLighting()` | 败露态灯光：不是"终幕冷光"，是"灯灭了"（留一点底面余光） |
 
 **换模型不换判定**：`collider` 从头到尾只写一次，两态共用；抓取/滑落逻辑读的永远是它。
-加一件物资的两态：表里加两行（显形态 + `-rot`），`-rot` 那条的 `collider` 与显形态**逐字相同**。
+加一件物资的两态：`prize-pairs.json` 加一条 → 生成两个 GLB → `PRIZE_TABLE` 加一条。
 
-**加一件新的败露态模型**：把 GLB 放进 `assets/prizes/`，在 `assets.manifest.js` 加一行 `id: '路径'`，
-再在 `PRIZE_TABLE` 那条的 `variants.rot.to` 里写这个 id。任务三件套就是这么接的（`moldy` / `rustcan` / `rot`）。
+**加一件新的败露态模型**：把 GLB 放进 `assets/prizes-good-p2/`（发布套），
+manifest 由 `node tools/generate.mjs --set good-p2` 自动重建；
+再在 `PRIZE_TABLE` 那条的 `variants.rot.to` 里写这个 id。
+任务三件套就是这么接的（`moldy` / `rustcan` / `rot`）。
+
+**只调材质 vs 换模型**：`variants.rot.to` 与显形态同名 = 没有独立败露模型，
+故障后只压暗 + 加粗糙。轮廓对得上，但**信息量不够**（观众看到的是"变脏"不是"变成另一种东西"）。
+现在 8 件里只有 3 件是真成套的 —— 缺口清单见 `PROGRESS.md`。
 
 ### 4. 交互键位
 

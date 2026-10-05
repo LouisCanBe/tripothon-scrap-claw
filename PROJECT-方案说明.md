@@ -218,7 +218,8 @@ rarity, authorId, version, moderationStatus
 
 - **游戏前端**：静态资源托管（Netlify / itch / GitHub Pages / 自有 CDN），无玩家侧 API Key。  
 - **生成与审核后台**（运营期）：内网或云函数调用 Tripo/Marble/PixVerse；任务队列 + 对象存储（GLB/MP4）。  
-- **配置下发**：奖池 `manifest.json` 与分幕 `acts` 热更新，版本号与 CDN 缓存策略分离（开发用 `devServer` no-store，线上带 hash）。
+- **配置下发**：奖池 manifest（`prototype/src/assets.manifest-*.js`，由 `tools/generate.mjs` 生成）
+  与分幕 `acts` 热更新，版本号与 CDN 缓存策略分离（开发用 `devServer` no-store，线上带 hash）。
 
 ### 8.2 日常维护
 
@@ -274,9 +275,12 @@ rarity, authorId, version, moderationStatus
 | 文档 | 用途 |
 |---|---|
 | `PROJECT-方案说明.md` | 本文：完整项目说明与运营规划 |
+| `PROGRESS.md` | **进度快照**：跑到哪了、资产实况、缺口清单、下一步 |
 | `剧情设计-拾荒娃娃机.md` | **剧情定稿**：核心规则、五幕 + 黑场、物资两态表、副屏口径、扩展场景 |
 | `策划脚本.md` | **台词本定稿**：与 `prototype/src/acts.js` 逐行对应的分幕台词 |
 | `过场图规划.md` | 12 张过场/说明图的时机、画面与生成 prompt |
+| `PRIZE-PANEL-PLAN.md` | **Hub 奖池管理面板**的实施计划（建对、配额、预览、校验） |
+| `tools/prize-pairs.json` | **奖池资产台账**（单一事实来源，Hub 面板读它） |
 | `outline.md` | 历史版本（最初设计思考），已归档 |
 | `CONCEPT-参赛与裸眼3D.md` | 参赛布展与硬件结合简版 |
 | `README.md` | 启动、发布、目录 |
@@ -284,6 +288,9 @@ rarity, authorId, version, moderationStatus
 | `prototype/GUIDE.md` | 二开指南：界面怎么改、模型怎么换、两态怎么加 |
 | `tools/TOOLS.md` | 多服务 AI 管线总览 |
 | `tools/MARBLE.md` / `tools/PIXVERSE.md` | 场景与视频接入 |
+
+**测试闸门**（改完记得跑）：`node tools/_e2e.mjs`（主流程 32 项）、
+`node tools/_e2e-display.mjs`（副屏揭晓 12 项）、`node tools/_verify-variants.mjs`（资产配对，秒级）。
 
 ---
 
