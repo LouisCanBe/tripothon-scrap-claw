@@ -30,7 +30,7 @@ import { buildMachineShell } from './machineShell.js';
 import { upgradeMachineShellTripo } from './machineShellTripo.js';
 import { Director } from './director.js';
 import { ACTS, DEFAULT_HINT } from './acts.js';
-import { applyStaticCopy, copy, onLangChange, t as tr, toggleLang } from './i18n.js';
+import { applyStaticCopy, copy, onLangChange, tabTitle, t as tr, toggleLang } from './i18n.js';
 import { primeAudioFiles, primeAudioDecode, unlockAudio } from './gameAudio.js';
 import { enqueueRendererCompile, setCoalesceIncrementalCompile } from './renderCompile.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
@@ -38,6 +38,9 @@ import { applyRevealWorld, REVEAL_WORLDS, walkBoxFromBounds } from './revealWorl
 import { buildWalkSpace } from './revealWalkSpace.js';
 import { mountMarbleImmersive } from './revealMarble.js';
 import { createRevealDissolveTransition } from './revealTransition.js';
+import {
+  endingBrandActive, hideEndingBrand, initEndingBrand, layoutEndingBrand, showEndingBrand,
+} from './endingBrand.js';
 import { createModelFade } from './modelFade.js';
 import { createNarrativeSceneBgDome } from './narrativeSceneBgDome.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
@@ -290,6 +293,7 @@ const rig = new CameraRig(camera);
 document.documentElement.classList.add('game-booting');
 const mask = new FrameMask();
 initViewportChrome();
+initEndingBrand();
 mask.bootstrapFromAct(ACTS[parseStartActIndex()] ?? ACTS[0]);
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
@@ -768,6 +772,8 @@ function applyRevealFeatures() {
 function unlockRevealWalk() {
   revealWalkUnlocked = true;
   revealWalkAfterOrbit = false;
+  layoutEndingBrand(viewRect);
+  showEndingBrand();
   applyRevealFeatures();
   if (revealImmersive) applyRevealWalkBounds(revealImmersive);
   if (revealControlsOn && elHint) {
@@ -1102,6 +1108,7 @@ async function onGameplayRestart() {
   document.getElementById('revealBeat')?.classList.remove('show');
   const rb = document.getElementById('revealBeat');
   if (rb) rb.hidden = true;
+  hideEndingBrand();
   narrativeBg.showAmbient();
   narrativeBg.hideInterstitial();
 }
@@ -1120,6 +1127,7 @@ function stopCinemaWidenSequence() {
   cinemaWidenAnim = null;
   revealLiftTail = null;
   revealCtl.stopOrbitSweep();
+  hideEndingBrand();
 }
 
 function tickRevealLiftTail(dt) {
@@ -1380,12 +1388,11 @@ const pointerCtl = new PointerControls(document.getElementById('stage'), {
 
 // —— 调参面板（仅 dev / ?gui=1 可开；画幅按钮是调试入口，正常流程由导演接管）——
 const gui = new GUI({ title: '爪机手感调参' });
-const TITLE_GAME = '拾荒娃娃机';
 const TITLE_GUI = '拾荒娃娃机 · 调参';
 const guiUnlocked = parseDevGui();
 let guiOn = guiUnlocked;
 function syncDocumentTitle() {
-  document.title = guiOn ? TITLE_GUI : TITLE_GAME;
+  document.title = guiOn ? TITLE_GUI : tabTitle();
 }
 gui.show(guiOn);
 syncDocumentTitle();
@@ -1704,6 +1711,7 @@ function applyViewRect() {
   camera.setViewOffset(innerWidth, innerHeight, -dx, -dy, innerWidth, innerHeight);
   post.setCenter((viewRect.x + viewRect.w / 2) / innerWidth, 1 - (viewRect.y + viewRect.h / 2) / innerHeight);
   rig.setModeZoom(1 + (CONFIG.frame.nearZoom - 1) * modeBlend);
+  if (endingBrandActive()) layoutEndingBrand(viewRect);
 }
 
 /** 溶解定格/混帧：取消移轴与鱼眼中心偏移，避免两帧 UV 错位像绕某点旋 */

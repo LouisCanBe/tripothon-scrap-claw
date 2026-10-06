@@ -413,7 +413,7 @@ export const CONFIG = {
     boundsMargin: 0.45,        // 无 collider 网格时 AABB 内缩
     collisionSkin: 0.2,        // meshClip 射线留白（米）；主边界改走网格内缩
     showBoundsHelper: false,   // true：显示 collider 包围盒线框，核对是否贴 SPZ
-    showWalkHelper: true,      // 终幕画出可行走范围（GLB 多边形，失败则偏转盒）
+    showWalkHelper: false,     // 调试：终幕行走范围绿/蓝线（GUI「显示行走范围」可临时打开）
     moveSpeed: 0.9,            // 环视结束后 WASD 目标速度（米/秒）
     moveAccel: 1.5,            // 从静止加速到目标速度（米/秒²）
     moveDecel: 4.2,            // 松手后减速（米/秒²）

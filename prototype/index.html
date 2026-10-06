@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="icon" href="./assets/mark-horizontal.svg" type="image/svg+xml" />
-<title>拾荒娃娃机</title>
+<title>拾荒娃娃机 | PickMan: Claw Machine</title>
 <script>
   // 调试钩子：收集运行时错误，便于自动化验证
   window.__errs = [];
@@ -286,6 +286,49 @@
                     color: var(--color-ink-dim); text-shadow: var(--text-shadow); pointer-events: none; user-select: none;
                     padding: 6px 10px; background: rgba(9,9,12,.45); border-radius: 6px;
                     border: 1px solid rgba(216,212,200,.12); }
+  /* 终幕自转结束：画面内左上/右上角标 */
+  #endingBrand {
+    position: fixed; z-index: 24; pointer-events: none; overflow: hidden;
+    opacity: 0; transition: opacity 0.8s ease;
+  }
+  #endingBrand.show { opacity: 1; }
+  #endingBrand[hidden] { display: none !important; }
+  #endingBrand .ending-brand-mark {
+    position: absolute;
+    left: var(--brand-mark-left, 20px);
+    top: var(--brand-top, 3px);
+    width: var(--brand-mark-size, 22px);
+    max-height: calc(100% - var(--brand-top, 3px) - 2px);
+    height: auto;
+    aspect-ratio: 1;
+    object-fit: contain;
+    object-position: left top;
+  }
+  #endingBrand .ending-brand-corner {
+    position: absolute;
+    left: var(--brand-corner-left, auto);
+    top: var(--brand-top, 3px);
+    width: var(--brand-corner-width, 72px);
+    max-height: calc(100% - var(--brand-top, 3px) - 2px);
+    container-type: inline-size;
+  }
+  #endingBrand .ending-brand-wordmark {
+    display: block; width: 100%; height: auto;
+    aspect-ratio: 186.576 / 43.6076;
+    object-fit: contain;
+  }
+  #endingBrand .ending-brand-credit {
+    display: block;
+    margin-top: calc(4.4 / 186.576 * 100cqi);
+    width: auto;
+    height: calc(10 / 186.576 * 100cqi);
+    object-fit: contain;
+    object-position: left center;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #endingBrand { transition: none; }
+  }
+
   #revealBeat { position: fixed; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center;
                 background: rgba(0,0,0,.92); pointer-events: none; opacity: 0; transition: opacity .6s; }
   #revealBeat.show { opacity: 1; }
@@ -595,6 +638,13 @@
     <div class="syn-card" id="synCard1"></div>
     <div class="syn-card" id="synCard2"></div>
     <div id="menuCard"></div>
+  </div>
+  <div id="endingBrand" hidden aria-hidden="true">
+    <img class="ending-brand-mark" alt="" src="./assets/aspect-study/mark.svg" decoding="async" />
+    <div class="ending-brand-corner">
+      <img class="ending-brand-wordmark" alt="哇哇叽哇" src="./assets/aspect-study/wordmark.svg" decoding="async" />
+      <img class="ending-brand-credit" alt="WAWAJIWA @ LouisCanBe &amp; Jenny" src="./assets/aspect-study/credit-corner.png" decoding="async" />
+    </div>
   </div>
   <div id="revealBeat" hidden>
     <div class="reveal-beat-inner">

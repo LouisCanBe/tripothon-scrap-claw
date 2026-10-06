@@ -1,8 +1,16 @@
 /** 中英切换。剧本字段用 { zh, en }；界面短句走 UI 表。 */
 
+const TITLE_ZH = '拾荒娃娃机';
+const TITLE_EN = 'PickMan: Claw Machine';
+
+/** 浏览器标签页：固定中英双语 */
+export function tabTitle() {
+  return `${TITLE_ZH} | ${TITLE_EN}`;
+}
+
 const UI = {
   zh: {
-    title: '拾荒娃娃机',
+    title: TITLE_ZH,
     start: '开始',
     loadShell: '正在组装娃娃机外壳……',
     loadClaw: '正在装载抓爪与导轨……',
@@ -54,7 +62,7 @@ const UI = {
     quotaReject: '……配额不认这个。',
   },
   en: {
-    title: 'Scavenger Claw',
+    title: TITLE_EN,
     start: 'Start',
     loadShell: 'Assembling the cabinet…',
     loadClaw: 'Fitting the claw and rails…',
@@ -207,7 +215,7 @@ export function onLangChange(fn) {
 }
 
 export function applyStaticCopy() {
-  document.title = t('title');
+  document.title = tabTitle();
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n);
   });
