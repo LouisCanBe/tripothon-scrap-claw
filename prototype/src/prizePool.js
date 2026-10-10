@@ -16,6 +16,7 @@ import { getGlbManifest } from './glbManifest.js';
 import { markItemVisualScale } from './poolDevPersist.js';
 import { enqueueRendererCompile } from './renderCompile.js';
 import { PRIZE_ROWS } from './prizeTableData.js';
+import { disposeObject, preloadIntoHttpCache } from './glbMemory.js';
 
 // shape: 'box' [w,h,d] | 'cylinder' [r,h] | 'sphere' [r, y压扁系数]
 // gripFactor: 0~1，越小越滑/越重
@@ -246,7 +247,8 @@ let _loader = null;
 async function prizeLoader() {
   if (!_loader) {
     const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-    _loader = new GLTFLoader();
+    const { withCompressedDecoders } = await import('./glbDecoders.js');
+    _loader = withCompressedDecoders(new GLTFLoader());
   }
   return _loader;
 }
@@ -303,6 +305,13 @@ export async function swapItemAppearance(item, appearance, { renderer, camera, p
   next.position.copy(item.mesh.position);
   next.rotation.copy(item.mesh.rotation);
   if (item.mesh.visible === false) next.visible = true;
+  // 释放旧视觉的 GPU 资源（geometry/material/texture）。
+  // 仅在有独立 GLB 的新视觉时才做：`next = item.mesh.clone(true)` 那条路径是**共享**
+  // geometry/material 的（clone 不复制数据），dispose 会把新视觉一起打坏。
+  if (url) {
+    const n = disposeObject(item.mesh);
+    if (n && globalThis.__perf?.mark) globalThis.__perf.mark(`释放 ${item.id} 旧模型(${n})`);
+  }
   root.remove(item.mesh);
   root.add(next);
   enableShadows(next);
@@ -325,8 +334,16 @@ export async function swapItemAppearance(item, appearance, { renderer, camera, p
 /**
  * 预算败露态模型：让它们在换货前就进浏览器 HTTP 缓存、并把并发请求合并掉，
  * 这样终幕在全黑里换货时基本只剩解析时间，黑屏不会被网络拖长。
- * （three r170 默认不缓存解析结果，所以这不是"零成本"；如果黑屏还是偏长，
- *   可以在 main.js 里开 THREE.Cache.enabled = true 再试。）
+ *
+ * 2026-10 改：原来用 `loader.loadAsync()` 预热，但 **THREE.Cache 默认是关的**
+ * （three.module.js 里 `enabled: false`），所以那次 loadAsync 解析完就把结果丢了 ——
+ * 既没进 three 的缓存，本地 dev 下 GLB 还是 no-store 连浏览器缓存都不命中，
+ * 等于白解析一次、还白占一次解析峰值内存。
+ *
+ * 现在改成只取 ArrayBuffer 丢引用（`preloadIntoHttpCache`）：
+ *   · 线上 GLB 是 immutable，能真正进浏览器 HTTP 缓存，换货时命中、不走网络
+ *   · 不产生任何常驻的解析结果，内存安全（iPad 友好）
+ *   · 本地 dev 下不命中缓存，但也不会更慢
  * 第四幕（他最暖的一幕）空闲时调用。
  */
 export async function preloadVariantVisuals(items, appearance = VARIANT_ROT) {
@@ -335,10 +352,8 @@ export async function preloadVariantVisuals(items, appearance = VARIANT_ROT) {
     .map(it => manifest[variantVisualKey(it, appearance)])
     .filter(Boolean))];
   if (!urls.length) return 0;
-  const loader = await prizeLoader();
-  let ok = 0;
-  await Promise.all(urls.map(u => loader.loadAsync(u).then(() => { ok += 1; }).catch(() => {})));
-  return ok;
+  const warmed = await preloadIntoHttpCache(urls);
+  return warmed;
 }
 
 /** 给一个视觉根节点套上材质覆盖（保留原贴图，只改粗糙/金属度；有 tint 才改颜色） */
@@ -392,7 +407,8 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
   if (!pending.length) return;
 
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const loader = new GLTFLoader();
+  const { withCompressedDecoders } = await import('./glbDecoders.js');
+  const loader = withCompressedDecoders(new GLTFLoader());
   let done = 0;
   const track = p => p.finally(() => onProgress?.(++done, pending.length));   // 成败都计进度
   // 触屏设备限流加载：16 个 GLB 同时下载解析会内存尖峰；桌面端保持全并行
@@ -409,8 +425,14 @@ export async function upgradeVisuals(parent, items, renderer, camera, onProgress
       }
     }
   };
-  const lanes = COARSE ? Math.min(CONFIG.mobile.glbConcurrency, pending.length) : pending.length;
-  await Promise.all(Array.from({ length: lanes }, worker));
+  // 并发上限：触屏早已限流（mobile.glbConcurrency=3），桌面补一个。
+  // 桌面端原本 28 个 GLB 全并行 —— 每个 parse 期间 body + 全部 bufferView 副本同时在世，
+  // 全并行会让这些瞬时副本叠加，峰值内存成倍上去。这是 iPad 上最危险的一处。
+  const lanes = Math.min(
+    COARSE ? CONFIG.mobile.glbConcurrency : (CONFIG.mobile.desktopGlbConcurrency ?? 6),
+    pending.length,
+  );
+  await Promise.all(Array.from({ length: Math.max(1, lanes) }, worker));
 
   // 归一化 + 隐身挂场景（此时尚未显示，不触发逐材质编译卡顿）
   const ready = [];

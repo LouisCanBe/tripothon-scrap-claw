@@ -14,7 +14,8 @@ export { MACHINE_SHELL_SLOTS };
  */
 async function loadPlacedShell(shell, procedural, renderer, camera, url) {
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const loader = new GLTFLoader();
+  const { withCompressedDecoders } = await import('./glbDecoders.js');
+  const loader = withCompressedDecoders(new GLTFLoader());
   const gltf = await loader.loadAsync(url);
   const root = gltf.scene;
   root.name = 'machineShellPlaced';
@@ -53,7 +54,8 @@ export async function upgradeMachineShellTripo(shell, procedural, renderer, came
   if (!ids.length) return 0;
 
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const loader = new GLTFLoader();
+  const { withCompressedDecoders } = await import('./glbDecoders.js');
+  const loader = withCompressedDecoders(new GLTFLoader());
   const tripo = new THREE.Group();
   tripo.name = 'machineShellTripo';
 

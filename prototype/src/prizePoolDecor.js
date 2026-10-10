@@ -535,7 +535,8 @@ async function loadDecorCatalog() {
   const catalog = new Map();
   const manifest = GLB_MANIFEST_DECOR ?? {};
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const loader = new GLTFLoader();
+  const { withCompressedDecoders } = await import('./glbDecoders.js');
+  const loader = withCompressedDecoders(new GLTFLoader());
   const loadOne = async (id) => {
     const url = manifest[id]?.replace?.(/^\.\//, '');
     const kind = decorKindFromId(id);

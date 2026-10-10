@@ -5,9 +5,10 @@
 // ============================================================
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { withCompressedDecoders } from './glbDecoders.js';
 import { DropInViewer } from '../vendor/addons/gaussian-splats-3d.js';
 
-const loader = new GLTFLoader();
+const loader = withCompressedDecoders(new GLTFLoader());
 
 export function computeWorldBounds(object3d) {
   object3d.updateMatrixWorld(true);

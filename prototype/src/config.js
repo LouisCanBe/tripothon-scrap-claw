@@ -559,7 +559,8 @@ export const CONFIG = {
   mobile: {
     maxPixelRatio: 1.5,      // 触屏设备渲染分辨率上限（Retina ×2 全分辨率 + 后处理极易爆显存）
     maxTextureSize: 1024,    // 触屏设备贴图降尺寸上限（Tripo GLB 可能带 2K/4K 贴图，16 件解码后显存上 GB）
-    glbConcurrency: 3,       // 触屏设备 GLB 并行加载数（同时 16 个会内存尖峰）；桌面端不限
+    glbConcurrency: 3,       // 触屏设备 GLB 并行加载数（同时 16 个会内存尖峰）；桌面端用 desktopGlbConcurrency
+    desktopGlbConcurrency: 6, // 桌面端也限流：全并行会让 GLParser 的瞬时副本叠加，峰值内存成倍上涨
   },
 };
 

@@ -1,6 +1,7 @@
 // 独立出货展示屏（display.html）
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { withCompressedDecoders } from './glbDecoders.js';
 import { CONFIG } from './config.js';
 import {
   subscribeCollectDisplay, readLastCollectEvent, resolveCollectPair, shouldUseRemoteSubscribe,
@@ -327,7 +328,7 @@ function loadFrameRoom() {
   if (!FRAME) return;
   const url = CONFIG.collectDisplay.frame?.room;
   if (!url) return;
-  new GLTFLoader().load(url, (gltf) => {
+  withCompressedDecoders(new GLTFLoader()).load(url, (gltf) => {
     const room = gltf.scenes.find((s) => /deep/i.test(s.name || ''))
       || gltf.scenes[gltf.scenes.length - 1];
     room.traverse((obj) => {
@@ -434,12 +435,12 @@ function fitObject(obj, targetSize = 1.1, centerY = null) {
 function preloadGlb(prize) {
   if (!prize?.glbUrl) return;
   if (!glbCache.has(prize.id)) {
-    glbCache.set(prize.id, new GLTFLoader().loadAsync(prize.glbUrl).then((g) => g.scene));
+    glbCache.set(prize.id, withCompressedDecoders(new GLTFLoader()).loadAsync(prize.glbUrl).then((g) => g.scene));
   }
   // 真相模型也预热一次：揭晓那一下要立刻出，不能等下载
   const truthKey = `${prize.id}#truth`;
   if (prize.truthGlbUrl && !glbCache.has(truthKey)) {
-    glbCache.set(truthKey, new GLTFLoader().loadAsync(prize.truthGlbUrl).then((g) => g.scene));
+    glbCache.set(truthKey, withCompressedDecoders(new GLTFLoader()).loadAsync(prize.truthGlbUrl).then((g) => g.scene));
   }
 }
 

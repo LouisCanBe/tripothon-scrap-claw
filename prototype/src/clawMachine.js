@@ -215,7 +215,8 @@ export class ClawMachine {
     if (!cfg?.useTripoGLB || !cfg?.url) return;
     try {
       const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-      const gltf = await new GLTFLoader().loadAsync(cfg.url);
+      const { withCompressedDecoders } = await import('./glbDecoders.js');
+      const gltf = await withCompressedDecoders(new GLTFLoader()).loadAsync(cfg.url);
       const root = gltf.scene;
       if (matchMedia('(pointer: coarse)').matches) capTextures(root, CONFIG.mobile.maxTextureSize);
       enableShadows(root);
