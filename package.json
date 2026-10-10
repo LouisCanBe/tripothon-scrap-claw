@@ -3,10 +3,9 @@
   "private": true,
   "type": "module",
   "description": "TripoThon 拾荒娃娃机 — dev tooling only (game runs without npm install)",
+  "//devDependencies": "gltfpack / sharp 是**离线资产优化工具**（tools/gltf-optimize.mjs），游戏运行时零引用。故意不放 devDependencies：Render 的 build 若跑 npm install，sharp 会触发平台二进制下载，平添一个失败面。需要时手动 npm i -D gltfpack sharp。",
   "devDependencies": {
-    "gltfpack": "^1.3.0",
-    "pixverse": "^1.4.6",
-    "sharp": "^0.35.5"
+    "pixverse": "^1.4.6"
   },
   "scripts": {
     "start": "node tools/devServer.mjs 8000",
