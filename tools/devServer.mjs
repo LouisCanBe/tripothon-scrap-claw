@@ -82,8 +82,15 @@ const LONG_CACHE_EXT = new Set([
 //       .js/.mjs/.css/.html/.json 从 no-store 改成 no-cache + ETag
 //         —— 「存，但每次校验」。文件一改 mtime 变 → ETag 变 → 200 拿新的，
 //            所以开发新鲜度不丢；没变则回 304（一两百字节），不再整包重下 1.28MB。
-//       带 ?v=<版本> 查询串（build-deploy.mjs 注入）→ immutable 强缓存。
+//       带 ?v=<真实版本号>（build-deploy.mjs 注入 git hash）→ immutable 强缓存。
+//
+//       ⚠️ __ASSET_V__ 陷阱：Render 走 git 部署，**不跑 build-deploy.mjs**，
+//       仓库里 index.html 的 ?v=__ASSET_V__ 会原样上线。若认这个占位符，
+//       three.module.js / main.js 就被打上 immutable 一年缓存 ——
+//       以后改 JS，老访客浏览器永远用旧代码，只能手动清缓存才更新。
+//       所以显式把「占位符 / 空值」当没有版本号，退回 no-cache + ETag。
 // ============================================================
+const VERSION_PLACEHOLDERS = new Set(['__ASSET_V__', '__DEPLOY_V__', '__VERSION__', 'undefined', 'null', '']);
 const TEXT_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json']);
 const COMPRESSIBLE_EXT = new Set([
   '.html', '.js', '.mjs', '.css', '.json', '.svg', '.map', '.gltf', '.txt', '.webmanifest',
@@ -132,7 +139,10 @@ function cachedCompressed(file, stat, enc) {
 /** 该文件的 Cache-Control。immutable > revalidate(no-cache) > no-store。 */
 function cachePolicyFor(ext, url) {
   if (!LONG_CACHE) return 'no-store';
-  if (LONG_CACHE_EXT.has(ext) || url.searchParams.has('v')) {
+  if (LONG_CACHE_EXT.has(ext)) return 'public, max-age=31536000, immutable';
+  // 只有「真实版本号」才给 immutable；占位符/空值退回 no-cache + ETag
+  const ver = url.searchParams.get('v');
+  if (ver != null && !VERSION_PLACEHOLDERS.has(ver.trim())) {
     return 'public, max-age=31536000, immutable';
   }
   if (TEXT_EXT.has(ext)) return 'no-cache';    // 存，但每次带 If-None-Match 校验

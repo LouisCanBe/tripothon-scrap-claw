@@ -310,7 +310,8 @@ export async function swapItemAppearance(item, appearance, { renderer, camera, p
   // geometry/material 的（clone 不复制数据），dispose 会把新视觉一起打坏。
   if (url) {
     const n = disposeObject(item.mesh);
-    if (n && globalThis.__perf?.mark) globalThis.__perf.mark(`释放 ${item.id} 旧模型(${n})`);
+    // 走 markRuntime 而非 mark：这是运行期事件，不该挤占首屏加载时间线
+    if (n && globalThis.__perf?.markRuntime) globalThis.__perf.markRuntime(`释放 ${item.id} 旧模型(${n})`);
   }
   root.remove(item.mesh);
   root.add(next);

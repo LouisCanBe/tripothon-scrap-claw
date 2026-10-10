@@ -69,8 +69,9 @@ export function createPerfHud({ renderer, url }) {
   let tUpdate = 0, tRender = 0, tFrame = 0;
   let _mark = 0;
 
-  // —— 资源加载时间线 ——
-  const loads = [];
+  // —— 资源加载时间线（运行期标记单独放，避免互相挤掉）——
+  const loads = [];          // 首屏资源就绪时刻
+  const runtimeMarks = [];   // 运行期事件（换货/释放等），最多留 8 条
   const BOOT_T = performance.now();   // 基准 = 面板创建时刻（≈ 模块求值早期）
   let loadReadyAt = null;
 
@@ -106,10 +107,24 @@ export function createPerfHud({ renderer, url }) {
     frameCount += 1;
   }
 
-  /** 记录资源就绪时刻，用来拼首屏时间线 */
+  /**
+   * 记录首屏资源就绪时刻。这是「加载时间线」，只应被资源加载调用。
+   * 逐个显示、不设上限（首屏只有个位数的资源组）。
+   */
   function mark(name) {
     loads.push({ name, t: performance.now() });
-    if (loads.length > 24) loads.shift();
+  }
+  /**
+   * 记录运行期事件（两态换货、模型释放等）。
+   * **与加载时间线分开**：运行期事件可能触发几十次（按 N/Y 重玩），
+   * 混在一条列表里会把首屏的时间线挤掉，反而看不出加载慢在哪。
+   * 只保留最近 6 条，且只显示累计次数。
+   */
+  function markRuntime(name) {
+    const last = runtimeMarks[0];
+    if (last && last.name === name) { last.count += 1; last.t = performance.now(); return; }
+    runtimeMarks.unshift({ name, t: performance.now(), count: 1 });
+    if (runtimeMarks.length > 6) runtimeMarks.pop();
   }
   function setLoadReady() {
     if (loadReadyAt == null) loadReadyAt = performance.now();
@@ -172,13 +187,22 @@ export function createPerfHud({ renderer, url }) {
       html += row('⚠', '软渲染，帧率不代表真机');
     }
 
-    if (loads.length) {
+    if (loads.length || loadReadyAt != null) {
       html += '<div class="ph-sep"></div><div class="ph-k">加载时间线</div>';
       for (const l of loads) {
         html += row(l.name, `+${fmt(l.t - BOOT_T)}ms`);
       }
       if (loadReadyAt != null) {
         html += row('▶ 上货条满', `+${fmt(loadReadyAt - BOOT_T)}ms`, 'ph-ok');
+      }
+    }
+
+    // 运行期事件单独一块，不与加载时间线混（否则 N/Y 重玩几次就把时间线挤掉了）
+    if (runtimeMarks.length) {
+      html += '<div class="ph-sep"></div><div class="ph-k">运行期事件（不计入加载）</div>';
+      for (const m of runtimeMarks) {
+        const dt = fmt(m.t - BOOT_T);
+        html += row(m.name, `${m.count > 1 ? `×${m.count}  ` : ''}+${dt}ms`);
       }
     }
 
@@ -199,5 +223,5 @@ export function createPerfHud({ renderer, url }) {
     : (q.has('gui') && q.get('gui') !== '0') || (q.has('dev') && q.get('dev') !== '0');
   if (wantOpen) setVisible(true);
 
-  return { setVisible, toggle, setMsaaSamples, mark, setLoadReady, beginFrame, endUpdate, endRender, dispose, get enabled() { return enabled; } };
+  return { setVisible, toggle, setMsaaSamples, mark, markRuntime, setLoadReady, beginFrame, endUpdate, endRender, dispose, get enabled() { return enabled; } };
 }
