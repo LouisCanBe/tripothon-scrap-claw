@@ -356,11 +356,24 @@ node tools/_verify-variants.mjs                    # 压缩后必跑：两态配
 
 | 项 | 说明 |
 |---|---|
-| **A1/A5 实跑** | 需联网：`npm i -D @gltf-transform/core @gltf-transform/extensions @gltf-transform/functions draco3dgltf sharp`，然后 `npm run optimize:assets -- --only prizes`。**奖品优先**（时间线显示它占 47%） |
+| **A1/A5 实跑** | ✅ **奖品 33 件已压完**：74.9MB → 19.5MB（省 73%）。装饰/爪/壳待跑 |
 | 装饰约 100 件合批 | `BatchedMesh`(r165+) 或 `mergeGeometries`，静态件收益大 |
 | 描边复制使 draw call 翻倍 | `comicFx` 的 inverted hull；可考虑后处理描边替代 |
 | 副屏 SSE 与静态拆分（B1） | 静态上 CDN + Brotli/HTTP2，SSE 留小 Node 服务；这是新加坡→大陆的根治方案 |
 | `_e2e.mjs` 超时问题 | 根因是无 GPU 环境；正式测试应在有 GPU 的机器上跑，或给脚本加 `--gl=angle` 而非 swiftshader |
+
+### 工具链实况（2026-10-10 踩完坑后的结论）
+
+| 事 | 结论 |
+|---|---|
+| npm 源 | 当前就是 `registry.npmmirror.com`，官方源也通。**装不上从来不是源的问题** |
+| GitHub | `api.github.com` 通，但 **releases 下载 CDN（objects.githubusercontent.com）连不上** —— 想下 gltfpack 原生二进制走不通 |
+| `npm i -D gltfpack` | 可用（0.3MB，纯 WASM：`library.js` + `library.wasm`） |
+| gltfpack WASM 版限制 | **没编 WebP / BasisU**，`-tw`/`-tc`/`-tl` 全部不可用（`-tl` 也要求有纹理压缩链路）。只有几何 `-cc` 能用 |
+| `npm i -D sharp` | 可用，贴图降尺寸 + PNG→JPEG 靠它 |
+| 不 spawn 子进程 | gltfpack 直接 `import('gltfpack/library.js')` 调 `pack()`。Windows 上 `.cmd` 在 `shell:false` 报 EINVAL、`shell:true` 又在带空格路径上被 cmd 二次切分，走 WASM 接口两类坑一起消失 |
+| **PNG 必须转码** | sharp 只 resize 不换编码时，400~500KB 的 baseColor PNG **一点都压不动**，占单件体积一半。统一转 JPEG(q82, mozjpeg)，有 alpha 的保留 PNG |
+| 备份 | 每次跑生成 `.orig`，33 个共 73MB；这些文件都在 git 里，确认无损后应删除 |
 
 ---
 
