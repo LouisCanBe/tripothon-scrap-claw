@@ -33,3 +33,51 @@
   @font-face { font-family: 'MyHand'; src: url('./fonts/hand.woff2') format('woff2'); }
   */
 }
+
+/* ============================================================
+   开发模式 · 性能面板（src/perfHud.js）
+   默认不渲染；仅 ?perf=1 / ?gui=1 / ?dev=1 或按 P 才出现。
+   配色沿用上面那套变量，不做第二套视觉。
+   ============================================================ */
+#perfHud {
+  position: fixed;
+  top: 8px; left: 8px;
+  z-index: 9999;
+  min-width: 250px;
+  max-width: 340px;
+  padding: 6px 9px 8px;
+  font-family: var(--font-main);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-ink);
+  background: rgba(7, 7, 8, .88);
+  border: 1px solid rgba(216, 212, 200, .18);
+  border-radius: 3px;
+  text-shadow: var(--text-shadow);
+  pointer-events: none;      /* 不抢鼠标 */
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#perfHud[hidden] { display: none; }
+
+#perfHud .ph-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 2px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(216, 212, 200, .14);
+}
+#perfHud .ph-title { color: var(--color-accent); letter-spacing: .14em; font-weight: bold; }
+#perfHud .ph-hint  { color: var(--color-ink-dim); font-size: 10px; }
+
+#perfHud .ph-row {
+  display: flex; justify-content: space-between; gap: 10px;
+}
+#perfHud .ph-k { color: var(--color-ink-dim); }
+#perfHud .ph-v { color: var(--color-ink); font-variant-numeric: tabular-nums; }
+#perfHud .ph-big .ph-v { font-size: 12px; }
+#perfHud .ph-ok { color: var(--color-accent); }
+#perfHud .ph-sep {
+  height: 1px; margin: 4px 0 3px;
+  background: rgba(216, 212, 200, .12);
+}

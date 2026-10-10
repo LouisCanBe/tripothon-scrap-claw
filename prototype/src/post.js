@@ -3,7 +3,7 @@
 // 终幕扩展位：之后 glitch shader 加在本 pass 之后即可。
 // 展开 16:9 时 fisheyeFade → 0，鱼眼同步消退（"梦醒了"）。
 // ============================================================
-import { Vector2 } from 'three';
+import { Vector2, WebGLRenderTarget, HalfFloatType } from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
@@ -75,7 +75,29 @@ const GradeShader = {
 
 export class Post {
   constructor(renderer, scene, camera) {
-    this.composer = new EffectComposer(renderer);
+    // MSAA：场景是渲进 composer 的 RT 再走后期链的，canvas 的 antialias 用不上（见 main.js）。
+    // 所以在这里给 RT 开 samples —— 这才是抗锯齿真正生效的地方，且比 canvas MSAA 更省
+    // （只对场景几何生效，不作用于后期链的全屏 pass）。
+    // 触屏关掉：iPad/手机显存与填充率吃紧。
+    // ?aa=0|2|4 可覆盖 —— Chrome 在 Intel 核显上会把 WebGL MSAA 上限砍到 4
+    // （driver bug workaround `max_msaa_sample_count_4`），所以 4 就是官方上限。
+    // 想量"关 MSAA 省多少 ms"：用 ?aa=0 对比，看面板「渲染」段。
+    const COARSE_POST = matchMedia('(pointer: coarse)').matches;
+    const MSAA_SAMPLES = (() => {
+      const raw = new URLSearchParams(location.search).get('aa');
+      if (raw == null) return COARSE_POST ? 0 : 4;
+      if (/^(0|off|false|none)$/i.test(raw)) return 0;
+      const n = parseInt(raw, 10);
+      return Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : (COARSE_POST ? 0 : 4);
+    })();
+    const size = renderer.getDrawingBufferSize(new Vector2());
+    const composerRT = new WebGLRenderTarget(size.width, size.height, {
+      type: HalfFloatType,
+      samples: MSAA_SAMPLES,
+    });
+    composerRT.texture.name = 'EffectComposer.rt1';
+    this.msaaSamples = MSAA_SAMPLES;
+    this.composer = new EffectComposer(renderer, composerRT);
     this.composer.addPass(new RenderPass(scene, camera));
     // 泛光：只让灯带/高光晕开（threshold 守门），第四幕回暖演出更动人
     // 触屏设备默认关：全屏模糊采样对 iPad GPU 不友好

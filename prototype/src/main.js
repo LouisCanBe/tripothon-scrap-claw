@@ -60,6 +60,7 @@ import { NarrativeBg } from './narrativeBg.js';
 import { preloadNarrativeImages } from './narrativeAssets.js';
 import { initPresent, applyPresentAct, getPresentActId } from './present.js';
 import { resolveViewportEdgeFromQuery, syncViewportEdgeToDom, applyFisheyeEdgeToBorder } from './frameEdge.js';
+import { createPerfHud } from './perfHud.js';
 
 loadPoolDevOverrides();
 setCoalesceIncrementalCompile(true);
@@ -103,7 +104,14 @@ function parseDevGui() {
 // —— 渲染器 ——
 // 触屏设备（iPad/手机）降渲染分辨率上限：Retina ×2 全幅 + 后处理极易爆显存崩标签页
 const COARSE = matchMedia('(pointer: coarse)').matches;
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({
+  // 双显卡笔记本可能落到集显，明确要独显（一行改动，零副作用）
+  powerPreference: 'high-performance',
+  // 画面全程走 EffectComposer 渲进 RT 再走后期链，canvas 的 antialias 只作用于
+  // 最后那张全屏 quad（没有内部边缘可抗），等于白付显存带宽。
+  // 真正的抗锯齿由 Post 里带 samples 的 composer RT 负责 —— 见 post.js。
+  antialias: false,
+});
 renderer.setPixelRatio(Math.min(devicePixelRatio, COARSE ? CONFIG.mobile.maxPixelRatio : 2));
 renderer.setSize(innerWidth, innerHeight);
 // ACES 电影级色调映射：高光滚降更柔，暖灯不过曝（OutputPass 会读这个设置）
@@ -113,6 +121,12 @@ renderer.toneMappingExposure = CONFIG.render.exposure;
 renderer.shadowMap.enabled = CONFIG.render.shadows;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('stage').appendChild(renderer.domElement);
+
+// 开发模式性能面板（?perf=1 / ?gui=1 / ?dev=1，或按 P）。默认不渲染、不占开销。
+// 必须建在 prizesReady / decorReady 这些 Promise 回调之前 —— 那些回调里要调 perf.mark()。
+// main.js 无顶层 await，模块体同步执行完才会跑微任务，所以按源码顺序建就一定安全。
+const perf = createPerfHud({ renderer });
+window.__perf = perf;   // 控制台 / e2e 也能读
 
 const scene = new THREE.Scene();
 scene.background = GAMEPLAY_SCENE_BG;
@@ -198,6 +212,7 @@ const decorReady = upgradePoolDecor(poolDecor, items)
   .then(() => {
     decorLoaded = true;
     paintLoading();
+    perf.mark('池底装饰 GLB');
     return poolDecorSim?.rebuild?.(poolDecor);
   })
   .catch((e) => console.warn('[decor] upgrade', e));
@@ -211,6 +226,7 @@ const prizesReady = upgradeVisuals(world, items, renderer, camera, (d, t) => {
   restackPoolDecorWithPrizes(poolDecor, items);
   poolDecorSim?.rebuild?.(poolDecor);
   refreshPrizeComicFx(items, { renderer, key, scene }, poolDecor);
+  perf.mark('奖品 GLB');
 });
 
 // 两态换货后重刷漫画描边（换的是模型/材质，描边子网格得跟着重建）。
@@ -272,12 +288,14 @@ const shellReady = upgradeMachineShellTripo(
   shellLoaded = true;
   shellTripoCount = n;
   paintLoading();
+  perf.mark('机壳 GLB');
 });
 
 const clawReady = Promise.all([shellReady, claw.upgradeClawVisual(renderer, camera)]).then(() => {
   refreshClawComicFx(claw);
   clawLoaded = true;
   paintLoading();
+  perf.mark('爪 GLB');
 });
 const machineVisualsReady = Promise.all([prizesReady, clawReady, decorReady]);
 
@@ -297,6 +315,8 @@ initEndingBrand();
 mask.bootstrapFromAct(ACTS[parseStartActIndex()] ?? ACTS[0]);
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
+// post.js 已经把实际生效的 MSAA 档位挂在实例上，这里转交面板（?aa= 生效可自证）
+perf.setMsaaSamples(post.msaaSamples ?? 4);
 const input = new Input();
 const buttons = new OnscreenButtons(input);   // 屏幕按钮（触屏自动显示，H 面板可开）
 const design = new DesignOverlay();           // 设计稿叠加层（G 切换，调试对齐用）
@@ -1634,6 +1654,9 @@ input.on('gui', () => {
   syncDocumentTitle();
 });
 
+// P：性能面板。不设闸门 —— 线上排障也要能开（面板本身零开销，不渲染就不跑 paint）
+input.on('perf', () => perf.toggle());
+
 // —— 调试钩子（控制台/自动化用）——
 window.__debug = {
   claw, rig, director, mask, items, CONFIG, toast, world, modelFade, scene, narrativeBg,
@@ -1779,6 +1802,7 @@ async function onLoadGateReady() {
     window.__boot.loadReady = true;
     window.__boot.started = true;
   }
+  perf.setLoadReady();   // 时间线的终点：上货条满、可以点「开始」
 }
 
 function beginGame() {
@@ -1829,6 +1853,7 @@ function tick() {
   requestAnimationFrame(tick);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
+  perf.beginFrame();
 
   if (rig.cur !== lastView) {
     lastView = rig.cur;
@@ -1883,10 +1908,13 @@ function tick() {
   }
   if (revealDissolve) {
     revealDissolve.update(dt, t);
+    perf.endUpdate();
   } else {
+    perf.endUpdate();          // —— 逻辑/物理段结束 ——
     post.render(dt, t);
     if (revealPictureGate) stepRevealPictureGate();
   }
+  perf.endRender();            // —— 渲染（后处理链提交）结束，计一帧 ——
 }
 tick();
 

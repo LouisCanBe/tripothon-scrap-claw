@@ -22,6 +22,7 @@ export class Input {
         case 'KeyE':   this.emit('cycle', 1); break;
         case 'KeyF':   this.emit(e.shiftKey ? 'hardCut' : 'toggleFrame'); break;
         case 'KeyH':   this.emit('gui'); break;
+        case 'KeyP':   this.emit('perf'); break;   // 开发模式：性能面板显隐
         case 'KeyN':   this.emit('next'); break;   // 调试：跳过当前幕
         case 'KeyY':   this.emit('replay'); break; // 通关后再玩一次
         case 'KeyV':   this.emit('frameMode'); break;   // 取景 近/远 切换
