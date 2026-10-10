@@ -148,8 +148,17 @@ function restoreBackup(abs) {
  *   -vp N 顶点位置量化位数（默认 14）
  *   -vn N 法线量化位数（默认 8）
  */
-async function compressGeometryMeshopt(abs) {
+async function compressGeometryMeshopt(abs, opts = {}) {
   const args = ['-i', abs, '-o', abs, '-cc', '-si', '1.0', '-vp', '14', '-vn', '8'];
+
+  // -kn 保留命名节点与挂在其上的 mesh —— 没有它 gltfpack 会把多个分件
+  // 合并成单个 mesh 并丢掉 node 名称。
+  // ⚠️ claw_parts.glb 的分件爪完全靠名称驱动（clawMachine.js 的
+  // staticParts / prongGroups 按 tripo_part_N 挂关节），丢了名字就一条
+  // 爪臂都找不到，只能回退 procedural 爪。所以默认开启，不让关。
+  if (opts.keepNames !== false) args.push('-kn');
+  // -km 保留命名材质、禁用材质合并（Toon/描边按材质名分组时靠它）
+  if (opts.keepMaterials) args.push('-km');
 
   let pack;
   try {
@@ -297,6 +306,31 @@ async function hasAlphaChannel(bytes) {
   }
 }
 
+/**
+ * 压缩后自检：确认命名节点没有被合并/丢弃。
+ *
+ * 为什么必须查：gltfpack 默认会把多个 mesh 合并成一个、并丢掉 node 名。
+ * 对大多数模型无所谓，但 claw_parts.glb 的分件爪**完全靠名称驱动**
+ * （clawMachine.js 的 staticParts / prongGroups 按 tripo_part_N 挂关节）。
+ * 名字一丢，加载器报「需 3 条可动爪臂，当前 0」，静默回退 procedural 爪 ——
+ * 外观变了但不报错，肉眼在首屏很难发现，是我实际踩过的坑。
+ *
+ * @returns {{ok: boolean, msg?: string}}
+ */
+function verifyNamedNodes(abs) {
+  try {
+    const b = fs.readFileSync(abs);
+    if (b.readUInt32LE(0) !== 0x46546c67) return { ok: false, msg: '不是 GLB' };
+    const jl = b.readUInt32LE(12);
+    const j = JSON.parse(b.subarray(20, 20 + jl).toString('utf8'));
+    const named = (j.nodes ?? []).filter((n) => n.name).length;
+    if (named === 0) return { ok: false, msg: '压缩后 0 个命名 node（分件爪会失效）' };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: String(e.message).slice(0, 80) };
+  }
+}
+
 /** 卸掉死代码 run()（meshopt 与 sharp 都走进程内 API，不再 spawn） */
 function runDeprecated() {}
 
@@ -406,7 +440,17 @@ async function main() {
           else if (r) steps.push(`贴图失败(${String(r.err).slice(0, 40)})`);
         }
         const res = await compressGeometryMeshopt(abs);
-        if (res.ok) steps.push('几何-meshopt');
+        if (res.ok) {
+          // 分件名自检：丢了 node 名就恢复备份，绝不把坏模型留在原地
+          const chk = verifyNamedNodes(abs);
+          if (!chk.ok) {
+            note = `❌ ${chk.msg}，已还原原文件`;
+            restoreBackup(abs);
+            after = before;
+          } else {
+            steps.push('几何-meshopt');
+          }
+        }
         else { note = `❌ meshopt 失败：${res.err}`; restoreBackup(abs); after = before; }
         if (!note) {
           after = fs.statSync(abs).size;
