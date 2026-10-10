@@ -11,7 +11,9 @@
 // ============================================================
 import http from 'node:http';
 import os from 'node:os';
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { brotliCompressSync, gzipSync, constants } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleCollectApi } from './collectDisplayHub.mjs';
@@ -68,6 +70,76 @@ const LONG_CACHE_EXT = new Set([
   '.woff2', '.woff',
 ]);
 
+// ============================================================
+// A2 压缩 / A3 缓存 —— 见 PERF-性能优化.md
+//
+// A2：文本类（js/mjs/css/html/json/svg/gltf/map）按 Accept-Encoding 出 br 优先、gzip 兜底。
+//     只对 ≤4MB 的文件做，结果按 mtime 缓存进内存 —— 免费实例 CPU 弱，
+//     不能每个请求都重压一遍 three.module.js。GLB/SPZ/图/音不在列，原样直出。
+//
+// A3：本地（无 PORT）保持 no-store，行为与以前完全一致 —— 改完 .js 刷新即生效。
+//     生产（Render 注入 PORT → LONG_CACHE）：
+//       .js/.mjs/.css/.html/.json 从 no-store 改成 no-cache + ETag
+//         —— 「存，但每次校验」。文件一改 mtime 变 → ETag 变 → 200 拿新的，
+//            所以开发新鲜度不丢；没变则回 304（一两百字节），不再整包重下 1.28MB。
+//       带 ?v=<版本> 查询串（build-deploy.mjs 注入）→ immutable 强缓存。
+// ============================================================
+const TEXT_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json']);
+const COMPRESSIBLE_EXT = new Set([
+  '.html', '.js', '.mjs', '.css', '.json', '.svg', '.map', '.gltf', '.txt', '.webmanifest',
+]);
+const COMPRESS_MIN_BYTES = 1024;              // 太小压了反而亏
+const COMPRESS_CACHE_MAX_BYTES = 4 * 1024 * 1024;
+const _compressCache = new Map();             // `${file}|${mtimeMs}|${enc}` → Buffer
+
+/** br 优先，其次 gzip；客户端都不要就返回 null（直出）。 */
+function pickEncoding(req) {
+  const ae = String(req.headers['accept-encoding'] || '');
+  if (ae.includes('br')) return 'br';
+  if (ae.includes('gzip')) return 'gzip';
+  return null;
+}
+
+function compressBytes(buf, enc) {
+  return enc === 'br'
+    ? brotliCompressSync(buf, { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } }) // 5 而非 11：免费实例 CPU 友好
+    : gzipSync(buf, { level: 6 });
+}
+
+/** 弱 ETag：同文件 + 同编码 + 同 mtime 才算命中。编码不同 ETag 也不同（RFC 要求）。 */
+function weakETag(file, stat, enc) {
+  const h = createHash('sha1')
+    .update(`${stat.size}:${stat.mtimeMs}:${enc || 'identity'}:${path.basename(file)}`)
+    .digest('base64url')
+    .slice(0, 20);
+  return `W/"${h}"`;
+}
+
+function cachedCompressed(file, stat, enc) {
+  const key = `${file}|${stat.mtimeMs}|${enc}`;
+  let buf = _compressCache.get(key);
+  if (buf) return buf;
+  try {
+    buf = compressBytes(readFileSync(file), enc);
+  } catch {
+    return null;                              // 压缩失败就退回直出，不挡请求
+  }
+  _compressCache.set(key, buf);
+  if (_compressCache.size > 400) _compressCache.delete(_compressCache.keys().next().value);
+  return buf;
+}
+
+/** 该文件的 Cache-Control。immutable > revalidate(no-cache) > no-store。 */
+function cachePolicyFor(ext, url) {
+  if (!LONG_CACHE) return 'no-store';
+  if (LONG_CACHE_EXT.has(ext) || url.searchParams.has('v')) {
+    return 'public, max-age=31536000, immutable';
+  }
+  if (TEXT_EXT.has(ext)) return 'no-cache';    // 存，但每次带 If-None-Match 校验
+  return 'no-store';
+}
+
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -108,13 +180,47 @@ const server = http.createServer(async (req, res) => {
       return res.end('404');
     }
     const ext = path.extname(file).toLowerCase();
-    const cache = LONG_CACHE && LONG_CACHE_EXT.has(ext)
-      ? 'public, max-age=31536000, immutable'
-      : 'no-store';
-    res.writeHead(200, {
-      'Content-Type': MIME[ext] ?? 'application/octet-stream',
+    const stat = statSync(file);
+    const contentType = MIME[ext] ?? 'application/octet-stream';
+    const cache = cachePolicyFor(ext, url);
+
+    // —— A2/A3：先定一套头（HEAD 与 GET 共用同一套，行为才一致）——
+    const enc = pickEncoding(req);
+    const canCompress = enc && COMPRESSIBLE_EXT.has(ext) && stat.size >= COMPRESS_MIN_BYTES;
+    const headers = {
+      'Content-Type': contentType,
       'Cache-Control': cache,
-    });
+      // 同一 URL 按 Accept-Encoding 出不同编码，必须告诉缓存
+      Vary: 'Accept-Encoding',
+    };
+    let status = 200;
+    let body = null;   // HEAD 不取 body，省一次压缩
+
+    if (canCompress && stat.size <= COMPRESS_CACHE_MAX_BYTES) {
+      const etag = weakETag(file, stat, enc);
+      headers['Content-Encoding'] = enc;
+      headers.ETag = etag;
+      if (req.headers['if-none-match'] === etag) status = 304;
+      else if (req.method !== 'HEAD') body = cachedCompressed(file, stat, enc);
+    } else if (LONG_CACHE && (TEXT_EXT.has(ext) || LONG_CACHE_EXT.has(ext))) {
+      const etag = weakETag(file, stat, null);
+      headers.ETag = etag;
+      if (req.headers['if-none-match'] === etag) status = 304;
+    }
+
+    if (status === 304) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+    if (req.method === 'HEAD') {
+      res.writeHead(200, headers);
+      return res.end();
+    }
+    if (body) {
+      res.writeHead(200, headers);
+      return res.end(body);
+    }
+    res.writeHead(200, headers);
     createReadStream(file).pipe(res);
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });

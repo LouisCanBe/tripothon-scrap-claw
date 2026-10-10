@@ -16,6 +16,8 @@
     "pixverse": "pixverse",
     "pixverse:login": "pixverse auth login",
     "pixverse:status": "pixverse auth status",
-    "skills:pixverse": "npx skills add https://github.com/pixverseai/skills --skill pixverse-ai-image-and-video-generator --project -y"
+    "skills:pixverse": "npx skills add https://github.com/pixverseai/skills --skill pixverse-ai-image-and-video-generator --project -y",
+    "build:deploy": "node tools/build-deploy.mjs",
+    "optimize:assets": "node tools/gltf-optimize.mjs"
   }
 }

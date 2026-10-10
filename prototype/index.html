@@ -662,15 +662,18 @@
   <button type="button" id="langToggle">EN</button>
   <div id="loading" aria-live="polite" aria-busy="true"><img class="mark" alt="" src="./assets/mark-horizontal.svg" /><div class="title" data-i18n="title">拾荒娃娃机</div><div class="t">准备中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div><button type="button" id="loadStart" class="load-start" data-i18n="start" hidden>开始</button></div>
 
+  <!-- ?v= 由 tools/build-deploy.mjs 在打包时替换成版本号（本地开发原样带着，服务端在本地会忽略）。
+       生产环境带版本串的请求拿 immutable 强缓存；其余模块走 no-cache + ETag 重验证。
+       注意：importmap 的前缀映射（three/addons/）不能加查询串，会把后面的路径拼坏。 -->
   <script src="./vendor/qrcode-generator.js"></script>
   <script type="importmap">
   {
     "imports": {
-      "three": "./vendor/three.module.js",
+      "three": "./vendor/three.module.js?v=__ASSET_V__",
       "three/addons/": "./vendor/addons/"
     }
   }
   </script>
-  <script type="module" src="./src/main.js"></script>
+  <script type="module" src="./src/main.js?v=__ASSET_V__"></script>
 </body>
 </html>
