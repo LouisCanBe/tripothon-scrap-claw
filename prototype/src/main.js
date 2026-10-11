@@ -31,7 +31,7 @@ import { upgradeMachineShellTripo } from './machineShellTripo.js';
 import { Director } from './director.js';
 import { ACTS, DEFAULT_HINT } from './acts.js';
 import { applyStaticCopy, copy, onLangChange, tabTitle, t as tr, toggleLang } from './i18n.js';
-import { primeAudioFiles, primeAudioDecode, unlockAudio } from './gameAudio.js';
+import { primeAudioFiles, primeAudioDecode, unlockAudio, installAudioUnlock } from './gameAudio.js';
 import { enqueueRendererCompile, setCoalesceIncrementalCompile } from './renderCompile.js';
 import { SceneControls, SceneControlPresets } from './sceneControls.js';
 import { applyRevealWorld, REVEAL_WORLDS, walkBoxFromBounds } from './revealWorlds.js';
@@ -1769,6 +1769,11 @@ applyViewRect();
 
 // —— 加载闸门：GLB 全部就位后才开演（线上 48MB 走网络，避免演到一半"变装"）——
 const loadingEl = document.getElementById('loading');
+// 提前解锁音频：原来 installAudioUnlock 是死代码（导出但从没调用），
+// AudioContext 要等点「开始」才建，第一个音效就容易发钝。
+// 现在任何首次点击/按空格都会 resume，并把 #loading 标上 audio-ready。
+// resume() 必须在手势同一帧调用（gameAudio 里已保证先于任何 await）。
+installAudioUnlock(loadingEl);
 const loadFill = document.getElementById('loadFill');
 const loadPct = document.getElementById('loadPct');
 const loadStartBtn = document.getElementById('loadStart');

@@ -15,7 +15,7 @@ import { nearestItem, capTextures, enableShadows, poolVisualScale, clampItemToPo
 import { tameClawMaterials } from './clawMaterials.js';
 import { enqueueRendererCompile } from './renderCompile.js';
 import {
-  setClawTravel, playSlip, playFloorHit, playHoleDrop,
+  setClawTravel, playSlip, playFloorHit, playHoleDrop, playSfx,
 } from './gameAudio.js';
 
 const C = () => CONFIG.claw;
@@ -320,6 +320,7 @@ export class ClawMachine {
     if (cand && (c.forceGrip || Math.random() < g * cand.gripFactor)) {
       this.gripped = cand;
       cand.state = 'gripped';
+      playSfx('grab', { gain: 0.5 });
       // 上升前一次性掷签：是否滑落、在哪个高度滑
       this.slipPlanned = !c.forceGrip && Math.random() < c.baseSlipProb * (1 - g * cand.gripFactor);
       this.slipAtY = lerp(t.grabY + 0.25, t.restY - 0.20, Math.random());
@@ -330,6 +331,7 @@ export class ClawMachine {
         cand.mesh.rotation.x += (Math.random() - 0.5) * 0.3;
       }
       this.#say('miss');
+      playSfx('fail', { gain: 0.45 });
       this.hooks.onGrabFail?.('miss');
     }
   }
@@ -347,6 +349,7 @@ export class ClawMachine {
       if (!skip) this.#say(it.category === 'food' ? 'food' : 'junk');
     } else {
       playSlip();
+      playSfx('fail', { gain: 0.35, rate: 0.85 });   // 滑落比抓空轻一档，音高也压低
       this.#say('slip');
       this.hooks.onGrabFail?.('slip');
     }
@@ -365,6 +368,7 @@ export class ClawMachine {
       if (it.mesh.position.y <= floorY) {
         if (it.state === 'delivering') {
           playHoleDrop();
+          playSfx('pop', { gain: 0.55 });
           it.mesh.visible = false;
           it.state = 'collected';
           this.hooks.onVended?.(it);

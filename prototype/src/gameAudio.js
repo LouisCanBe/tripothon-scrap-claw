@@ -28,6 +28,17 @@ function prefetchAudio(url) {
 const TYPE_TICK_URL = 'assets/audio/sfx_type_tick.wav';
 const COIN_URL = 'assets/audio/sfx_coin.mp3';
 
+// 抓取音效（仓库里已有素材，之前一直没接进代码）
+//   grab  —— 爪合上、抓住东西那一下
+//   fail  —— 爪合上但抓空 / 上升途中滑落
+//   pop   —— 物品落进出货口
+const SFX_URL = {
+  grab: 'assets/audio/sfx_grab.mp3',
+  fail: 'assets/audio/sfx_fail.mp3',
+  pop:  'assets/audio/sfx_pop.mp3',
+};
+const sfxBuf = {};
+
 // Kenney Impact Sounds（CC0）
 const CLAW_SAMPLE = {
   open: 'assets/audio/claw-open.ogg',
@@ -110,6 +121,14 @@ async function fillAllSamples(c) {
       if (buf) quotaCoin = buf;
     } catch { quotaCoin = undefined; }
   }
+  // 抓取三件套：解锁后一并预热，避免第一次抓取时才解码
+  await Promise.all(Object.entries(SFX_URL).map(async ([k, url]) => {
+    if (sfxBuf[k]) return;
+    try {
+      const buf = await decodeUrl(c, url);
+      if (buf) sfxBuf[k] = buf;
+    } catch { /* 没接到就静音，不影响游戏 */ }
+  }));
   typeTickBuf = bakeTypeTickBuffer();
   try {
     const buf = decodedCache.get(TYPE_TICK_URL) ?? await decodeUrl(c, TYPE_TICK_URL);
@@ -459,23 +478,63 @@ export function playHoleDrop() {
   playClawSample('thud', 0.3, (c) => tone(c, { freq: 90, type: 'sine', dur: 0.07, gain: 0.04 }), { rate: 0.92, dur: 0.09 });
 }
 
-/** 字幕逐字：实时方波，不走文件解码（解码会拖过点击手势，整段静音） */
-export function playTypeTick() {
+/**
+ * 播放抓取音效（grab / fail / pop）。
+ * 素材来自仓库 assets/audio/sfx_*.mp3，解锁时已预热解码。
+ * 文件缺失或没解好就静音返回 —— 不挡游戏。
+ */
+export function playSfx(key, { gain = 0.5, rate = 1 } = {}) {
+  const buf = sfxBuf[key];
+  if (!buf) return;
+  withAudio((c) => {
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = c.createGain();
+    g.gain.value = gain;
+    src.connect(g).connect(c.destination);
+    src.start();
+  });
+}
+
+/**
+ * 字幕逐字：实时合成，不走文件解码（解码会拖过点击手势，整段静音）。
+ *
+ * @param {number} [offset] 错开起始时间（秒）。掉帧时一帧补多个字符，
+ *   若不措开就会叠成一声；24ms 一档。
+ *
+ * 优先用预解码的 sfx_type_tick.wav；没解好就退回合成。
+ * 合成音原来用 80~104Hz 方波 —— 那是闷「tok」不是打字机「嗒」，
+ * 且 gain 0.04 偏轻。现在提到 1.6kHz 附近、衰减 11ms，更像打印头。
+ */
+export function playTypeTick(offset = 0) {
   const c = ac();
   if (!c || c.state !== 'running') return;
-  const t = c.currentTime;
+  const t = c.currentTime + (offset || 0);
+
+  const buf = typeTickBuf;
+  if (buf) {
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const g = c.createGain();
+    g.gain.value = 0.5;
+    src.connect(g).connect(c.destination);
+    src.start(t);
+    return;
+  }
+
   const o = c.createOscillator();
   o.type = 'square';
-  o.frequency.setValueAtTime(80 + Math.random() * 24, t);
+  o.frequency.setValueAtTime(1500 + Math.random() * 700, t);
   const filt = c.createBiquadFilter();
   filt.type = 'lowpass';
-  filt.frequency.value = 1200;
+  filt.frequency.value = 2600;
   const g = c.createGain();
-  g.gain.setValueAtTime(0.04, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.016);
+  g.gain.setValueAtTime(0.075, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.011);
   o.connect(filt).connect(g).connect(c.destination);
   o.start(t);
-  o.stop(t + 0.018);
+  o.stop(t + 0.013);
 }
 
 /** 字幕或操作提示落下时的一下打印头，很短，不连打 */

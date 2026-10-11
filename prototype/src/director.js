@@ -425,6 +425,7 @@ export class Director {
       let i = 0;
       let acc = '';
       let lastTs = 0;
+      let pendingTicks = 0;   // 掉帧时欠下的 tick 数
       const CHAR_MS = 46;
       this.elMsg.textContent = '';
       this.elMsg.classList.add('typing');
@@ -435,15 +436,20 @@ export class Director {
           return;
         }
         if (!lastTs) lastTs = now;
-        let ticked = false;
+        // 文字按 46ms 节奏累积补齐 —— 掉帧时会一帧补出多个字符
         while (i < chars.length && now - lastTs >= CHAR_MS) {
           lastTs += CHAR_MS;
           const ch = chars[i++];
           acc += ch;
-          if (ch && !/\s/.test(ch) && !ticked) {
-            ticked = true;
-            try { playTypeTick(); } catch { /* 音频未解锁也不挡字幕 */ }
-          }
+          if (ch && !/\s/.test(ch)) pendingTicks++;
+        }
+        // 原来这里有个 ticked 标志「每帧最多响一次」，掉帧时文字照追、声音却少了，
+        // 听着就是打字音慢半拍。改成按欠的数补齐，并用 24ms 错开避免同帧叠加成一声。
+        let k = 0;
+        while (pendingTicks > 0 && k < 4) {   // 单帧最多补 4 声，长掉帧后剩下的下一帧继续
+          playTypeTick(k * 0.024);
+          pendingTicks--;
+          k++;
         }
         if (acc.length !== this.elMsg.textContent.length) this.elMsg.textContent = acc;
         this._typeRaf = requestAnimationFrame(step);
