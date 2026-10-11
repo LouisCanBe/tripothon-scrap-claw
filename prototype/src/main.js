@@ -1786,7 +1786,36 @@ async function onLoadGateReady() {
   if ((ACTS[startIdx]?.id ?? 1) === 1) world.visible = false;
   setCoalesceIncrementalCompile(false);
   setLoadStatus(tr('loadWarm'));
-  void enqueueRendererCompile(renderer, camera, world, { force: true });
+  // —— 编译分优先级（方案 A，见 PERF-性能优化.md）——
+  // 原来这里编译整个 world：机壳 + 爪 + 奖品 + 约 150 个装饰 ≈ 170 个 mesh。
+  // 在集显上超过 28s 的 compileAsync 超时，超时后闸门放行但编译仍在后台继续，
+  // 真正编完那一刻猛吃 GPU —— 那就是 act1 开头的「打架」，且设备越弱越明显。
+  //
+  // poolDecor 只有 ball/roll/disk/ribbon 四种背景点缀（150 件），没有任何叙事
+  // 必需件，完全可以延后。所以先从 world 摘掉它，只编译第一幕真正看的
+  // 机壳 + 爪 + 奖品（约 40 个 mesh），编完立刻挂回，再用空闲期补编装饰。
+  //
+  // 摘除是安全的：poolDecor 与 world 都在原点、无变换，本地矩阵不变；
+  // 物理（poolDecorSim）持有装饰对象自身引用，不经过 world。
+  // 所有 rebuild/restack 都在本函数之前就已完成（gate 的 Promise.all）。
+  const decorGroup = world.getObjectByName('poolDecor');
+  if (decorGroup) world.remove(decorGroup);
+  const _t0 = performance.now();
+  void enqueueRendererCompile(renderer, camera, world, { force: true }).then(() => {
+    perf.mark(`编译·机壳爪奖品(${Math.round(performance.now() - _t0)}ms)`);
+    if (decorGroup) world.add(decorGroup);
+    // 「上货条满 → 玩家点开始」这段时间屏幕是加载遮罩，GPU 有余量，
+    // 是补编装饰的最佳窗口。用 idle 但不死等 —— 带 timeout，
+    // 设备再紧也保证 1.5s 内开始，不会把装饰拖到 act1 才编。
+    const runDeferred = () => {
+      if (!decorGroup) return;
+      const _t1 = performance.now();
+      void enqueueRendererCompile(renderer, camera, decorGroup, { force: true })
+        .then(() => perf.mark(`编译·装饰(${Math.round(performance.now() - _t1)}ms)`));
+    };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(runDeferred, { timeout: 1500 });
+    else setTimeout(runDeferred, 60);
+  });
   setLoadStatus(startIdx > 0
     ? tr('loadReadyAct', { n: ACTS[startIdx]?.id ?? startIdx + 1 })
     : tr('loadReady'));
