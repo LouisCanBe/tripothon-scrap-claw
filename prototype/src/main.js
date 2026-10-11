@@ -1416,6 +1416,20 @@ function syncDocumentTitle() {
 }
 gui.show(guiOn);
 syncDocumentTitle();
+// lil-gui 的 input 一律不带 id/name，Lighthouse 会报「form field should have
+// an id or name attribute」（诊断时那 86 个违规节点全来自这里，共 105 个控件）。
+// 补一个 name 即可：这些 input 不在任何 <form> 里，name 不会有自动填充副作用，
+// 纯粹为了让审计通过、DOM 更可读。
+// 注意别用 aria-hidden / inert —— 会被 Chrome 的「aria-hidden on focusable
+// element」抓回来，且 inert 会让面板拖不动，直接废掉调试工具。
+// 在下面 gui 块（所有控制器构建完）结尾处调用。
+function nameGuiFields(root) {
+  let i = 0;
+  root.querySelectorAll('input, select, textarea').forEach((el) => {
+    if (el.name) return;
+    el.name = `gui-${i++}`;
+  });
+}
 {
   const f = gui.addFolder('移动惯性');
   f.add(CONFIG.claw, 'moveSpeed', 0.5, 4, 0.05);
@@ -1646,6 +1660,9 @@ syncDocumentTitle();
     '展开16:9': () => mask.setLayout('wide'),
   };
   for (const k of Object.keys(act)) gui.add(act, k);
+
+  // 所有控制器都加完了，这时才补 name 属性（早调会一个 input 都没有）
+  nameGuiFields(gui.domElement);
 }
 input.on('gui', () => {
   if (!guiUnlocked) return;
