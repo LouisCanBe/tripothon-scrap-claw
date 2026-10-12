@@ -115,11 +115,8 @@ export class FrameMask {
   #rectForMode(mode) {
     const w = innerWidth, h = innerHeight, f = CONFIG.frame;
     const vh = h;
-    if (mode === 'right') {
-      const margin = w * (f.rightMargin ?? 0.03);
-      const vw = Math.min(vh, w * (f.rightWidthFrac ?? 0.58));
-      return { x: w - margin - vw, y: 0, w: vw, h: vh };
-    }
+    const portrait = h > w * 1.05;
+
     if (mode === 'wide') {
       const aspect = this.wideAspect ?? (16 / 9);
       const fill = this.wideWidthFrac ?? f.wideFill;
@@ -128,6 +125,23 @@ export class FrameMask {
       if (aspect >= 16 / 9 - 0.01) hh = Math.min(hh, h * 0.98);
       else hh = Math.min(hh, h);
       return { x: (w - ww) / 2, y: (h - hh) / 2, w: ww, h: hh };
+    }
+
+    // —— 竖屏 ——
+    // 原逻辑不分横竖都用「整窗高做视窗高、窗宽乘系数做视窗宽」，
+    // 竖屏 390×844 会得到 218×844 一根竖条（左右黑边）。
+    // 现改为：视窗取短边基准的方形，同时水平+垂直居中。
+    // 这样 camera viewOffset 的 dx/dy 均为 0，机器正中心自然落在视窗正中心。
+    if (portrait) {
+      const side = Math.min(w, h) * (f.squareFill ?? 0.88);
+      const size = Math.min(side, Math.min(w, h));
+      return { x: (w - size) / 2, y: (h - size) / 2, w: size, h: size };
+    }
+
+    if (mode === 'right') {
+      const margin = w * (f.rightMargin ?? 0.03);
+      const vw = Math.min(vh, w * (f.rightWidthFrac ?? 0.58));
+      return { x: w - margin - vw, y: 0, w: vw, h: vh };
     }
     const vw = Math.min(vh, w * (f.centerWidthFrac ?? 0.56));
     return { x: (w - vw) / 2, y: 0, w: vw, h: vh };

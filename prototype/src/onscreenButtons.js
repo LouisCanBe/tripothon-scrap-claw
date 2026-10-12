@@ -20,6 +20,8 @@ export class OnscreenButtons {
     this.root = document.createElement('div');
     this.root.id = 'touchUI';
     this._moveMode = localStorage.getItem(LS_MOVE_MODE) || 'joystick';
+    this._viewOrder = ['front', 'right', 'left'];
+    this._viewIdx = 0;   // 与 CameraRig 实际状态通过 'view' 事件同步
 
     const movePanel = document.createElement('div');
     movePanel.className = 'move-panel';
@@ -68,7 +70,15 @@ export class OnscreenButtons {
     view.className = 'act view';
     view.textContent = t('view');
     this._viewBtn = view;
-    view.addEventListener('pointerdown', (e) => { e.preventDefault(); input.emit('cycle', 1); });
+    const VIEW_ORDER = ['front', 'right', 'left'];
+    let _viewIdx = VIEW_ORDER.indexOf('front');
+    const syncViewIdx = (v) => { _viewIdx = VIEW_ORDER.indexOf(v); };
+    const cycleView = () => {
+      _viewIdx = (_viewIdx + 1) % VIEW_ORDER.length;
+      input.emit('cycle', VIEW_ORDER[_viewIdx] === 'right' ? 1 : -1);
+    };
+    view.addEventListener('pointerdown', (e) => { e.preventDefault(); cycleView(); });
+    input.on('view', syncViewIdx);
     const drop = document.createElement('button');
     drop.type = 'button';
     drop.className = 'act drop';

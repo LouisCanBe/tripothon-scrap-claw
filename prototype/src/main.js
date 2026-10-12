@@ -1394,7 +1394,7 @@ input.on('designLock', () => design.toggleLock());
 input.on('designReset', () => design.reset());
 input.on('designCycle', (d) => design.cycle(d));
 
-// —— 指针手势：拖拽切视角（过权限闸）/ 终幕环视 / 滚轮与捏合缩放 ——
+// —— 指针手势：拖拽切视角（过权限闸）/ 终幕环视 / 滚轮与捏合缩放 / 点击展开副屏面板 ——
 const pointerCtl = new PointerControls(document.getElementById('stage'), {
   onCycle: (d) => {
     if (revealControlsOn) return;
@@ -1403,6 +1403,10 @@ const pointerCtl = new PointerControls(document.getElementById('stage'), {
   onZoomFactor: (f) => {
     if (revealControlsOn) revealCtl.applyWheelFactor(f);   // 触屏双指捏合（滚轮走 canvas 上的 sceneControls）
     else rig.setUserZoom(rig.userZoom * f);
+  },
+  // 轻点视窗区域：若副屏面板处于 wait/err 状态则展开
+  onTap: () => {
+    if (window.__expandCollectPair) window.__expandCollectPair();
   },
 });
 

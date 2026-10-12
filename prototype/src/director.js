@@ -26,6 +26,24 @@ import {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (a, b) => a + Math.random() * (b - a);
 
+// 移动端竖屏：用触屏操作说明替换键盘提示，去掉 WASD / 方向键 / 空格等
+const MOBILE_PORTRAIT = typeof matchMedia === 'function'
+  && matchMedia('(pointer: coarse) and (orientation: portrait)').matches;
+
+const MOBILE_HINT_MAP = {
+  // 中文：拖动转视角 · 双指缩放 · V 拉近/拉远 · 按钮抓取
+  '←→↑↓ / WASD 移动 · 空格 落爪 · 1/2/3 视角 · Q/E 循环':
+    '拖动转视角 · 双指缩放 · V 拉近/拉远 · 按钮抓取',
+  // English
+  '←→↑↓ / WASD move · Space drop · 1/2/3 view · Q/E cycle':
+    'Swipe to look · Pinch to zoom · V near/far · Button grab',
+};
+
+function mobileHint(hint) {
+  if (!hint || !MOBILE_PORTRAIT) return hint;
+  return MOBILE_HINT_MAP[hint] ?? hint;
+}
+
 export class Director {
   constructor({ mask, claw, rig, lights, hooks = {}, clawDefaults = null }) {
     this.mask = mask;
@@ -75,7 +93,9 @@ export class Director {
     if (act.label && this.elLabel?.classList.contains('show')) {
       this.elLabel.textContent = copy(act.label);
     }
-    if (act.hint && this.elHint) this.elHint.textContent = copy(act.hint);
+    if (act.hint && this.elHint) {
+      this.elHint.textContent = copy(mobileHint(act.hint));
+    }
     this.#paintQuestHud();
     if (this._msgSource != null && this.elMsg && this.elMsg.style.opacity !== '0') {
       if (this._typeRaf) cancelAnimationFrame(this._typeRaf);
@@ -318,7 +338,7 @@ export class Director {
     }
 
     this.elHint.style.opacity = act.hint === null ? '0' : '1';
-    if (act.hint) this.elHint.textContent = copy(act.hint);
+    if (act.hint) this.elHint.textContent = copy(mobileHint(act.hint));
 
     if (act.label) {
       this.elLabel.textContent = copy(act.label);

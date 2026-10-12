@@ -202,6 +202,27 @@ function bakeTypeTickBuffer() {
 
 let quotaCoin = undefined;
 
+// —— 输出增益 ——
+// 手机/平板扬声器物理音量小，同一 gain 听感明显比桌面轻。
+// 触屏设备整体提一档，只影响本模块对外的播放，不改各调用点的 gain 语义
+// （那些数值是相对比例，比如滑落故意比抓空轻）。
+const OUT_GAIN = (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches)
+  ? 1.6
+  : 1.0;
+
+/** 统一的输出增益节点，按 OUT_GAIN 放大；触屏断开时自动回到 1 */
+function out(c) {
+  if (!c) return c.destination;
+  let g = c.__scrapOutGain;
+  if (!g) {
+    g = c.createGain();
+    g.gain.value = OUT_GAIN;
+    g.connect(c.destination);
+    c.__scrapOutGain = g;
+  }
+  return g;
+}
+
 /** 抓到计入配额的一件：中小音量的投币声 */
 export function playQuotaCoin() {
   withAudio((c) => {
@@ -210,7 +231,7 @@ export function playQuotaCoin() {
     src.buffer = quotaCoin;
     const g = c.createGain();
     g.gain.value = 0.32;
-    src.connect(g).connect(c.destination);
+    src.connect(g).connect(out(c));
     src.start();
   });
 }
@@ -229,7 +250,7 @@ function playClawSample(key, gain, fallback, { rate = 1, dur = 0.1 } = {}) {
     const g = c.createGain();
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(g).connect(c.destination);
+    src.connect(g).connect(out(c));
     src.start(t);
     src.stop(t + dur + 0.02);
   });
@@ -247,7 +268,7 @@ function noiseBurst(c, { dur = 0.06, gain = 0.08, filterHz = 800 } = {}) {
   filt.frequency.value = filterHz;
   const g = c.createGain();
   g.gain.value = gain;
-  src.connect(filt).connect(g).connect(c.destination);
+  src.connect(filt).connect(g).connect(out(c));
   src.start();
 }
 
@@ -304,7 +325,7 @@ export function startGlitchBed({ morphMs = 2800, glitchMs = 2200 } = {}) {
   filt.Q.value = 0.7;
   const gBed = c.createGain();
   gBed.gain.value = 0;
-  src.connect(filt).connect(gBed).connect(c.destination);
+  src.connect(filt).connect(gBed).connect(out(c));
   src.start();
 
   const hum = c.createOscillator();
@@ -312,7 +333,7 @@ export function startGlitchBed({ morphMs = 2800, glitchMs = 2200 } = {}) {
   hum.frequency.value = 38;
   const gHum = c.createGain();
   gHum.gain.value = 0;
-  hum.connect(gHum).connect(c.destination);
+  hum.connect(gHum).connect(out(c));
   hum.start();
 
   const rampEnd = Math.min(morphMs, glitchMs) / 1000;
@@ -347,7 +368,7 @@ export function playGlitchBlackout() {
   o.frequency.value = 42;
   g.gain.setValueAtTime(0.12, c.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.35);
-  o.connect(g).connect(c.destination);
+  o.connect(g).connect(out(c));
   o.start();
   o.stop(c.currentTime + 0.36);
   });
@@ -366,7 +387,7 @@ export function playRevealDrone() {
   g.gain.setValueAtTime(0, c.currentTime);
   g.gain.linearRampToValueAtTime(0.04, c.currentTime + 1.2);
   g.gain.linearRampToValueAtTime(0.02, c.currentTime + 4);
-  o.connect(g).connect(c.destination);
+  o.connect(g).connect(out(c));
   o.start();
   o.stop(c.currentTime + 4.2);
   });
@@ -382,7 +403,7 @@ function tone(c, { freq = 440, type = 'sine', dur = 0.08, gain = 0.05, slide } =
   if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, slide), t + dur);
   g.gain.setValueAtTime(gain, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(c.destination);
+  o.connect(g).connect(out(c));
   o.start(t);
   o.stop(t + dur + 0.02);
 }
@@ -405,7 +426,7 @@ function loopNoise(c, filterHz, q = 0.8) {
   filt.Q.value = q;
   const g = c.createGain();
   g.gain.value = 0;
-  src.connect(filt).connect(g).connect(c.destination);
+  src.connect(filt).connect(g).connect(out(c));
   src.start();
   return { src, filt, g };
 }
@@ -440,10 +461,10 @@ export function setClawTravel(amount) {
     filt.type = 'lowpass';
     filt.frequency.value = 420;
     const g = c.createGain();
-    g.gain.value = 0;
-    src.connect(filt).connect(g).connect(c.destination);
+    g.gain.value = 0.045;
+    src.connect(filt).connect(g).connect(out(c));
     src.start();
-    g.gain.linearRampToValueAtTime(0.03, c.currentTime + 0.06);
+    g.gain.linearRampToValueAtTime(0.045, c.currentTime + 0.06);
     _travel = { src, g };
     });
   } else if (!on && _travel) {
@@ -492,7 +513,7 @@ export function playSfx(key, { gain = 0.5, rate = 1 } = {}) {
     src.playbackRate.value = rate;
     const g = c.createGain();
     g.gain.value = gain;
-    src.connect(g).connect(c.destination);
+    src.connect(g).connect(out(c));
     src.start();
   });
 }
@@ -518,7 +539,7 @@ export function playTypeTick(offset = 0) {
     src.buffer = buf;
     const g = c.createGain();
     g.gain.value = 0.5;
-    src.connect(g).connect(c.destination);
+    src.connect(g).connect(out(c));
     src.start(t);
     return;
   }
@@ -532,7 +553,7 @@ export function playTypeTick(offset = 0) {
   const g = c.createGain();
   g.gain.setValueAtTime(0.075, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.011);
-  o.connect(filt).connect(g).connect(c.destination);
+  o.connect(filt).connect(g).connect(out(c));
   o.start(t);
   o.stop(t + 0.013);
 }
@@ -551,7 +572,7 @@ export function playPrinterTick() {
   const g = c.createGain();
   g.gain.setValueAtTime(0.14, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-  o.connect(filt).connect(g).connect(c.destination);
+  o.connect(filt).connect(g).connect(out(c));
   o.start(t);
   o.stop(t + 0.045);
   });
@@ -578,7 +599,7 @@ export function playPaper() {
   const g = c.createGain();
   g.gain.setValueAtTime(0.022, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  src.connect(filt).connect(g).connect(c.destination);
+  src.connect(filt).connect(g).connect(out(c));
   src.start(t);
   });
 }
@@ -615,7 +636,7 @@ export function playMusicBoxStinger() {
     g.gain.setValueAtTime(0, t0);
     g.gain.linearRampToValueAtTime(0.07, t0 + 0.04);
     g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.85);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(out(c));
     o.start(t0);
     o.stop(t0 + 0.9);
   });

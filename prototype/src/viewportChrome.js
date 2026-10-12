@@ -118,6 +118,11 @@ export function initViewportChrome() {
     root.hidden = false;
     rect = detail;
     placeInFrame(detail);
+    // 竖屏：视口内叠层不钉在视窗矩形内，由 CSS 媒体查询控制是否显示
+    if (typeof matchMedia === 'function' && matchMedia('(orientation: portrait)').matches) {
+      root.hidden = true;
+      return;
+    }
     if (detail.shape === 'circle' && detail.radius > 0) {
       const d = detail.radius * 2;
       Object.assign(root.style, {

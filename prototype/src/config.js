@@ -465,7 +465,7 @@ export const CONFIG = {
     enabled: true,
     channel: 'tripo.collect-display.v1',
     displayPath: '/display.html',
-    shareFrame: true,          // 扫码/复制链接用 display-frame.html（相框副屏）
+    shareFrame: false,         // 扫码/复制链接用普通 display.html（相框版 display-frame 暂停展示）
     // 相框固定打开 frame.path。介绍词只改 copy，两个副屏一起变。
     copy: {
       kicker: 'COLLECT DISPLAY',

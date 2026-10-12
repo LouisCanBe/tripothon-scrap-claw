@@ -267,5 +267,8 @@ export function startCollectDisplayPairPanel(director) {
 
   setPanelVisible(shouldShowPanel(director.act));
 
+  // 供主线程快速展开：点击视窗区域时调用
+  window.__expandCollectPair = () => setExpanded(true);
+
   return stopTransport;
 }

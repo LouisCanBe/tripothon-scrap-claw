@@ -10,11 +10,12 @@ const DRAG_THRESHOLD = 60;   // px，超过才算一次"甩视角"
 const WHEEL_SPEED = 0.0012;  // deltaY → 指数缩放系数
 
 export class PointerControls {
-  constructor(el, { onCycle, onZoomFactor, onLook }) {
+  constructor(el, { onCycle, onZoomFactor, onLook, onTap }) {
     this.el = el;
     this.onCycle = onCycle;
     this.onZoomFactor = onZoomFactor;
     this.onLook = onLook;
+    this.onTap = onTap;
     this.lookMode = false;
     this.stagePassthrough = false;   // 终幕：stage 不抢指针，只留 canvas 上 sceneControls
     this.pointers = new Map();   // pointerId → {x, y}（双指捏合用）
@@ -35,6 +36,9 @@ export class PointerControls {
 
   _down(e) {
     if (this.stagePassthrough) return;
+    // 若落在副屏面板或其子元素上，不 capture，让面板正常接收 click/pointerup
+    const t = e.target;
+    if (t && t.closest && t.closest('#collectPairPanel')) return;
     try { this.el.setPointerCapture(e.pointerId); } catch { /* 合成事件/失效指针忽略 */ }
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (this.pointers.size === 1) {
@@ -79,7 +83,15 @@ export class PointerControls {
   _up(e) {
     this.pointers.delete(e.pointerId);
     if (this.pointers.size < 2) this._pinchDist = 0;
-    if (this.pointers.size === 0) this._drag = null;
+    if (this.pointers.size === 0) {
+      // 快速点击（未拖拽、未捏合）→ onTap，用于展开副屏配对面板
+      if (this._drag && !this._drag.cycled && this.onTap) {
+        const dx = Math.abs(e.clientX - this._drag.startX);
+        const dy = Math.abs(e.clientY - this._drag.startY);
+        if (dx < 8 && dy < 8) this.onTap(e);
+      }
+      this._drag = null;
+    }
   }
 
   _dist() {

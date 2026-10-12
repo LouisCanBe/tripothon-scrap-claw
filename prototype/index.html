@@ -441,6 +441,36 @@
            opacity: 0; transition: opacity .6s; }
   .panel.right { left: auto; right: 5%; transform: translateY(-50%) rotate(.7deg); }
   .panel.show { opacity: 1; }
+
+  /* —— 竖屏 ——
+     视窗在 frameMask.js 里已改成「短边基准的居中方形、靠上」，
+     左右 5% 的旁白面板会压到画面上。改成堆到视窗下方同一槽位。
+     剧本里左右两块基本是交替出现（director 的 #panel(side,...)），
+     同一槽位不会真的撞上；万一同屏也只会轻微叠角。 */
+  @media (orientation: portrait) {
+    .panel, .panel.right {
+      top: auto; left: 50%; right: auto;
+      bottom: 96px;
+      width: min(92%, 460px);
+      max-width: 460px;
+      max-height: 44vh;
+      overflow: auto;
+      transform: translateX(-50%);
+      font-size: 14px; line-height: 1.75; padding: 14px 16px;
+    }
+    #msg { bottom: 18px; width: min(94%, 560px); font-size: 14px; }
+    .syn-card { width: min(88%, 300px); }
+    /* 屏幕按钮右上，远离左下摇杆 */
+    #touchUI .acts { top: 18px; right: 14px; bottom: auto; align-items: flex-start; }
+    /* Hub 固定在左上（placeInFrame 竖屏分支也写同样的值，双重保险） */
+    #hud { top: 8px !important; left: 8px !important; right: auto !important; bottom: auto !important; }
+    /* 视口提示（hint + viewDots）放在视窗下方，不挡画面 */
+    #viewportChrome { top: auto !important; left: 50% !important; right: auto !important;
+      bottom: 108px !important; width: min(92%, 420px) !important; height: auto !important;
+      transform: translateX(-50%) !important; border-radius: 0 !important;
+      display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    #viewportChrome #hint { position: relative; width: min(200px, 60%); text-align: center; }
+  }
   .panel .op { display: block; margin-top: 10px;
     font-size: 12px; line-height: 1.45; letter-spacing: .4px; color: #9a5b2a; }
   .panel.await-continue { pointer-events: auto; cursor: pointer; }
