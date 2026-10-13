@@ -61,7 +61,7 @@ export class OnscreenButtons {
     });
     this._modeBtn = modeBtn;
 
-    movePanel.append(this.joyRoot, dpad, modeBtn);
+    movePanel.append(this.joyRoot, dpad);
 
     const acts = document.createElement('div');
     acts.className = 'acts';
@@ -87,7 +87,7 @@ export class OnscreenButtons {
     drop.addEventListener('pointerdown', (e) => { e.preventDefault(); input.emit('drop'); });
     acts.append(view, drop);
 
-    this.root.append(movePanel, acts);
+    this.root.append(movePanel, modeBtn, acts);
     document.body.appendChild(this.root);
     onLangChange(() => {
       if (this._viewBtn) this._viewBtn.textContent = t('view');

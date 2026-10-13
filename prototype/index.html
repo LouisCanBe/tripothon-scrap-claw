@@ -462,6 +462,8 @@
     .syn-card { width: min(88%, 300px); }
     /* 屏幕按钮右上，远离左下摇杆 */
     #touchUI .acts { top: 18px; right: 14px; bottom: auto; align-items: flex-start; }
+    /* 摇杆/按键切换放到顶部居中，不和左下操作区重叠 */
+    #touchUI .move-mode { top: 18px; bottom: auto; left: 50%; right: auto; }
     /* Hub 固定在左上（placeInFrame 竖屏分支也写同样的值，双重保险） */
     #hud { top: 8px !important; left: 8px !important; right: auto !important; bottom: auto !important; }
     /* 视口提示（hint + viewDots）放在视窗下方，不挡画面 */
@@ -591,8 +593,9 @@
                             transform: translate(-50%, -50%);
                             background: rgba(216,212,200,.22); border: 1px solid rgba(216,212,200,.55);
                             pointer-events: none; }
-  #touchUI .move-mode { font-size: 11px; letter-spacing: 1px; padding: 5px 12px;
-                        width: auto; height: auto; border-radius: 6px; opacity: .85; }
+  #touchUI .move-mode { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
+                        font-size: 11px; letter-spacing: 1px; padding: 5px 12px;
+                        width: auto; height: auto; border-radius: 6px; opacity: .85; z-index: 26; }
   #touchUI .dpad { display: grid; grid-template-areas: ". up ." "left down right"; gap: 8px; }
   #touchUI .dpad[hidden], #touchUI .joystick[hidden] { display: none !important; }
   #touchUI .pad { width: 52px; height: 52px; font-size: 16px; }
