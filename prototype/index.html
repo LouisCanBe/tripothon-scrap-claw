@@ -472,6 +472,16 @@
       transform: translateX(-50%) !important; border-radius: 0 !important;
       display: flex; flex-direction: column; align-items: center; gap: 10px; }
     #viewportChrome #hint { position: relative; width: min(200px, 60%); text-align: center; }
+    /* 双重保险：竖屏下隐藏视口内叠层（含操作提示），避免与旁白面板重叠 */
+    #viewportChrome { display: none !important; }
+    /* 竖屏下方元素间距：字幕 → 面板 → 卡牌，从上到下排开不打架 */
+    #msg { bottom: 16px; }
+    .panel, .panel.right { bottom: 110px; max-height: 36vh; }
+    /* 四幕菜单卡：top:44% 在竖屏会压到视窗下沿，改到视窗下方 */
+    #menuCard { top: 52% !important; }
+    .syn-card { bottom: 22% !important; }
+    .syn-card.show { bottom: 26% !important; }
+    .syn-card.merge { bottom: auto !important; top: 48% !important; }
   }
   .panel .op { display: block; margin-top: 10px;
     font-size: 12px; line-height: 1.45; letter-spacing: .4px; color: #9a5b2a; }
