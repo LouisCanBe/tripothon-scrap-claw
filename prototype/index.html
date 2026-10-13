@@ -463,7 +463,7 @@
     /* 屏幕按钮右上，远离左下摇杆 */
     #touchUI .acts { top: 18px; right: 14px; bottom: auto; align-items: flex-start; }
     /* 摇杆/按键切换放到顶部居中，不和左下操作区重叠 */
-    #touchUI .move-mode { top: 18px; bottom: auto; left: 50%; right: auto; }
+    #touchUI .move-mode { top: 18px !important; }
     /* Hub 固定在左上（placeInFrame 竖屏分支也写同样的值，双重保险） */
     #hud { top: 8px !important; left: 8px !important; right: auto !important; bottom: auto !important; }
     /* 视口提示（hint + viewDots）放在视窗下方，不挡画面 */
@@ -477,9 +477,9 @@
     /* 竖屏下方元素间距：字幕 → 面板 → 卡牌，从上到下排开不打架 */
     #msg { bottom: 16px; }
     .panel, .panel.right { bottom: 110px; max-height: 36vh; }
-    /* 三幕副屏面板移到视窗右侧外，避免裁切二维码 */
-    #collectPairPanel { right: 8px !important; bottom: auto !important; top: 50% !important;
-                        transform: translateY(-50%) !important; max-width: 220px !important; }
+    /* 三幕副屏面板移到视窗外右上角，不压画面 */
+    #collectPairPanel { right: 10px !important; top: 10px !important; bottom: auto !important;
+                        left: auto !important; transform: none !important; max-width: 200px !important; }
     /* 四幕菜单卡：top:44% 在竖屏会压到视窗下沿，改到视窗下方 */
     #menuCard { top: 52% !important; }
     .syn-card { bottom: 22% !important; }
@@ -610,7 +610,7 @@
                             transform: translate(-50%, -50%);
                             background: rgba(216,212,200,.22); border: 1px solid rgba(216,212,200,.55);
                             pointer-events: none; }
-  #touchUI .move-mode { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
+  #touchUI .move-mode { position: fixed; left: 50%; top: 18px; transform: translateX(-50%);
                         font-size: 11px; letter-spacing: 1px; padding: 5px 12px;
                         width: auto; height: auto; border-radius: 6px; opacity: .85; z-index: 26; }
   #touchUI .dpad { display: grid; grid-template-areas: ". up ." "left down right"; gap: 8px; }
