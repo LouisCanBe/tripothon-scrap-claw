@@ -477,9 +477,8 @@
     /* 竖屏下方元素间距：字幕 → 面板 → 卡牌，从上到下排开不打架 */
     #msg { bottom: 16px; }
     .panel, .panel.right { bottom: 110px; max-height: 36vh; }
-    /* 三幕副屏面板移到视窗外右上角，不压画面 */
-    #collectPairPanel { right: 10px !important; top: 10px !important; bottom: auto !important;
-                        left: auto !important; transform: none !important; max-width: 200px !important; }
+    /* 三幕副屏面板移到视窗外右上角，不压画面（位置由 JS framemask:apply 动态控制） */
+    #collectPairPanel { max-width: 200px !important; }
     /* 四幕菜单卡：top:44% 在竖屏会压到视窗下沿，改到视窗下方 */
     #menuCard { top: 52% !important; }
     .syn-card { bottom: 22% !important; }

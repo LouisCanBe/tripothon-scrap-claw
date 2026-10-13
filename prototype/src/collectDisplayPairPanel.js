@@ -270,5 +270,23 @@ export function startCollectDisplayPairPanel(director) {
   // 供主线程快速展开：点击视窗区域时调用
   window.__expandCollectPair = () => setExpanded(true);
 
+  // 竖屏：副屏面板跟随视窗右上角，不贴顶
+  const repositionPairPanel = (e) => {
+    if (!root || root.hidden) return;
+    const isPortrait = typeof matchMedia === 'function' && matchMedia('(orientation: portrait)').matches;
+    if (!isPortrait) return;
+    const rect = window.__debug?.mask?.getRect?.() ?? e?.detail;
+    if (!rect) return;
+    // 折叠态：放在视窗右上角内侧，露出头部可点击展开
+    root.style.top = `${rect.y + 8}px`;
+    root.style.left = `${rect.x + rect.w - 8}px`;
+    root.style.right = 'auto';
+    root.style.bottom = 'auto';
+    root.style.transform = 'none';
+  };
+  window.addEventListener('framemask:apply', repositionPairPanel);
+  // 初始定位（首屏可能没有 framemask:apply）
+  repositionPairPanel({ detail: window.__debug?.mask?.getRect() ?? {} });
+
   return stopTransport;
 }
