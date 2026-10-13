@@ -47,11 +47,12 @@ function mobileHint(hint) {
 function formatActLabel(text) {
   if (!text) return text;
   const isPortrait = typeof matchMedia === 'function' && matchMedia('(orientation: portrait)').matches;
-  if (!isPortrait) return text;
-  // 在 "幕" 或 "·" 后插换行
-  const m = text.match(/^(.*?[幕·])\s*(.*)$/);
+  // 去掉 "·"，竖屏换行居中，横屏单行空格分隔
+  const clean = text.replace(/·/g, ' ');
+  if (!isPortrait) return clean;
+  const m = clean.match(/^(.*?幕)\s*(.*)$/);
   if (m) return `${m[1]}<br>${m[2]}`;
-  return text;
+  return clean;
 }
 
 export class Director {
