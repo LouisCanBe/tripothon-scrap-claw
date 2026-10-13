@@ -7,18 +7,7 @@ import { copy } from './i18n.js';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /** 左右字上的咖啡渍：大团浅斑压在卡片边角（与相框同用 % 椭圆，直接写 background-image）。 */
-export function randomizePanelStains(el) {
-  if (!el) return;
-  const j = (a, b) => a + Math.random() * (b - a);
-  const blob = (x, y, w, h, a) =>
-    `radial-gradient(ellipse ${w.toFixed(0)}% ${h.toFixed(0)}% at ${x.toFixed(1)}% ${y.toFixed(1)}%, rgba(92,68,38,${a.toFixed(2)}), transparent 72%)`;
-  const layers = [
-    blob(j(2, 10), j(2, 12), j(50, 64), j(38, 52), j(0.16, 0.24)),
-    blob(j(88, 98), j(84, 96), j(52, 66), j(40, 54), j(0.14, 0.22)),
-    blob(j(72, 92), j(4, 14), j(32, 44), j(22, 34), j(0.08, 0.14)),
-  ];
-  el.style.backgroundImage = layers.join(', ');
-}
+// 已移除：竖屏小屏读字清晰度优先
 
 /** 相纸污渍：五团色斑 + 灰点/亮点。 */
 export function randomizePaperStains(el) {

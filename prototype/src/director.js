@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { ACTS } from './acts.js';
 import { copy, onLangChange, t } from './i18n.js';
-import { randomizePanelStains } from './narrativeBg.js';
 import { PRIZE_TABLE } from './prizePool.js';
 import {
   playGlitchTick,
@@ -42,6 +41,17 @@ const MOBILE_HINT_MAP = {
 function mobileHint(hint) {
   if (!hint || !MOBILE_PORTRAIT) return hint;
   return MOBILE_HINT_MAP[hint] ?? hint;
+}
+
+// 幕标题：竖屏下"第x幕"和后续文字换行，避免与 HUD 重叠
+function formatActLabel(text) {
+  if (!text) return text;
+  const isPortrait = typeof matchMedia === 'function' && matchMedia('(orientation: portrait)').matches;
+  if (!isPortrait) return text;
+  // 在 "幕" 或 "·" 后插换行
+  const m = text.match(/^(.*?[幕·])\s*(.*)$/);
+  if (m) return `${m[1]}<br>${m[2]}`;
+  return text;
 }
 
 export class Director {
@@ -91,7 +101,7 @@ export class Director {
     const act = this.act;
     if (!act) return;
     if (act.label && this.elLabel?.classList.contains('show')) {
-      this.elLabel.textContent = copy(act.label);
+      this.elLabel.innerHTML = formatActLabel(copy(act.label));
     }
     if (act.hint && this.elHint) {
       this.elHint.textContent = copy(mobileHint(act.hint));
@@ -341,7 +351,7 @@ export class Director {
     if (act.hint) this.elHint.textContent = copy(mobileHint(act.hint));
 
     if (act.label) {
-      this.elLabel.textContent = copy(act.label);
+      this.elLabel.innerHTML = formatActLabel(copy(act.label));
       this.elLabel.classList.add('show');
       if (i !== 0) setTimeout(() => this.elLabel.classList.remove('show'), 5200);
     }
@@ -500,12 +510,22 @@ export class Director {
       delete this._panelSource[side];
       el.replaceChildren();
       el.classList.remove('show');
+      this.#syncHintVisibility();
       return;
     }
     this._panelSource[side] = { text, op };
     this.#paintPanel(el, text, op);
-    randomizePanelStains(el);
+    // 面板 stain 效果已移除（竖屏小屏读字清晰度优先）
     el.classList.add('show');
+    this.#syncHintVisibility();
+  }
+
+  #syncHintVisibility() {
+    // 竖屏下，当有面板在展示文字时，隐藏底部操作提示（避免与面板文字重复）
+    const anyPanel = Object.values(this._panelSource ?? {}).some(s => s.text);
+    if (this.elHint && typeof matchMedia === 'function' && matchMedia('(orientation: portrait)').matches) {
+      this.elHint.style.opacity = anyPanel ? '0' : '1';
+    }
   }
 
   #paintPanel(el, text, op) {
@@ -563,6 +583,10 @@ export class Director {
     const grain0 = CONFIG.post.grain;
     const fill0 = CONFIG.lights.fill.intensity;
     const hemi0 = CONFIG.lights.hemi.intensity;
+    // 四幕菜单卡期间隐藏操作提示，避免与卡牌文字重叠
+    const prevHint = this.elHint?.textContent ?? null;
+    const prevHintOp = this.elHint?.style.opacity ?? null;
+    if (this.elHint) { this.elHint.textContent = ''; this.elHint.style.opacity = '0'; }
     for (let i = 0; i <= 16; i++) {
       const t = i / 16;
       key.color.copy(from).lerp(warm, t);
@@ -599,6 +623,11 @@ export class Director {
     synth.hidden = true;
     cards.forEach(c => c.classList.remove('show', 'merge'));
     menu.classList.remove('show');
+    // 恢复操作提示
+    if (this.elHint) {
+      this.elHint.textContent = prevHint ?? '';
+      this.elHint.style.opacity = prevHintOp ?? '1';
+    }
   }
 
   async #glitch(step = {}) {

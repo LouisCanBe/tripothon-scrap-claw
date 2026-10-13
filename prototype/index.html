@@ -477,11 +477,18 @@
     /* 竖屏下方元素间距：字幕 → 面板 → 卡牌，从上到下排开不打架 */
     #msg { bottom: 16px; }
     .panel, .panel.right { bottom: 110px; max-height: 36vh; }
+    /* 三幕副屏面板移到视窗右侧外，避免裁切二维码 */
+    #collectPairPanel { right: 8px !important; bottom: auto !important; top: 50% !important;
+                        transform: translateY(-50%) !important; max-width: 220px !important; }
     /* 四幕菜单卡：top:44% 在竖屏会压到视窗下沿，改到视窗下方 */
     #menuCard { top: 52% !important; }
     .syn-card { bottom: 22% !important; }
     .syn-card.show { bottom: 26% !important; }
     .syn-card.merge { bottom: auto !important; top: 48% !important; }
+    /* 幕标题：竖屏换行，移到 HUD 下方避免重叠 */
+    #actLabel { top: 130px !important; max-width: min(80vw, 280px) !important;
+                white-space: normal !important; letter-spacing: 3px !important; }
+    #actLabel::before, #actLabel::after { flex: 0 0 24px !important; width: 24px !important; }
   }
   .panel .op { display: block; margin-top: 10px;
     font-size: 12px; line-height: 1.45; letter-spacing: .4px; color: #9a5b2a; }
