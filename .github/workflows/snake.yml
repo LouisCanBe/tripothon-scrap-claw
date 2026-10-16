@@ -4,6 +4,10 @@ name: 刷新 README 可视化（贪吃蛇 + 热度图）
 #   generate — Platane/snk 把 GitHub 贡献日历渲染成贪吃蛇 SVG，推到 output 分支
 #   heatmap  — tools/heatmap.mjs 读 git log 重画 docs/activity.svg 并提交回仓库
 # 每天自动跑一次；push 到 master 也会触发贪吃蛇（首次推送后即生效）。
+# permissions：默认 token 是只读的，两个 job 都要往仓库里写东西，必须显式开。
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: "0 17 * * *"
