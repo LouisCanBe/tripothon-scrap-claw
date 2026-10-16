@@ -59,8 +59,9 @@ const maxDay = Math.max(...perDay.values());
 const activeDays = perDay.size;
 
 // ---------- 3. 样式（主题色板） ----------
-const CELL = 11, GAP = 3, STEP = CELL + GAP;
-const PAD_L = 30, PAD_T = 34, PAD_R = 6, PAD_B = 30;
+// 格子放大过：项目历史还短（几周），11px 小格子整张图只有 120px 宽，README 里太窄
+const CELL = 15, GAP = 4, STEP = CELL + GAP;
+const PAD_L = 32, PAD_T = 38, PAD_R = 8, PAD_B = 34;
 const BG = '#0d0f0b', INK = '#d8d4c8', INK_DIM = '#8a877e';
 const LEVELS = ['#22261f', '#33422a', '#4f6b3d', '#778a55', '#9db87a'];
 
@@ -92,7 +93,7 @@ weeks.forEach((col, w) => {
     if (day.getDate() === 1 && day.getMonth() !== lastMonth) {
       lastMonth = day.getMonth();
       monthLabels.push(
-        `<text x="${x}" y="${PAD_T - 8}" font-size="9" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">${day.getMonth() + 1}月</text>`
+        `<text x="${x}" y="${PAD_T - 10}" font-size="11" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">${day.getMonth() + 1}月</text>`
       );
     }
   });
@@ -100,23 +101,23 @@ weeks.forEach((col, w) => {
 
 // 左侧星期标签（一/三/五）
 const weekdayLabels = [1, 3, 5].map((r) =>
-  `<text x="0" y="${PAD_T + r * STEP + CELL - 2}" font-size="9" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">${WEEKDAYS[r]}</text>`
+  `<text x="0" y="${PAD_T + r * STEP + CELL - 3}" font-size="11" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">${WEEKDAYS[r]}</text>`
 ).join('');
 
 // 图例
-const legendY = PAD_T + 7 * STEP + 12;
+const legendY = PAD_T + 7 * STEP + 16;
 const legendX = PAD_L + weeks.length * STEP - 5 * STEP;
 const legend = [
-  `<text x="${legendX - 16}" y="${legendY + CELL - 2}" font-size="9" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">少</text>`,
+  `<text x="${legendX - 22}" y="${legendY + CELL - 4}" font-size="11" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">少</text>`,
   ...LEVELS.map((c, i) =>
     `<rect x="${legendX + i * STEP}" y="${legendY}" width="${CELL}" height="${CELL}" rx="2" fill="${c}" stroke="rgba(216,212,200,.06)"/>`
   ),
-  `<text x="${legendX + 5 * STEP + 4}" y="${legendY + CELL - 2}" font-size="9" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">多</text>`,
+  `<text x="${legendX + 5 * STEP + 6}" y="${legendY + CELL - 4}" font-size="11" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">多</text>`,
 ].join('');
 
 const title =
-  `<text x="0" y="12" font-size="12" fill="${INK}" font-family="ui-monospace,Consolas,monospace">提交热度 · ${toKey(firstCommit)} → ${toKey(today)}</text>` +
-  `<text x="0" y="26" font-size="10" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">${total} commits · 活跃 ${activeDays} 天 · 单日最多 ${maxDay} 次</text>`;
+  `<text x="0" y="15" font-size="14" fill="${INK}" font-family="ui-monospace,Consolas,monospace">提交热度 · ${toKey(firstCommit)} → ${toKey(today)}</text>` +
+  `<text x="0" y="31" font-size="12" fill="${INK_DIM}" font-family="ui-monospace,Consolas,monospace">${total} commits · 活跃 ${activeDays} 天 · 单日最多 ${maxDay} 次</text>`;
 
 const svg =
   `<?xml version="1.0" encoding="UTF-8"?>\n` +

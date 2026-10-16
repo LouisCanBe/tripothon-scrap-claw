@@ -30,9 +30,15 @@ gantt
 
 ### 代码热度
 
+本地版（`docs/activity.svg`，离线可看，悬停格子看当天提交数）：
+
 ![提交热度](docs/activity.svg)
 
-`npm run heatmap` 随时重新生成（GitHub Action 每天自动刷新一次），鼠标悬停格子看当天提交数。GitHub 页面上还有一张贡献日历贪吃蛇动画，由 `.github/workflows/snake.yml` 生成（首次 push 后出现）：
+外链版（[github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph)，挂在 Vercel 公共实例上，国内网络可能打不开，放这儿作对比）：
+
+![提交热度（外链版）](https://github-readme-activity-graph.vercel.app/graph?username=LouisCanBe&repo=tripothon-scrap-claw&theme=github&area=true&hide_border=true)
+
+`npm run heatmap` 随时重新生成本地图（GitHub Action 每天自动刷新一次）。GitHub 页面上还有一张贡献日历贪吃蛇动画，由 `.github/workflows/snake.yml` 生成：
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/LouisCanBe/tripothon-scrap-claw/output/github-snake.svg" alt="贪吃蛇吃提交记录" />
