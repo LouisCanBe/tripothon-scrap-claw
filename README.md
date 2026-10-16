@@ -6,13 +6,13 @@ Web3D 抓娃娃机叙事 Demo：四幕方框画幅（记忆）+ 终幕 16:9 故�
 
 ## 项目进度与热度
 
-可视化都不依赖外部服务：时间线用 [mermaid](https://mermaid.js.org/)（GitHub 原生渲染），热度图是 `tools/heatmap.mjs` 读 git log 画的 SVG（配色取自 `prototype/theme.css` 的强调色 `#9db87a`）——本地 VS Code 预览、GitHub、离线打开都能看。
+时间线用 [mermaid](https://mermaid.js.org/)（GitHub 原生渲染）；另有一张贡献日历贪吃蛇动画，由 `.github/workflows/snake.yml` 自动生成。
 
 ### 更新进度
 
 ```mermaid
 gantt
-    title 开发时间线 · 首提交 2026-09-11 → 至今（117 commits）
+    title 开发时间线 · 首提交 2026-09-11 → 至今（120 commits）
     dateFormat YYYY-MM-DD
     axisFormat %m-%d
     todayMarker off
@@ -30,15 +30,7 @@ gantt
 
 ### 代码热度
 
-本地版（`docs/activity.svg`，离线可看，悬停格子看当天提交数）：
-
-![提交热度](docs/activity.svg)
-
-外链版（[github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph)，挂在 Vercel 公共实例上，国内网络可能打不开，放这儿作对比）：
-
-![提交热度（外链版）](https://github-readme-activity-graph.vercel.app/graph?username=LouisCanBe&repo=tripothon-scrap-claw&theme=github&area=true&hide_border=true)
-
-`npm run heatmap` 随时重新生成本地图（GitHub Action 每天自动刷新一次）。GitHub 页面上还有一张贡献日历贪吃蛇动画，由 `.github/workflows/snake.yml` 生成：
+GitHub 页面上的贡献日历贪吃蛇（[Platane/snk](https://github.com/Platane/snk) 渲染，蛇身配色取自项目强调色，每天 + push 到 master 自动刷新）：
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/LouisCanBe/tripothon-scrap-claw/output/github-snake.svg" alt="贪吃蛇吃提交记录" />
@@ -154,7 +146,6 @@ PixVerse（网页会员）：仓库根 `npm install` → `npm run pixverse:login
 
 ```
 outline.md              设计文档（叙事/机制/美术纲领）
-docs/activity.svg       提交热度日历图（README 里那张，tools/heatmap.mjs 生成）
 prototype/              可玩原型（Three.js 0.170，CDN 引入）
   index.html            页面骨架 + 画幅遮罩/HUD 样式
   theme.css             主题变量（字体/颜色/字号，设计稿定稿只改这里）
@@ -176,7 +167,6 @@ tools/tripo.mjs         Tripo API 全接口薄封装：CLI / 可 import / serve 
 tools/marble.mjs        Marble 世界生成 API 薄封装（同 tripo 三段式，已实测）
 tools/pixverse.mjs      PixVerse 视频生成 API 薄封装（text/image/transition → MP4）
 tools/devServer.mjs     开发静态服务器（no-store 禁模块缓存）
-tools/heatmap.mjs       提交热度日历图生成器（git log → docs/activity.svg，npm run heatmap）
 tools/TRIPO.md          接口清单 + 分件可动/绑骨动画/替换流程示例
 tools/MARBLE.md         Marble 场景接入手册（资产路径/坐标系/预览器交互/已知坑）
 tools/PIXVERSE.md       PixVerse 视频接入手册（积分估算/叙事接入/已知坑）

@@ -1,10 +1,9 @@
-name: 刷新 README 可视化（贪吃蛇 + 热度图）
+name: 生成贪吃蛇动画
 
-# 两个 job：
-#   generate — Platane/snk 把 GitHub 贡献日历渲染成贪吃蛇 SVG，推到 output 分支
-#   heatmap  — tools/heatmap.mjs 读 git log 重画 docs/activity.svg 并提交回仓库
-# 每天自动跑一次；push 到 master 也会触发贪吃蛇（首次推送后即生效）。
-# permissions：默认 token 是只读的，两个 job 都要往仓库里写东西，必须显式开。
+# Platane/snk 把 GitHub 贡献日历渲染成贪吃蛇 SVG，推到 output 分支，
+# README 里用 raw.githubusercontent.com 引用（不需要提交任何东西，图自动更新）。
+# 每天自动跑一次；push 到 master 也会触发。
+# permissions：默认 token 是只读的，推 output 分支必须显式开写权限。
 permissions:
   contents: write
 
@@ -36,17 +35,3 @@ jobs:
           build_dir: dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # 每天顺手刷新 README 里的本地热度图（docs/activity.svg）
-  heatmap:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # 热度图要读全量 git log
-      - run: node tools/heatmap.mjs
-      - uses: EndBug/add-and-commit@v9
-        with:
-          message: "chore: 刷新提交热度图 [skip ci]"
-          add: docs/activity.svg
