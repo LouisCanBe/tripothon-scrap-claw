@@ -373,6 +373,10 @@ function startRevealMarblePreload() {
     colliderUrl: CONFIG.reveal.colliderGlb,
     spzUrl: CONFIG.reveal.spz,
     showBoundsHelper: !!CONFIG.reveal.showBoundsHelper,
+    alignColliderToSplat: CONFIG.reveal.alignColliderToSplat !== false,
+    splatYOffset: CONFIG.reveal.splatYOffset ?? 0,
+    // 场景目录里配了绝对世界 Y 就直接贴，null 才走自动贴 SPZ
+    colliderFloorY: CONFIG.reveal.colliderFloorY ?? null,
   }).then((immersive) => {
     if (gen === revealLoadGen) beginRevealStillBake(immersive);
     return immersive;

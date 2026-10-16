@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Marble 终幕调试 · 拾荒娃娃机</title>
+<link rel="stylesheet" href="/console-theme.css" />
+<style>
+  :root { --bg: #0b0b0d; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg);
+               font-family: ui-monospace, "Courier New", monospace; color: var(--ink); }
+  #bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; flex-wrap: wrap;
+         background: #121216; border-bottom: 1px solid #26262c; font-size: 13px; }
+  #bar b { color: var(--accent); }
+  select, button { background: #1c1c22; color: var(--ink); border: 1px solid #3a3a44;
+                   padding: 5px 10px; border-radius: 4px; font: inherit; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #111; }
+  #stage { position: fixed; inset: 52px 0 0 0; }
+  #stage canvas { display: block; }
+  #info { position: fixed; left: 12px; bottom: 10px; font-size: 12px; color: var(--dim);
+          background: rgba(8,8,10,.7); padding: 4px 10px; border-radius: 4px; pointer-events: none; }
+  /* 常驻几何摘要：地板/天花板/层高/当前眼高/相机高度 —— 调墙带和眼高时最需要的数 */
+  #geo { position: fixed; left: 12px; top: 62px; font-size: 11px; line-height: 1.7; color: var(--ink);
+         background: rgba(8,8,10,.78); border: 1px solid #26262c; border-radius: 4px;
+         padding: 7px 10px; pointer-events: none; white-space: pre; }
+  #geo b { color: var(--accent); font-weight: normal; }
+  #geo .warn { color: #e07070; }
+  /* 贴出可直接粘进 revealWorlds.js 的配置 */
+  #out { position: fixed; right: 12px; bottom: 10px; max-width: 46vw; max-height: 46vh; overflow: auto;
+         background: rgba(8,8,10,.86); border: 1px solid #26262c; border-radius: 4px;
+         padding: 8px 10px; font-size: 11px; line-height: 1.5; white-space: pre; color: var(--ink);
+         display: none; }
+  #out.show { display: block; }
+  #out b { color: var(--accent); }
+</style>
+</head>
+<body>
+<div id="bar">
+  <b>终幕调试</b>
+  <select id="worldSel"></select>
+  <button id="btnReload" type="button" title="重新加载当前世界">重载</button>
+  <button id="btnOrbit" type="button">范式 fps/orbit(V)</button>
+  <button id="btnHelper" type="button" class="on">行走范围线</button>
+  <button id="btnBounds" type="button">碰撞盒</button>
+  <button id="btnAxis" type="button" class="on">坐标轴</button>
+  <button id="btnRuler" type="button" class="on">高度标尺</button>
+  <button id="btnBand" type="button" class="on">墙带预览</button>
+  <button id="btnSolid" type="button" class="on">碰撞实体</button>
+  <button id="btnSlice" type="button" class="on">墙带切片</button>
+  <button id="btnOut" type="button">导出配置</button>
+  <span id="cost" style="color:var(--dim)"></span>
+</div>
+<div id="stage"></div>
+<div id="info"></div>
+<div id="geo"></div>
+<pre id="out"></pre>
+
+<script type="importmap">
+{ "imports": { "three": "/vendor/three.module.js", "three/addons/": "/vendor/addons/" } }
+</script>
+<script type="module">
+// ============================================================
+// Marble 终幕调试台 —— 与游戏 prototype 终幕**同一套实现**
+//
+// 复用（不是重写）：
+//   mountMarbleImmersive  prototype/src/revealMarble.js     collider + SPZ 挂载、翻 X、落地
+//   buildWalkSpace        prototype/src/revealWalkSpace.js   三角光栅化 → 洪泛 → 轮廓（吃 U 形/凹角）
+//   SceneControls         prototype/src/sceneControls.js     fps 走场 / orbit 环视，游戏终幕同款手感
+//   REVEAL_WORLDS         prototype/src/revealWorlds.js     世界目录（spawn/walk 就是游戏那份）
+//
+// 与游戏终幕的差异（仅此两处，故意为之）：
+//   1. 没有导演 / 溶解转场 / 后处理，进来就是终幕实景。
+//   2. spawn 是「相对包围盒」的偏移，这里和游戏一样实时算出落地点。
+//
+// 操作：拖拽环视 / WASD·方向键前后左右 / QE 升降 / 滚轮 FOV / V 切范式 / H 面板
+// ============================================================
+import * as THREE from 'three';
+import GUI from '/vendor/addons/libs/lil-gui.module.min.js';
+import { SceneControls, SceneControlPresets, attachGlobalKeys } from '/src/sceneControls.js';
+import { REVEAL_WORLDS, applyRevealWorld } from '/src/revealWorlds.js';
+import { mountMarbleImmersive } from '/src/revealMarble.js';
+import { buildWalkSpace, walkSpaceDiag } from '/src/revealWalkSpace.js';
+import { CONFIG } from '/src/config.js';
+import { Post } from '/src/post.js';
+import { createSceneLights, applyRevealLightingForLift } from '/src/sceneLighting.js';
+
+const stage = document.getElementById('stage');
+const info = document.getElementById('info');
+const geoEl = document.getElementById('geo');
+const worldSel = document.getElementById('worldSel');
+const outEl = document.getElementById('out');
+
+function setInfo(msg) { info.textContent = msg; }
+
+// —— WebGL 前置检查：headless / 无 GPU 环境会在这里就拦住，报清楚原因，
+//    而不是留一块黑屏让人猜（three 的 WebGLRenderer 构造失败只抛 "Error creating WebGL context"）。
+(function checkWebGL() {
+  try {
+    const c = document.createElement('canvas');
+    if (!(c.getContext('webgl2') || c.getContext('webgl'))) throw new Error('getContext 返回 null');
+  } catch (e) {
+    stage.innerHTML = '<div style="padding:24px;color:#e07070;font-size:13px;line-height:1.7">'
+      + 'WebGL 不可用，终幕调试台开不出画面。<br>'
+      + '原因：' + (e.message ?? e) + '<br>'
+      + '请用带 GPU 的浏览器打开（本机 Chrome / Edge 正常；headless 或无显卡环境不行）。'
+      + '</div>';
+    throw e;
+  }
+})();
+
+// —— 渲染器 / 场景 / 相机：与游戏 main.js 终幕同规格 ——
+const renderer = new THREE.WebGLRenderer({
+  powerPreference: 'high-performance',
+  antialias: false,     // 画面走 EffectComposer 渲进 RT 再走后期链，canvas 抗锯齿用不上（见 main.js）
+});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+renderer.shadowMap.enabled = false;   // 终幕是点云，不需要阴影
+stage.appendChild(renderer.domElement);
+const GAME_OUTPUT_COLOR_SPACE = renderer.outputColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0b0d);
+const camera = new THREE.PerspectiveCamera(70, stage.clientWidth / stage.clientHeight, 0.05, 200);
+
+// —— 灯光：游戏主场景同款（revealCold / revealNeutral 两档，用 lift 插值）——
+const lights = createSceneLights(scene, { shadows: false, shadowMapSize: CONFIG.render.shadowMapSize });
+const { ambient, hemi, key, fill, glow } = lights;
+
+// —— 后处理：直接用游戏的 Post（鱼眼 + 泛光 + 颗粒 + 暗角 + 调色，全链路一致）——
+const post = new Post(renderer, scene, camera);
+post.setSize(stage.clientWidth, stage.clientHeight);
+
+addEventListener('resize', () => {
+  renderer.setSize(stage.clientWidth, stage.clientHeight);
+  camera.aspect = stage.clientWidth / stage.clientHeight;
+  camera.updateProjectionMatrix();
+  post.setSize(stage.clientWidth, stage.clientHeight);
+});
+
+// 模块级异常也别咽掉：import 失败 / 解码器缺失都会走到这里
+addEventListener('error', (e) => {
+  if (e.message?.includes('ResizeObserver') || e.error?.name === 'ResizeObserverLoop') return;
+  console.error('[reveal]', e.error ?? e.message);
+});
+addEventListener('unhandledrejection', (e) => {
+  console.error('[reveal] unhandled', e.reason);
+  setInfo(`出错：${e.reason?.message ?? e.reason}`);
+});
+
+// —— 世界根节点：和游戏 revealRoot 同构，frame.rotation.x = π 在 mountMarbleImmersive 里做——
+const revealRoot = new THREE.Group();
+scene.add(revealRoot);
+
+const globalKeys = attachGlobalKeys();
+let ctl = null;
+let immersive = null;
+let walkHelper = null;
+let boundsHelper = null;
+let colliderHelper = null;
+let debugGroup = null;
+let currentWorld = '';
+let raf = 0;
+let last = 0;
+
+/**
+ * 世界目录里的 URL 是相对路径（'assets/worlds/xxx.glb'）——游戏跑在 devServer
+ * 根路径下所以没问题，但本页挂在 /marble/reveal/ 子路径下，浏览器会把它解析成
+ * /marble/reveal/assets/... → 404。这里统一提到站点根。
+ * 已带前导 / 或 http(s):// 的原样返回。
+ */
+function absUrl(url) {
+  if (!url) return url;
+  if (/^([a-z]+:)?\/\//i.test(url)) return url;
+  return '/' + String(url).replace(/^\.?\//, '');
+}
+
+/** 世界目录 → 下拉框。label 就是游戏面板里那个中文名。 */
+function refreshWorldList() {
+  worldSel.innerHTML = Object.entries(REVEAL_WORLDS)
+    .map(([id, w]) => `<option value="${id}">${w.label} · ${id}</option>`).join('');
+  worldSel.value = currentWorld || Object.keys(REVEAL_WORLDS)[0];
+}
+
+function disposeCurrent() {
+  ctl?.dispose();
+  ctl = null;
+  // 顺序要紧：disposeDebugGroup 要读 immersive.colliderMeshes 才知道哪些 geometry 是共享的，
+  // 所以必须在 immersive = null **之前**调用。
+  disposeDebugGroup();
+  if (walkHelper) { walkHelper.removeFromParent(); walkHelper.geometry?.dispose(); walkHelper.material?.dispose?.(); walkHelper = null; }
+  if (boundsHelper) { boundsHelper.removeFromParent(); boundsHelper.geometry?.dispose(); boundsHelper.material?.dispose?.(); boundsHelper = null; }
+  immersive?.dispose();
+  immersive = null;
+  revealRoot.clear();
+}
+
+/** 出生点：和游戏 main.js revealSpawnOrigin 同一算法（相对碰撞包围盒的偏移）。 */
+function spawnOrigin(immersive, spawn) {
+  const center = immersive.bounds.getCenter(new THREE.Vector3());
+  const size = immersive.bounds.getSize(new THREE.Vector3());
+  return new THREE.Vector3(
+    center.x + (spawn?.offsetX ?? 0),
+    immersive.bounds.min.y + (spawn?.eyeHeight ?? 1.55),
+    center.z + size.z * (spawn?.offsetZFrac ?? 0),
+  );
+}
+
+// ============================================================
+// 调试可视化：坐标轴 / 高度标尺 / 墙带预览 / 碰撞网格线框
+//
+// 为什么需要这些：Marble collider 是**完整封闭碰撞体**（地+墙+天花），
+// 不是纯地面。ending-ring 实测 Y 范围 -1.466 ~ 0.602，层高 2.07m，
+// 其中 -1.466 是真实地板、0.602 是天花板（三角密度最高那层）。
+// 而 buildWalkSpace 的 wallY0/wallY1 是**相对 bounds.min.y** 的，
+// 所以"墙带底 1.5"实际取的是 y = -1.466+1.5 = 0.03 —— 眼睛在面板上看不出来，
+// 必须有标尺才看得见。
+// ============================================================
+const DEBUG_COLORS = {
+  axisX: 0xff5566, axisZ: 0x5588ff, axisY: 0x66dd88,
+  ruler: 0xf0c419, rulerMinor: 0x6a6428,
+  wallBand: 0xff8844, spawn: 0xff3366,
+  collider: 0x88bbee, colliderEdge: 0x3a4a5a,
+  walkLine: 0x00ffc8, walkLineBg: 0x003322,
+  grid: 0x2a2a32,
+};
+
+/**
+ * 释放调试层。
+ *
+ * ⚠️ buildColliderSolid 复用 collider 的 geometry、buildWallSlice 读同一份，
+ *    一旦 dispose 掉，collider 本身和后续 buildWalkSpace 会一起坏掉。
+ * 所以这里按**引用比对**区分：凡是 collider 自己的 geometry 一律跳过，
+ * 其余（本模块新建的 line/geo/sprite/canvas 贴图）全部释放。
+ */
+function disposeDebugGroup() {
+  if (!debugGroup) return;
+  debugGroup.parent?.remove(debugGroup);
+  const sharedGeos = new Set();
+  for (const m of immersive?.colliderMeshes ?? []) if (m?.geometry) sharedGeos.add(m.geometry);
+  debugGroup.traverse((o) => {
+    if (o.geometry && !sharedGeos.has(o.geometry)) o.geometry.dispose();
+    const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of mats) {
+      // collider 材质是共享的，只释放自己建的（Sprite 的 CanvasTexture 也是）
+      if (m?.userData?.debugOwned) {
+        m.map?.dispose?.();
+        m.dispose();
+      }
+    }
+  });
+  debugGroup = null;
+}
+
+function ensureDebugGroup() {
+  if (debugGroup) return debugGroup;
+  debugGroup = new THREE.Group();
+  debugGroup.name = 'revealDebug';
+  scene.add(debugGroup);   // 挂 scene 而非 revealRoot：revealRoot 不带翻转，标尺读数才是世界坐标
+  return debugGroup;
+}
+
+function on(name) { return document.getElementById(name)?.classList.contains('on'); }
+
+/**
+ * collider 半透明实体：把整个碰撞体画成淡蓝半透明，墙、地、天花的实际位置一眼可见。
+ * 15 万三角不用 WireframeGeometry（会糊），直接复用原 geometry + 一个共享半透明材质。
+ */
+function buildColliderSolid(immersive) {
+  const g = new THREE.Group();
+  g.name = 'colliderSolid';
+  const meshes = immersive.colliderMeshes ?? [];
+  if (!meshes.length) return g;
+  // 注意：colliderMeshes 是 mountMarbleImmersive 里 collectColliderMeshes(group) 收集的，
+  // group 已挂在 frame（rotation.x = π）下，所以直接复用同一个 Object3D 引用即可，
+  // 不需要再算 matrixWorld —— 但这里另建 mesh，所以要 applyMatrix4。
+  const mat = new THREE.MeshBasicMaterial({
+    color: DEBUG_COLORS.collider,
+    transparent: true,
+    opacity: 0.35,
+    depthWrite: false,     // 半透明不写深度，否则会和点云互相遮挡出黑块
+    side: THREE.DoubleSide,
+  });
+  mat.userData.debugOwned = true;
+  const matEdge = new THREE.LineBasicMaterial({
+    color: DEBUG_COLORS.colliderEdge, transparent: true, opacity: 0.9, depthWrite: false,
+  });
+  matEdge.userData.debugOwned = true;
+  for (const m of meshes) {
+    const geo = m.geometry;
+    if (!geo) continue;
+    m.updateMatrixWorld(true);
+    const solid = new THREE.Mesh(geo, mat);   // geometry 复用，不 dispose
+    solid.applyMatrix4(m.matrixWorld);
+    solid.renderOrder = 2;
+    g.add(solid);
+    // 淡色边线：把 collider 的轮廓从点云里描出来
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), matEdge);
+    edges.applyMatrix4(m.matrixWorld);
+    edges.renderOrder = 3;
+    g.add(edges);
+  }
+  return g;
+}
+
+/**
+ * 墙带切片高亮：把 buildWalkSpace 此刻**真正参与光栅化**的三角挑出来，画成实心橙片。
+ * 这是"墙底和顶不确定"的直接答案 —— 亮着的部分就是被当成墙的部分。
+ * 判据与 revealWalkSpace.js rasterWalls 完全一致：三角形 y 范围与 [y0,y1] 有交集，
+ * 且法线偏水平（|ny|/|n| ≤ 0.55，即排除地板和天花板）。
+ */
+function buildWallSlice(immersive, walk) {
+  const g = new THREE.Group();
+  g.name = 'wallSlice';
+  const meshes = immersive.colliderMeshes ?? [];
+  if (!meshes.length) return g;
+  const w = walk ?? {};
+  // 与 revealWalkSpace.js 同一基准：仅 collider 的世界盒底
+  const base = colliderBox(immersive);
+  const y0 = base.min.y + (w.wallY0 ?? 1);
+  const y1 = base.min.y + (w.wallY1 ?? 2.35);
+
+  const mat = new THREE.MeshBasicMaterial({
+    color: DEBUG_COLORS.wallBand, transparent: true, opacity: 0.85,
+    depthWrite: false, side: THREE.DoubleSide,
+  });
+  mat.userData.debugOwned = true;
+  let kept = 0, total = 0;
+  for (const m of meshes) {
+    const geo = m.geometry;
+    if (!geo?.attributes?.position) continue;
+    const pos = geo.attributes.position;
+    const idx = geo.index;
+    const count = idx ? idx.count : pos.count;
+    const mat4 = m.matrixWorld;
+    const verts = [];
+    const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
+    for (let t = 0; t + 2 < count; t += 3) {
+      const ia = idx ? idx.getX(t) : t;
+      const ib = idx ? idx.getX(t + 1) : t + 1;
+      const ic = idx ? idx.getX(t + 2) : t + 2;
+      _a.fromBufferAttribute(pos, ia).applyMatrix4(mat4);
+      _b.fromBufferAttribute(pos, ib).applyMatrix4(mat4);
+      _c.fromBufferAttribute(pos, ic).applyMatrix4(mat4);
+      total += 1;
+      const miny = Math.min(_a.y, _b.y, _c.y);
+      const maxy = Math.max(_a.y, _b.y, _c.y);
+      if (maxy < y0 || miny > y1) continue;          // 与 rasterWalls 同一判据
+      // 法线偏水平才算墙
+      const abx = _b.x - _a.x, aby = _b.y - _a.y, abz = _b.z - _a.z;
+      const acx = _c.x - _a.x, acy = _c.y - _a.y, acz = _c.z - _a.z;
+      const ny = abz * acx - abx * acz;
+      const nxn = aby * acz - abz * acy;
+      const nzn = abx * acy - aby * acx;
+      const nlen = Math.hypot(nxn, ny, nzn) || 1;
+      if (Math.abs(ny / nlen) > 0.55) continue;       // 地板/天花板排除
+      kept += 1;
+      verts.push(_a.x, _a.y, _a.z, _b.x, _b.y, _b.z, _c.x, _c.y, _c.z);
+    }
+    if (verts.length) {
+      const geo2 = new THREE.BufferGeometry();
+      geo2.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      geo2.computeVertexNormals();
+      geo2.userData.debugOwned = true;
+      const mesh = new THREE.Mesh(geo2, mat);
+      mesh.renderOrder = 4;
+      g.add(mesh);
+    }
+  }
+  g.userData.slice = { y0, y1, kept, total };
+  return g;
+}
+
+/** 世界坐标三轴 + 1m 地面网格。基准取 collider 盒，好和「碰撞实体」对齐。 */
+function buildAxes(immersive) {
+  const bounds = colliderBox(immersive);
+  const g = new THREE.Group();
+  const len = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) * 0.6 + 1;
+  const y0 = bounds.min.y, y1 = bounds.max.y;
+  const mk = (from, to, color) => {
+    const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
+    return new THREE.Line(geo, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
+  };
+  g.add(mk(new THREE.Vector3(-len, y0, 0), new THREE.Vector3(len, y0, 0), DEBUG_COLORS.axisX));
+  g.add(mk(new THREE.Vector3(0, y0, -len), new THREE.Vector3(0, y0, len), DEBUG_COLORS.axisZ));
+  g.add(mk(new THREE.Vector3(0, y0, 0), new THREE.Vector3(0, y1 + 0.5, 0), DEBUG_COLORS.axisY));
+  // 地面 1m 网格
+  const grid = new THREE.GridHelper(Math.max(len * 2, 10), Math.max(10, Math.round(len * 2)), DEBUG_COLORS.grid, DEBUG_COLORS.grid);
+  grid.position.set(0, y0, 0);
+  grid.material.transparent = true;
+  grid.material.opacity = 0.5;
+  grid.material.depthWrite = false;
+  g.add(grid);
+  return g;
+}
+
+/** 高度标尺：立在原点旁，每 0.25m 一刻度，绝对 y 值直接标在刻度旁（用 sprite 文字）。 */
+/**
+ * 高度标尺：立在场景旁，每 0.25m 一刻度，每 1m 标绝对 y 值。
+ * 同时标出四个关键高度：collider 底/顶（墙带基准）与整体盒底/顶（眼高基准），
+ * 以及当前眼位和墙带上下沿 —— 一根尺子回答"我站在哪、切的是哪层"。
+ */
+function buildHeightRuler(immersive) {
+  const g = new THREE.Group();
+  const cb = colliderBox(immersive);
+  const all = immersive.bounds;
+  const y0 = Math.min(cb.min.y, all.min.y);
+  const y1 = Math.max(cb.max.y, all.max.y);
+  const x = Math.max(cb.max.x, all.max.x) + 0.6;
+  const z = Math.min(cb.min.z, all.min.z) + 0.6;
+  // 主尺
+  g.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, y0, z), new THREE.Vector3(x, y1 + 0.5, z)]),
+    new THREE.LineBasicMaterial({ color: DEBUG_COLORS.ruler, depthTest: false, transparent: true, opacity: 0.95 }),
+  ));
+  const step = 0.25;
+  const tickGeo = [];
+  const labels = [];
+  for (let y = Math.ceil(y0 / step) * step; y <= y1 + 0.001; y += step) {
+    const major = Math.abs(y / 1 - Math.round(y / 1)) < 0.01;
+    const w = major ? 0.35 : 0.16;
+    tickGeo.push(new THREE.Vector3(x, y, z), new THREE.Vector3(x + w, y, z));
+    if (major) labels.push({ y, text: `${y.toFixed(2)}` });
+  }
+  if (tickGeo.length) {
+    g.add(new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(tickGeo),
+      new THREE.LineBasicMaterial({ color: DEBUG_COLORS.rulerMinor, depthTest: false, transparent: true, opacity: 0.9 }),
+    ));
+  }
+  for (const l of labels) g.add(makeLabel(l.text, new THREE.Vector3(x + 0.45, l.y, z), DEBUG_COLORS.ruler, 0.8));
+
+  // 关键高度：四个盒边界 + 点云盒底 + 当前眼位 + 墙带上下沿
+  const walk = CONFIG.reveal.walk ?? {};
+  const bandY0 = cb.min.y + (walk.wallY0 ?? 1);
+  const bandY1 = cb.min.y + (walk.wallY1 ?? 2.35);
+  const notes = [
+    { y: cb.min.y, text: `collider 底 ${cb.min.y.toFixed(3)} · 墙带基准`, color: 0x66dd88 },
+    { y: cb.max.y, text: `collider 顶 ${cb.max.y.toFixed(3)}`, color: 0x88aaff },
+    { y: all.min.y, text: `整体盒底 ${all.min.y.toFixed(3)} · 眼高基准`, color: 0xdddd66 },
+    { y: all.max.y, text: `整体盒顶 ${all.max.y.toFixed(3)}`, color: 0xcc88ff },
+    { y: bandY0, text: `墙带底 ${bandY0.toFixed(3)}`, color: 0xff8844 },
+    { y: bandY1, text: `墙带顶 ${bandY1.toFixed(3)}`, color: 0xff8844 },
+  ];
+  if (immersive?.splatFloorY != null) {
+    notes.push({ y: immersive.splatFloorY, text: `点云盒底 ${immersive.splatFloorY.toFixed(3)} · 对齐目标`, color: 0x00ffc8 });
+  }
+  if (ctl) notes.push({ y: ctl.pos.y, text: `眼位 ${ctl.pos.y.toFixed(3)}`, color: 0xff3366 });
+  for (const n of notes) {
+    // 横线穿过场景，便于和 collider 实体对齐
+    const mark = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(cb.min.x - 0.3, n.y, cb.min.z - 0.3),
+        new THREE.Vector3(cb.max.x + 0.3, n.y, cb.max.z + 0.3),
+      ]),
+      new THREE.LineBasicMaterial({ color: n.color, depthTest: false, transparent: true, opacity: 0.5 }),
+    );
+    g.add(mark);
+    g.add(makeLabel(n.text, new THREE.Vector3(x + 0.45, n.y + 0.1, z), n.color, 0.85));
+  }
+  return g;
+}
+
+/** 墙带预览：把当前 wallY0/wallY1 那段水平带画成半透明盒子，直接看见"我在切哪一层"。 */
+/** 取 collider 自己的世界包围盒（buildWalkSpace 的墙带基准，与 revealWalkSpace.js 同算法）。 */
+function colliderBox(immersive) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const m of immersive.colliderMeshes ?? []) {
+    m.updateMatrixWorld(true);
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const box = m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld);
+    if (box.min.x < minX) minX = box.min.x;
+    if (box.max.x > maxX) maxX = box.max.x;
+    if (box.min.y < minY) minY = box.min.y;
+    if (box.max.y > maxY) maxY = box.max.y;
+    if (box.min.z < minZ) minZ = box.min.z;
+    if (box.max.z > maxZ) maxZ = box.max.z;
+  }
+  if (!Number.isFinite(minX)) return immersive.bounds;
+  return new THREE.Box3(new THREE.Vector3(minX, minY, minZ), new THREE.Vector3(maxX, maxY, maxZ));
+}
+
+function buildWallBand(bounds, walk, immersive) {
+  const w = walk ?? {};
+  // 墙带相对 collider 的盒底，不是整体盒底 —— 与 buildWalkSpace 保持一致。
+  const base = immersive ? colliderBox(immersive) : bounds;
+  const y0 = base.min.y + (w.wallY0 ?? 1);
+  const y1 = base.min.y + (w.wallY1 ?? 2.35);
+  const h = Math.max(0.01, y1 - y0);
+  const geo = new THREE.BoxGeometry(
+    base.max.x - base.min.x + 0.2,
+    h,
+    base.max.z - base.min.z + 0.2,
+  );
+  const mat = new THREE.MeshBasicMaterial({
+    color: DEBUG_COLORS.wallBand, transparent: true, opacity: 0.22,
+    depthWrite: false, side: THREE.DoubleSide,
+  });
+  const box = new THREE.Mesh(geo, mat);
+  box.position.set(
+    (base.min.x + base.max.x) / 2,
+    y0 + h / 2,
+    (base.min.z + base.max.z) / 2,
+  );
+  box.name = 'wallBand';
+  box.renderOrder = 5;
+  const g = new THREE.Group();
+  g.add(box);
+  // 带上下沿的实线
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geo),
+    new THREE.LineBasicMaterial({ color: DEBUG_COLORS.wallBand, depthTest: false, transparent: true, opacity: 0.95 }),
+  );
+  edges.position.copy(box.position);
+  g.add(edges);
+  g.add(makeLabel(`墙带 y∈[${y0.toFixed(2)}, ${y1.toFixed(2)}]`, new THREE.Vector3(box.position.x, y1 + 0.1, box.position.z), DEBUG_COLORS.wallBand));
+  return g;
+}
+
+/** 碰撞网格线框：collider 的可见化。默认关（150k 三角会糊成一片），要看了再开。 */
+function buildColliderWire(immersive) {
+  if (colliderHelper) { colliderHelper.parent?.remove(colliderHelper); colliderHelper = null; }
+  const meshes = immersive.colliderMeshes ?? [];
+  if (!meshes.length) return;
+  const g = new THREE.Group();
+  g.name = 'colliderWire';
+  let n = 0;
+  for (const m of meshes) {
+    const geo = m.geometry;
+    if (!geo) continue;
+    // 只画墙带附近的：用顶点数粗筛，避免把整个封闭体都画出来
+    const wire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(geo),
+      new THREE.LineBasicMaterial({ color: DEBUG_COLORS.collider, transparent: true, opacity: 0.28, depthWrite: false }),
+    );
+    wire.applyMatrix4(m.matrixWorld);
+    g.add(wire);
+    n += 1;
+  }
+  colliderHelper = g;
+  ensureDebugGroup().add(g);
+}
+
+/** canvas 贴图文字标签（不用外部字体）。 */
+function makeLabel(text, pos, color = 0xffffff, scale = 1) {
+  const pad = 8;
+  const fs = 22 * scale;
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  ctx.font = `600 ${fs}px ui-monospace, monospace`;
+  const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
+  const h = Math.ceil(fs * 1.5);
+  cv.width = w; cv.height = h;
+  const c2 = cv.getContext('2d');
+  c2.font = `600 ${fs}px ui-monospace, monospace`;
+  c2.fillStyle = 'rgba(8,8,10,.78)';
+  c2.fillRect(0, 0, w, h);
+  c2.strokeStyle = '#' + new THREE.Color(color).getHexString();
+  c2.lineWidth = 2;
+  c2.strokeRect(1, 1, w - 2, h - 2);
+  c2.fillStyle = '#' + new THREE.Color(color).getHexString();
+  c2.textBaseline = 'middle';
+  c2.fillText(text, pad, h / 2);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprMat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  sprMat.userData.debugOwned = true;   // 让 disposeDebugGroup 释放 CanvasTexture
+  const spr = new THREE.Sprite(sprMat);
+  spr.position.copy(pos);
+  spr.scale.set((w / h) * 0.22 * scale, 0.22 * scale, 1);
+  spr.renderOrder = 30;
+  return spr;
+}
+
+/** 统一刷新调试层（坐标轴 / 标尺 / 墙带）。 */
+function syncDebugGroup() {
+  disposeDebugGroup();
+  if (!immersive) return;
+  const want = (n) => on(n);
+  if (!want('btnAxis') && !want('btnRuler') && !want('btnBand') && !want('btnSolid') && !want('btnSlice')) return;
+  const g = ensureDebugGroup();
+  if (want('btnAxis')) g.add(buildAxes(immersive));
+  if (want('btnRuler')) g.add(buildHeightRuler(immersive));
+  if (want('btnBand')) g.add(buildWallBand(immersive.bounds, CONFIG.reveal.walk, immersive));
+  // 实体 collider 放在最底层（renderOrder 最小），让墙带盒和切片盖在它上面
+  if (want('btnSolid')) g.add(buildColliderSolid(immersive));
+  if (want('btnSlice')) {
+    const slice = buildWallSlice(immersive, CONFIG.reveal.walk);
+    g.add(slice);
+    const s = slice.userData.slice;
+    if (s) {
+      console.info(`[墙带切片] y∈[${s.y0.toFixed(3)}, ${s.y1.toFixed(3)}] · 命中 ${s.kept} / ${s.total} 三角`);
+    }
+  }
+}
+
+/** 常驻几何摘要：把调参真正要看的数钉在左上角。 */
+function paintGeo() {
+  if (!geoEl) return;
+  if (!immersive || !ctl) { geoEl.textContent = ''; return; }
+  const b = immersive.bounds;
+  const walk = CONFIG.reveal.walk ?? {};
+  const spawn = CONFIG.reveal.spawn ?? {};
+  // 两个基准必须分清：
+  //   immersive.bounds  = collider + SPZ 的整体盒（眼高 eyeHeight 的起算点）
+  //   colliderMinY      = 仅 collider 的盒底（buildWalkSpace 墙带的起算点）
+  // 两者通常不同（SPZ 一般比 collider 大一圈），混用就会"眼高对但墙带错"。
+  let colliderMinY = Infinity, colliderMaxY = -Infinity;
+  for (const m of immersive.colliderMeshes ?? []) {
+    m.updateMatrixWorld(true);
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const box = m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld);
+    if (box.min.y < colliderMinY) colliderMinY = box.min.y;
+    if (box.max.y > colliderMaxY) colliderMaxY = box.max.y;
+  }
+  if (!Number.isFinite(colliderMinY)) { colliderMinY = b.min.y; colliderMaxY = b.max.y; }
+  // collider 已贴到点云盒底（revealMarble.mountMarbleImmersive 的 alignColliderToSplat），
+  // 所以整体盒底 ≈ collider 盒底；差值来自 collider 与 SPZ 在 XZ / 顶部尺寸的差异。
+  const splatFloorY = immersive.splatFloorY;
+  const floorTarget = CONFIG.reveal.colliderFloorY ?? null;
+  // SPZ 盒底也要显示出来：对齐就是让 collider 盒底 vs SPZ 盒底（或指定的世界 Y）
+  let splatMinY = null;
+  if (immersive.splatWorldBox) splatMinY = immersive.splatWorldBox.min.y;
+  const alignGap = (splatMinY != null) ? (colliderMinY - splatMinY) : null;
+  geoEl.innerHTML = [
+    `<b>collider 盒底</b> <span style="color:#66dd88">y=${colliderMinY.toFixed(3)}</span>   <b>盒顶</b> y=${colliderMaxY.toFixed(3)}   <b>层高</b> ${(colliderMaxY - colliderMinY).toFixed(2)}m`,
+    `<b>SPZ 盒底</b> <span style="color:#00ffc8">y=${splatMinY != null ? splatMinY.toFixed(3) : '?'}</span>   ${alignGap != null ? `<b>与 collider 差</b> ${alignGap >= 0 ? '+' : ''}${alignGap.toFixed(3)}m` : ''}`,
+    floorTarget == null
+      ? `<span class="warn">⚠ 自动模式：贴 SPZ 盒底（未指定绝对 Y）</span>`
+      : `<span style="color:#6a8">✓ colliderFloorY = ${floorTarget.toFixed(3)}（绝对世界 Y，导出配置粘回 revealWorlds.js）</span>`,
+    `<b>整体盒 min.y</b> ${floor.toFixed(3)}  <b>max.y</b> ${ceil.toFixed(3)}   ← 眼高 eyeHeight 的基准`,
+    `<b>占地</b> ${size.x.toFixed(2)} × ${size.z.toFixed(2)} m`,
+    `<b>眼高参数</b> ${(spawn.eyeHeight ?? 1.55).toFixed(2)} → 实际眼位 y=${(floor + (spawn.eyeHeight ?? 1.55)).toFixed(2)}  <b>当前相机</b> y=${eye.toFixed(2)}  <b>头顶余量</b> ${(ceil - eye).toFixed(2)}m`,
+    `<b>墙带</b> y∈[${bandY0.toFixed(2)}, ${bandY1.toFixed(2)}]（相对 collider 底 ${colliderMinY.toFixed(2)}）  <b>带厚</b> ${(bandY1 - bandY0).toFixed(2)}m`,
+    `<b>可行走</b> ${space ? `${space.cells} cells · ${space.polygon.length} pts · ${space.source}` : '<span class="warn">抽边失败</span>'}`,
+    `<b>位置</b> (${ctl.pos.x.toFixed(2)}, ${ctl.pos.y.toFixed(2)}, ${ctl.pos.z.toFixed(2)})  <b>朝向</b> yaw ${(ctl.yaw * 180 / Math.PI).toFixed(0)}° pitch ${(ctl.pitch * 180 / Math.PI).toFixed(0)}°`,
+  ].join('\n');
+}
+
+/** 行走范围线：和游戏 syncRevealWalkHelper 同款（绿=网格抽边，蓝=回退偏转盒）。 */
+function syncWalkHelper(space) {
+  if (walkHelper) {
+    walkHelper.removeFromParent();
+    walkHelper.geometry?.dispose();
+    walkHelper.material?.dispose?.();
+    walkHelper = null;
+  }
+  if (!space || !document.getElementById('btnHelper').classList.contains('on')) return;
+  const y = (space.minY ?? 0) + 0.08;
+  let pts = null;
+  if (space.kind === 'mesh' && space.polygon?.length >= 3) {
+    pts = space.polygon.map((p) => new THREE.Vector3(p.x, y, p.z));
+    pts.push(pts[0].clone());
+  } else if (space.minX != null) {
+    const { yaw, cx, cz, minX, maxX, minZ, maxZ } = space;
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const toWorld = (lx, lz) => new THREE.Vector3(cx + lx * c - lz * s, y, cz + lx * s + lz * c);
+    pts = [toWorld(minX, minZ), toWorld(maxX, minZ), toWorld(maxX, maxZ), toWorld(minX, maxZ), toWorld(minX, minZ)];
+  }
+  if (!pts) return;
+  walkHelper = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color: space.kind === 'mesh' ? DEBUG_COLORS.walkLine : 0x44ddff, depthTest: false, transparent: true, opacity: 0.95 }),
+  );
+  walkHelper.renderOrder = 12;
+  walkHelper.name = 'revealWalkHelper';
+  revealRoot.add(walkHelper);
+}
+
+function syncBoundsHelper() {
+  if (boundsHelper) {
+    boundsHelper.removeFromParent();
+    boundsHelper.geometry?.dispose();
+    boundsHelper.material?.dispose?.();
+    boundsHelper = null;
+  }
+  if (!document.getElementById('btnBounds').classList.contains('on') || !immersive) return;
+  boundsHelper = new THREE.Box3Helper(immersive.bounds, 0x3a4a5a);
+  boundsHelper.name = 'revealBoundsHelper';
+  revealRoot.add(boundsHelper);
+}
+
+/**
+ * 套用 spawn + walk。这一步就是游戏 main.js applyMarbleRevealSpawn + applyRevealWalkBounds 的合并版。
+ * 读的是 CONFIG.reveal（applyRevealWorld 已把 profile 写进去），改参数所见即游戏所得。
+ */
+function applyRevealConfig() {
+  if (!immersive) return;
+  const spawn = CONFIG.reveal.spawn;
+  const walk = CONFIG.reveal.walk;
+
+  ctl.yaw = (spawn.yaw ?? 0) + (CONFIG.reveal.yawOffset ?? 0);
+  ctl.pitch = spawn.pitch ?? 0;
+  ctl.pos.copy(spawnOrigin(immersive, spawn));
+  ctl.baseFov = CONFIG.reveal.fov ?? CONFIG.camera.fov;
+  camera.fov = ctl.baseFov;
+  camera.updateProjectionMatrix();
+
+  const walkCfg = { useMesh: true, meshInset: 0.16, sealMeters: 0.6, grid: 96, wallY0: 1, wallY1: 2.35, ...walk };
+  let space = null;
+  if (walkCfg.useMesh !== false && immersive.colliderMeshes?.length) {
+    space = buildWalkSpace(immersive.colliderMeshes, ctl.pos, walkCfg);
+  }
+  ctl.setWalkSpace(space);
+  if (space) {
+    ctl.setBounds(null);
+    setInfo(
+      `[walk] ${space.source} · ${space.cells} cells / ${space.polygon.length} pts`
+      + ` · 出生 (${ctl.pos.x.toFixed(2)}, ${ctl.pos.y.toFixed(2)}, ${ctl.pos.z.toFixed(2)})`
+      + ` · 墙带 y∈[${(colliderBox(immersive).min.y + (walkCfg.wallY0 ?? 1)).toFixed(2)}, ${(colliderBox(immersive).min.y + (walkCfg.wallY1 ?? 2.35)).toFixed(2)}]`
+      + ` · 内缩 ${walkCfg.meshInset} / 闭合 ${walkCfg.sealMeters}`
+      + (walkSpaceDiag.leaked ? ' · ⚠ 洪泛疑似外泄，已转 polar' : ''),
+    );
+  } else {
+    const cb = colliderBox(immersive);
+    setInfo(
+      `[walk] 网格抽边失败：${walkSpaceDiag.reason ?? '未知'}`
+      + ` · 墙带 y∈[${(cb.min.y + (walkCfg.wallY0 ?? 1)).toFixed(2)}, ${(cb.min.y + (walkCfg.wallY1 ?? 2.35)).toFixed(2)}]`
+      + ` · 已抽到墙 ${walkSpaceDiag.rawWalls ?? '?'} 格 / 洪泛 ${walkSpaceDiag.floodN ?? '?'} 格`
+      + ` · 试试：墙带底↓ / 墙带顶↑ / 缺口闭合↓`,
+    );
+  }
+  ctl.setColliderMeshes(null);   // 调试台不开 meshClip：walk space 已经够用，射线弹更直觉
+  syncWalkHelper(space ?? ctl.walkBox);
+  if (on('btnBand') || on('btnSlice')) syncDebugGroup();
+  ctl.apply();
+}
+
+async function loadWorld(id) {
+  if (!id) return;
+  currentWorld = id;
+  worldSel.value = id;
+  disposeCurrent();
+  // 走游戏同一条写入管线：applyRevealWorld 会把 profile 的 pano/collider/spz/spawn/walk
+  // 写进 CONFIG.reveal。调试台读 CONFIG.reveal，就和游戏读的是同一份状态。
+  const profile = applyRevealWorld(CONFIG.reveal, id);
+  const spz = absUrl(CONFIG.reveal.spz);
+  const colliderGlb = absUrl(CONFIG.reveal.colliderGlb);
+  setInfo(`加载 ${id} …（点云 ${(spz ?? '?').split('/').pop()}）`);
+  try {
+    setInfo(`下载碰撞 GLB …（${colliderGlb.split('/').pop()}）`);
+    // colliderFloorY 已由 applyRevealWorld 从当前场景的 REVEAL_WORLDS 写入 CONFIG.reveal
+    // （可能是 null = 自动贴 SPZ，也可能是绝对世界 Y）
+    immersive = await mountMarbleImmersive(revealRoot, {
+      colliderUrl: colliderGlb,
+      spzUrl: spz,
+      showBoundsHelper: false,
+      alignColliderToSplat: CONFIG.reveal.alignColliderToSplat !== false,
+      splatYOffset: CONFIG.reveal.splatYOffset ?? 0,
+      colliderFloorY: CONFIG.reveal.colliderFloorY ?? null,
+    });
+    setInfo('解析点云并排序 …');
+  } catch (e) {
+    console.error('[reveal]', e);
+    setInfo(`加载失败：${e.message ?? e}\n  collider=${colliderGlb}\n  spz=${spz}`);
+    return;
+  }
+
+  // 终幕表现：灯光 + 后处理 + 色调映射，全部按游戏 main.js 终幕那一套
+  applyRevealPresentation(1);
+
+  ctl = new SceneControls(camera, {
+    canvas: renderer.domElement,
+    mode: 'fps',
+    features: {
+      ...SceneControlPresets.fpsWalk.features,
+      ...CONFIG.reveal.controls,
+      // 调试台始终允许走动和切换范式，避免被 pano 默认配置覆盖。
+      moveWalk: true,
+      modeToggle: true,
+    },
+    lookSensitivity: CONFIG.reveal.lookSensitivity ?? 0.005,
+    keyLookSpeed: CONFIG.reveal.keyLookSpeed ?? 1.8,
+    yawOffset: CONFIG.reveal.yawOffset ?? 0,
+    baseFov: CONFIG.reveal.fov ?? CONFIG.camera.fov,
+    moveSpeed: CONFIG.reveal.moveSpeed ?? 0.9,
+    moveAccel: CONFIG.reveal.moveAccel ?? 1.5,
+    moveDecel: CONFIG.reveal.moveDecel ?? 4.2,
+    walkBob: CONFIG.reveal.walkBob !== false,
+    walkBobAmount: CONFIG.reveal.walkBobAmount ?? 0.014,
+    walkBobHz: CONFIG.reveal.walkBobHz ?? 0.6,
+    lookSpeedMax: CONFIG.reveal.lookSpeedMax ?? 3.4,
+    collisionSkin: CONFIG.reveal.collisionSkin ?? 0.2,
+  });
+  ctl.setEnabled(true);
+  syncMoveFeel();
+  applyRevealConfig();
+  syncBoundsHelper();
+  syncDebugGroup();
+  setInfo(`${profile.label} · ${immersive.bounds.getSize(new THREE.Vector3()).toArray().map(v => v.toFixed(2)).join('×')}m · 拖拽环视 / WASD 走 / QE 升降 / 滚轮 FOV / V 切范式`);
+  safeBuildGui();
+}
+
+/**
+ * 终幕渲染表现 —— 抄游戏 main.js 的 applySplatPresentation + setRevealPanoLift。
+ * 点云直出（不套 ACES）、splatLook 调色、revealCold→revealNeutral 灯光插值。
+ * @param {number} lift 0=冷调终幕 / 1=中性实景
+ */
+function applyRevealPresentation(lift = 1) {
+  const look = CONFIG.reveal.splatLook ?? {};
+  post.setRevealLook(look);
+  renderer.toneMapping = look.toneMapping === 'aces' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  renderer.outputColorSpace = look.toneMapping === 'aces' ? GAME_OUTPUT_COLOR_SPACE : THREE.LinearSRGBColorSpace;
+  renderer.toneMappingExposure = look.exposure ?? 1;
+  scene.fog = null;
+  applyRevealLightingForLift(lift, lights, scene);
+  scene.background = new THREE.Color(0x0b0b0d);
+  scene.backgroundIntensity = CONFIG.reveal.backgroundIntensity ?? 1;
+}
+
+// —— 主循环：点云排序沿用游戏的做法（一空就排，不等转满 8°）；渲染走游戏同款后处理链 ——
+function tick(t) {
+  raf = requestAnimationFrame(tick);
+  const dt = Math.min((t - (last ?? t)) / 1000, 0.1);
+  last = t;
+  ctl?.tick(dt, globalKeys.keys);
+  if (immersive?.dropIn) {
+    for (const v of [immersive.dropIn.viewer]) {
+      if (!v.sortRunning) v.runSplatSort(true);
+    }
+  }
+  post.render(dt, t);
+  paintGeo();
+}
+
+// —— 调参面板：和游戏 main.js「终幕点云」文件夹同款，参数直接绑 CONFIG.reveal ——
+function buildGui() {
+  if (!ctl) return;
+  const profile = REVEAL_WORLDS[currentWorld] ?? {};
+  // lil-gui 的 add(obj, key) 内部会读 obj[key].constructor.name；字段不存在时
+  // 拿到 undefined 就抛 "cannot read properties of undefined (reading 'name')"。
+  // ending-ring 没有 fov 字段，所以必须先补齐再建面板（游戏侧由 applyRevealWorld 兜）。
+  const spawn = CONFIG.reveal.spawn ?? (CONFIG.reveal.spawn = { yaw: 0, pitch: 0, eyeHeight: 1.55, offsetX: 0, offsetZFrac: 0 });
+  const walk = CONFIG.reveal.walk ?? (CONFIG.reveal.walk = { useMesh: true, meshInset: 0.16, sealMeters: 0.6, grid: 96, wallY0: 1, wallY1: 2.35 });
+  CONFIG.reveal.fov ??= 78;
+  // colliderFloorY 为 null（自动贴 SPZ）时，lil-gui 滑块建不起来。
+  // 用当前 collider 盒底的实际世界 Y 兜底 —— 滑块一拖就自动切成绝对模式，
+  // 起始值就是所见即所得的那个高度。
+  if (CONFIG.reveal.colliderFloorY == null) {
+    CONFIG.reveal.colliderFloorY = immersive?.colliderFloorY ?? 0;
+  }
+  const gui = new GUI({ title: `终幕 · ${profile.label ?? currentWorld}` });
+  window.__gui?.destroy();
+  window.__gui = gui;
+
+  const f = gui.addFolder('出生点');
+  f.add(spawn, 'yaw', -Math.PI, Math.PI, 0.01).name('朝向').onChange(applyRevealConfig);
+  f.add(spawn, 'pitch', -1.2, 1.2, 0.01).name('俯仰').onChange(applyRevealConfig);
+  f.add(spawn, 'eyeHeight', 0.8, 3.2, 0.01).name('眼高').onChange(applyRevealConfig);
+  f.add(spawn, 'offsetX', -3, 3, 0.05).name('左右').onChange(applyRevealConfig);
+  f.add(spawn, 'offsetZFrac', -0.45, 0.45, 0.01).name('进深').onChange(applyRevealConfig);
+  f.add(CONFIG.reveal, 'yawOffset', -Math.PI, Math.PI, 0.01).name('整体偏转').onChange(applyRevealConfig);
+
+  const w = gui.addFolder('行走范围（buildWalkSpace）');
+  w.add(walk, 'useMesh').name('碰撞网格边界').onChange(applyRevealConfig);
+  w.add(walk, 'meshInset', 0, 1.2, 0.02).name('网格内缩').onChange(applyRevealConfig);
+  w.add(walk, 'sealMeters', 0, 1.4, 0.05).name('缺口闭合').onChange(applyRevealConfig);
+  w.add(walk, 'wallY0', 0.0, 2.2, 0.05).name('墙带底').onChange(applyRevealConfig);
+  w.add(walk, 'wallY1', 0.4, 3.2, 0.05).name('墙带顶').onChange(applyRevealConfig);
+  w.add(walk, 'grid', 48, 160, 8).name('网格精度').onChange(applyRevealConfig);
+
+  const c = gui.addFolder('手感（SceneControls）');
+  c.add(CONFIG.reveal, 'moveSpeed', 0.2, 4, 0.05).name('走速').onChange(syncMoveFeel);
+  c.add(CONFIG.reveal, 'moveAccel', 0, 12, 0.1).name('加速').onChange(syncMoveFeel);
+  c.add(CONFIG.reveal, 'moveDecel', 0, 16, 0.1).name('减速').onChange(syncMoveFeel);
+  c.add(CONFIG.reveal, 'walkBob').name('晃动').onChange(syncMoveFeel);
+  c.add(CONFIG.reveal, 'walkBobAmount', 0, 0.08, 0.002).name('晃动幅度').onChange(syncMoveFeel);
+  c.add(CONFIG.reveal, 'walkBobHz', 0.4, 2.4, 0.05).name('晃动频率').onChange(syncMoveFeel);
+  c.add(CONFIG.reveal, 'lookSpeedMax', 0, 8, 0.05).name('转头上限').onChange(syncMoveFeel);
+  c.add(CONFIG.reveal, 'lookSensitivity', 0.001, 0.02, 0.001).name('拖拽灵敏度').onChange(syncMoveFeel);
+  c.add(CONFIG.reveal, 'fov', 35, 90, 1).name('FOV').onChange((v) => { ctl.baseFov = v; camera.fov = v; camera.updateProjectionMatrix(); });
+
+  // 点云直出调色：游戏「终幕点云」里的 splatLook，直接改 CONFIG.reveal.splatLook
+  const s = gui.addFolder('点云调色（splatLook）');
+  const look = CONFIG.reveal.splatLook;
+  s.add(look, 'toneMapping', { 直出: 'none', ACES: 'aces' }).name('色调映射').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'exposure', 0.4, 2, 0.02).name('曝光').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'bloom', 0, 1.2, 0.02).name('泛光').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'bloomThreshold', 0.3, 1, 0.02).name('泛光阈值').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'vignette', 0, 1, 0.02).name('暗角').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'grain', 0, 0.15, 0.005).name('颗粒').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'saturation', 0, 1.6, 0.02).name('饱和').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'warmth', -0.4, 0.4, 0.02).name('冷暖').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'chroma', 0, 1, 0.02).name('色散').onChange(() => applyRevealPresentation(1));
+  s.add(look, 'fisheye', 0, 0.65, 0.005).name('桶形').onChange(() => applyRevealPresentation(1));
+
+  // 终幕渐亮：lift 0=冷 / 1=中性（游戏 onRevealColdLighting → setRevealPanoLift 的合并）
+  const l = gui.addFolder('终幕灯光（lift）');
+  l.add({ lift: 1 }, 'lift', 0, 1, 0.01).name('冷→中性').onChange((v) => applyRevealPresentation(v));
+
+  // 点云档位：热换 100k / 500k，不需要重载 collider
+  const splatProfile = REVEAL_WORLDS[currentWorld] ?? {};
+  const splatTiers = Object.keys(splatProfile.splats ?? {});
+  if (splatTiers.length > 1) {
+    const tierObj = { tier: splatProfile.splat ?? splatTiers[0] };
+    const tFolder = gui.addFolder('点云档位');
+    tFolder.add(tierObj, 'tier', Object.fromEntries(splatTiers.map(k => [k, k])))
+      .name('档位').onChange(async (val) => {
+        const newUrl = splatProfile.splats?.[val];
+        if (!newUrl || !immersive) return;
+        const infoEl2 = document.getElementById('info');
+        if (infoEl2) infoEl2.textContent = `切换点云 → ${val} …`;
+        try {
+          // 配了 colliderFloorY 就传绝对 Y，collider 保持不动；
+          // 否则传 null，让内部按当前模式（贴 SPZ 盒底）重算
+          const floorY = CONFIG.reveal.colliderFloorY ?? null;
+          const newBox = await immersive.swapSplatTier(absUrl(newUrl), floorY);
+          if (newBox) syncDebugGroup();
+          paintGeo();
+          if (infoEl2) infoEl2.textContent = `点云已切到 ${val}`;
+        } catch (e) {
+          console.error('[reveal] tier swap failed', e);
+          if (infoEl2) infoEl2.textContent = `切档失败：${e.message}`;
+        }
+      });
+  }
+
+  const g = gui.addFolder('对齐（世界坐标 Y）');
+  // 绝对世界 Y 滑块：拖的就是 collider 盒底要落在的世界 Y，不是偏移量
+  g.add(CONFIG.reveal, 'colliderFloorY', -5, 5, 0.001).name('collider 盒底 Y').onChange((v) => {
+    if (!immersive) return;
+    immersive.setColliderFloorY(v);
+    if (on('btnBand') || on('btnSlice') || on('btnRuler')) syncDebugGroup();
+  });
+  // 一键回退到自动模式（贴 SPZ 盒底）
+  g.add({ 自动贴SPZ: () => {
+    CONFIG.reveal.colliderFloorY = null;
+    loadWorld(currentWorld);
+  } }, '自动贴SPZ').name('↺ 退回自动贴 SPZ 盒底');
+
+  const a = gui.addFolder('操作');
+  a.add({ 回到出生点: () => applyRevealConfig() }, '回到出生点');
+  a.add({ 导出配置: () => dumpConfig() }, '导出配置');
+
+  // 调试台默认展开面板（没有导演流程，进来第一件事就是调参）
+  gui.open();
+  gui.domElement.style.zIndex = '20';
+}
+
+/** 手感参数：写进 CONFIG.reveal 后同步到 SceneControls（游戏 syncRevealWalkFeel 同款）。 */
+function syncMoveFeel() {
+  if (!ctl) return;
+  const r = CONFIG.reveal;
+  ctl.moveSpeed = r.moveSpeed ?? 0.9;
+  ctl.moveAccel = r.moveAccel ?? 1.5;
+  ctl.moveDecel = r.moveDecel ?? 4.2;
+  ctl.walkBob = r.walkBob !== false;
+  ctl.walkBobAmount = r.walkBobAmount ?? 0.014;
+  ctl.walkBobHz = r.walkBobHz ?? 0.6;
+  ctl.lookSpeedMax = r.lookSpeedMax ?? 3.4;
+  ctl.lookSensitivity = r.lookSensitivity ?? 0.005;
+}
+
+/** 面板单独 try：lil-gui 遇到字段缺失会抛 "reading 'name'"，别让它把世界加载也带崩。 */
+function safeBuildGui() {
+  try {
+    buildGui();
+  } catch (e) {
+    console.error('[reveal gui]', e);
+    setInfo(`面板构建失败（世界本身已加载，可正常走动）：${e.message ?? e}`);
+  }
+}
+
+/**
+ * 把当前 CONFIG.reveal 里调好的 spawn / walk / fov **写回 REVEAL_WORLDS**（游戏目录那份），
+ * 再打成可直接粘进 revealWorlds.js 的字面量。
+ * 这对应游戏 main.js 的 rememberRevealWorldSpawn()。
+ */
+function dumpConfig() {
+  const p = REVEAL_WORLDS[currentWorld];
+  if (!p) { setInfo('当前世界不在目录里，无法导出'); return; }
+  // 写回目录（游戏调参面板也是这么做的，见 main.js rememberRevealWorldSpawn）
+  p.spawn = { ...(p.spawn ?? {}), ...CONFIG.reveal.spawn };
+  p.walk = { ...(p.walk ?? {}), ...CONFIG.reveal.walk };
+  p.fov = CONFIG.reveal.fov ?? p.fov ?? 78;
+  p.colliderFloorY = CONFIG.reveal.colliderFloorY ?? null;   // ← collider 盒底的世界 Y（绝对坐标）
+
+  const txt = `// ${p.label} — 由 tools/world-reveal.html 导出（已写回 REVEAL_WORLDS）
+  '${currentWorld}': {
+    label: '${p.label}',
+    pano: '${p.pano}',
+    colliderGlb: '${p.colliderGlb}',
+    splats: ${JSON.stringify(p.splats, null, 2).replace(/\n/g, '\n    ')},
+    splat: '${p.splat ?? '100k'}',
+    fov: ${p.fov},
+    spawn: ${JSON.stringify(p.spawn)},
+    walk: ${JSON.stringify(p.walk)},
+    // 对齐：collider 盒底要落在的世界 Y（米，绝对坐标）。
+    // null = 自动贴 SPZ 盒底；数字 = 直接贴到这个高度。
+    colliderFloorY: ${p.colliderFloorY},
+  },`;
+  outEl.textContent = txt;
+  outEl.classList.add('show');
+  setInfo(`已写回 REVEAL_WORLDS['${currentWorld}']，配置见右下角`);
+}
+
+worldSel.addEventListener('change', () => loadWorld(worldSel.value));
+document.getElementById('btnReload').onclick = () => loadWorld(currentWorld);
+document.getElementById('btnOrbit').onclick = () => ctl?.toggleMode();
+document.getElementById('btnHelper').onclick = (e) => {
+  e.currentTarget.classList.toggle('on');
+  syncWalkHelper(ctl?.walkSpace ?? ctl?.walkBox);
+};
+document.getElementById('btnBounds').onclick = (e) => {
+  e.currentTarget.classList.toggle('on');
+  syncBoundsHelper();
+};
+document.getElementById('btnAxis').onclick = (e) => {
+  e.currentTarget.classList.toggle('on');
+  syncDebugGroup();
+};
+document.getElementById('btnRuler').onclick = (e) => {
+  e.currentTarget.classList.toggle('on');
+  syncDebugGroup();
+};
+document.getElementById('btnBand').onclick = (e) => {
+  e.currentTarget.classList.toggle('on');
+  syncDebugGroup();
+};
+document.getElementById('btnSolid').onclick = (e) => {
+  e.currentTarget.classList.toggle('on');
+  syncDebugGroup();
+};
+document.getElementById('btnSlice').onclick = (e) => {
+  e.currentTarget.classList.toggle('on');
+  syncDebugGroup();
+};
+document.getElementById('btnOut').onclick = () => dumpConfig();
+
+addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() !== 'v' || e.repeat) return;
+  const t = e.target.tagName;
+  if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
+  ctl?.toggleMode();
+});
+
+// 默认世界跟随 config.js 的 CONFIG.reveal.world（游戏实际用的那个），
+// 而不是目录第一项 —— 这样调试台开起来就是游戏终幕的样子。
+refreshWorldList();
+if (CONFIG.reveal.world) {
+  worldSel.value = CONFIG.reveal.world;
+  currentWorld = CONFIG.reveal.world;
+}
+raf = requestAnimationFrame(tick);
+loadWorld(worldSel.value);
+</script>
+</body>
+</html>

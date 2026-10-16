@@ -414,6 +414,10 @@ export const CONFIG = {
     collisionSkin: 0.2,        // meshClip 射线留白（米）；主边界改走网格内缩
     showBoundsHelper: false,   // true：显示 collider 包围盒线框，核对是否贴 SPZ
     showWalkHelper: false,     // 调试：终幕行走范围绿/蓝线（GUI「显示行走范围」可临时打开）
+    alignColliderToSplat: false, // 调试台默认关：先看原始坐标对应，再手动调
+    splatYOffset: 0,            // 调试台 session 级：SPZ 盒底偏移（米）；点云往上抬则 collider 相对下沉
+    colliderFloorY: null,       // collider 盒底的目标**世界 Y**（米）。数字=绝对贴这个高度；
+                                // null=自动贴 SPZ 盒底。每个场景的值见 revealWorlds.js。
     moveSpeed: 0.9,            // 环视结束后 WASD 目标速度（米/秒）
     moveAccel: 1.5,            // 从静止加速到目标速度（米/秒²）
     moveDecel: 4.2,            // 松手后减速（米/秒²）
