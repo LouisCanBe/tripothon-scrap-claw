@@ -373,7 +373,6 @@ if (!FRAME) {
   const pad = renderer.domElement;
   const pointers = new Map(); // pointerId -> { x, y }
   let prevPinchDist = null;
-  let prevSpinY = 0;
   let prevZoomZ = camera.position.z;
   let userZoomTarget = null;   // null=无缩放输入, number=目标 camera.position.z
   let userInteracting = false;
@@ -389,7 +388,6 @@ if (!FRAME) {
   pad.addEventListener('pointerdown', (e) => {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
-      prevSpinY = spinGroup ? spinGroup.rotation.y : 0;
       prevZoomZ = camera.position.z;
       userInteracting = true;    // 立即停止自转
       displaySpinRate = 0;       // 清零，避免 loop 叠加
@@ -412,8 +410,8 @@ if (!FRAME) {
     pt.y = e.clientY;
 
     if (pointers.size === 1 && spinGroup) {
-      // 单指：水平拖拽旋转（完全由用户控制，不叠加自转）
-      spinGroup.rotation.y = prevSpinY + dx * 0.008;
+      // 单指：水平拖拽旋转（累加增量，与 FRAME 拖拽同逻辑）
+      spinGroup.rotation.y += dx * 0.008;
     } else if (pointers.size === 2) {
       // 双指：捏合缩放
       const pts = [...pointers.values()];
@@ -432,9 +430,8 @@ if (!FRAME) {
       prevPinchDist = null;
       scheduleResume();          // 松手后 1.2s 无操作再恢复自转
     } else if (pointers.size === 1) {
-      // 从双指变单指：重新锁定旋转基准，保持自转暂停
+      // 从双指变单指：保持自转暂停
       prevPinchDist = null;
-      prevSpinY = spinGroup ? spinGroup.rotation.y : 0;
       prevZoomZ = camera.position.z;
       userInteracting = true;
       clearTimeout(resumeTimer);
