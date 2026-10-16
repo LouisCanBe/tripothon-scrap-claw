@@ -366,6 +366,87 @@ if (FRAME) {
   pad.addEventListener('pointercancel', endDrag);
 }
 
+// ---- 普通副屏：触摸/拖拽旋转 + 双指缩放 + 滚轮缩放 ----
+// 触摸/拖拽期间暂停自转，松手后指数阻尼平滑恢复；缩放直接驱动 camera.position.z
+if (!FRAME) {
+  const pad = renderer.domElement;
+  const pointers = new Map(); // pointerId -> { x, y }
+  let prevPinchDist = null;
+  let prevSpinY = 0;
+  let prevZoomZ = camera.position.z;
+  let userSpinTarget = null;   // null=自动自转, 0=用户拖拽中
+  let userZoomTarget = null;   // null=无缩放输入, number=目标 camera.position.z
+
+  pad.addEventListener('pointerdown', (e) => {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      prevSpinY = spinGroup ? spinGroup.rotation.y : 0;
+      prevZoomZ = camera.position.z;
+      userSpinTarget = 0; // 暂停自转，交给用户
+    }
+    if (pointers.size === 2) {
+      const pts = [...pointers.values()];
+      prevPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      userZoomTarget = camera.position.z; // 锁定缩放基准
+    }
+    pad.setPointerCapture(e.pointerId);
+  });
+
+  pad.addEventListener('pointermove', (e) => {
+    const pt = pointers.get(e.pointerId);
+    if (!pt) return;
+    const dx = e.clientX - pt.x;
+    const dy = e.clientY - pt.y;
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+
+    if (pointers.size === 1 && spinGroup) {
+      // 单指：水平拖拽旋转
+      spinGroup.rotation.y = prevSpinY + dx * 0.008;
+    } else if (pointers.size === 2) {
+      // 双指：捏合缩放
+      const pts = [...pointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (prevPinchDist > 1) {
+        const scale = prevPinchDist / Math.max(dist, 1);
+        userZoomTarget = Math.min(5.5, Math.max(0.8, prevZoomZ * scale));
+      }
+    }
+  });
+
+
+  const endPointer = (e) => {
+    pointers.delete(e.pointerId);
+    pad.style.cursor = pointers.size > 0 ? 'grabbing' : 'grab';
+    if (pointers.size === 0) {
+      prevPinchDist = null;
+      userSpinTarget = null; // 恢复自动自转
+    } else if (pointers.size === 1) {
+      // 从双指变单指：重新锁定旋转基准，保持自转暂停
+      prevPinchDist = null;
+      prevSpinY = spinGroup ? spinGroup.rotation.y : 0;
+      prevZoomZ = camera.position.z;
+      userSpinTarget = 0;
+    }
+  };
+
+  pad.addEventListener('pointerup', endPointer);
+  pad.addEventListener('pointercancel', endPointer);
+
+  // 滚轮缩放（鼠标用户）
+  pad.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = 1 + (e.deltaY > 0 ? 0.08 : -0.08);
+    userZoomTarget = Math.min(5.5, Math.max(0.8, (userZoomTarget ?? camera.position.z) * factor));
+  }, { passive: false });
+
+  pad.style.cursor = 'grab';
+
+  // 暴露给 loop() 读取
+  window.__userSpinTarget = () => userSpinTarget;
+  window.__userZoomTarget = () => userZoomTarget;
+}
+
 let spinGroup = null;
 let entrance = null;
 let displaySpinRate = 0;
@@ -712,15 +793,28 @@ function loop() {
     entrance.update(spinDt);
   }
   if (spinGroup) {
-    const target = FRAME
+    // 普通副屏：触摸拖拽时 userSpinTarget=0，暂停自转交给用户；
+    // 松手后 userSpinTarget 变回 null，damp 指数阻尼平滑恢复自转
+    const userSpin = typeof window.__userSpinTarget === 'function'
+      ? window.__userSpinTarget()
+      : null;
+    const autoTarget = FRAME
       ? (CONFIG.collectDisplay.frame?.spin ?? 0)
       : (entrance?.active
         ? (entCfg.spinDuringEntrance ?? 0.22)
         : (entCfg.idleSpin ?? 0.85));
-    displaySpinRate = damp(displaySpinRate, target, entCfg.spinBlendTau ?? 0.4, spinDt);
+    const spinTarget = FRAME ? autoTarget : (userSpin ?? autoTarget);
+    displaySpinRate = damp(displaySpinRate, spinTarget, entCfg.spinBlendTau ?? 0.4, spinDt);
     if (displaySpinRate > 1e-4) spinGroup.rotation.y += spinDt * displaySpinRate;
   } else {
     displaySpinRate = 0;
+  }
+  // 普通副屏：缩放平滑驱动 camera.position.z（用户输入 → damp → 实际相机距离）
+  if (!FRAME && typeof window.__userZoomTarget === 'function') {
+    const zt = window.__userZoomTarget();
+    if (Number.isFinite(zt)) {
+      camera.position.z = damp(camera.position.z, zt, 0.18, spinDt);
+    }
   }
   const moving = RELAY_HOST && (!!entrance?.active || relayDragging);
   if (RELAY_HOST) {
