@@ -367,22 +367,33 @@ if (FRAME) {
 }
 
 // ---- 普通副屏：触摸/拖拽旋转 + 双指缩放 + 滚轮缩放 ----
-// 触摸/拖拽期间暂停自转，松手后指数阻尼平滑恢复；缩放直接驱动 camera.position.z
+// 触摸/拖拽期间完全停止自转（displaySpinRate=0），松手后无操作 1.2s 再恢复；
+// 缩放直接驱动 camera.position.z，damp tau=0.18s 平滑跟随
 if (!FRAME) {
   const pad = renderer.domElement;
   const pointers = new Map(); // pointerId -> { x, y }
   let prevPinchDist = null;
   let prevSpinY = 0;
   let prevZoomZ = camera.position.z;
-  let userSpinTarget = null;   // null=自动自转, 0=用户拖拽中
   let userZoomTarget = null;   // null=无缩放输入, number=目标 camera.position.z
+  let userInteracting = false;
+  let resumeTimer = null;
+
+  const scheduleResume = () => {
+    clearTimeout(resumeTimer);
+    resumeTimer = setTimeout(() => {
+      userInteracting = false;
+    }, 1200);
+  };
 
   pad.addEventListener('pointerdown', (e) => {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
       prevSpinY = spinGroup ? spinGroup.rotation.y : 0;
       prevZoomZ = camera.position.z;
-      userSpinTarget = 0; // 暂停自转，交给用户
+      userInteracting = true;    // 立即停止自转
+      displaySpinRate = 0;       // 清零，避免 loop 叠加
+      clearTimeout(resumeTimer);
     }
     if (pointers.size === 2) {
       const pts = [...pointers.values()];
@@ -401,7 +412,7 @@ if (!FRAME) {
     pt.y = e.clientY;
 
     if (pointers.size === 1 && spinGroup) {
-      // 单指：水平拖拽旋转
+      // 单指：水平拖拽旋转（完全由用户控制，不叠加自转）
       spinGroup.rotation.y = prevSpinY + dx * 0.008;
     } else if (pointers.size === 2) {
       // 双指：捏合缩放
@@ -414,19 +425,19 @@ if (!FRAME) {
     }
   });
 
-
   const endPointer = (e) => {
     pointers.delete(e.pointerId);
     pad.style.cursor = pointers.size > 0 ? 'grabbing' : 'grab';
     if (pointers.size === 0) {
       prevPinchDist = null;
-      userSpinTarget = null; // 恢复自动自转
+      scheduleResume();          // 松手后 1.2s 无操作再恢复自转
     } else if (pointers.size === 1) {
       // 从双指变单指：重新锁定旋转基准，保持自转暂停
       prevPinchDist = null;
       prevSpinY = spinGroup ? spinGroup.rotation.y : 0;
       prevZoomZ = camera.position.z;
-      userSpinTarget = 0;
+      userInteracting = true;
+      clearTimeout(resumeTimer);
     }
   };
 
@@ -443,7 +454,7 @@ if (!FRAME) {
   pad.style.cursor = 'grab';
 
   // 暴露给 loop() 读取
-  window.__userSpinTarget = () => userSpinTarget;
+  window.__userInteracting = () => userInteracting;
   window.__userZoomTarget = () => userZoomTarget;
 }
 
@@ -793,18 +804,20 @@ function loop() {
     entrance.update(spinDt);
   }
   if (spinGroup) {
-    // 普通副屏：触摸拖拽时 userSpinTarget=0，暂停自转交给用户；
-    // 松手后 userSpinTarget 变回 null，damp 指数阻尼平滑恢复自转
-    const userSpin = typeof window.__userSpinTarget === 'function'
-      ? window.__userSpinTarget()
-      : null;
+    // 普通副屏：触摸拖拽时 userInteracting=true，直接清零 spinRate 避免叠加；
+    // 松手后 1.2s 无操作 userInteracting 变回 false，damp 平滑恢复自转
+    const interacting = typeof window.__userInteracting === 'function'
+      ? window.__userInteracting()
+      : false;
     const autoTarget = FRAME
       ? (CONFIG.collectDisplay.frame?.spin ?? 0)
       : (entrance?.active
         ? (entCfg.spinDuringEntrance ?? 0.22)
         : (entCfg.idleSpin ?? 0.85));
-    const spinTarget = FRAME ? autoTarget : (userSpin ?? autoTarget);
-    displaySpinRate = damp(displaySpinRate, spinTarget, entCfg.spinBlendTau ?? 0.4, spinDt);
+    const target = interacting ? 0 : autoTarget;
+    // 用户交互期间直接清零自转速度，不做 damp 过渡（避免叠加）
+    if (interacting) displaySpinRate = 0;
+    displaySpinRate = damp(displaySpinRate, target, entCfg.spinBlendTau ?? 0.4, spinDt);
     if (displaySpinRate > 1e-4) spinGroup.rotation.y += spinDt * displaySpinRate;
   } else {
     displaySpinRate = 0;
