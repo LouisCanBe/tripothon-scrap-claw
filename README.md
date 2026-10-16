@@ -4,6 +4,40 @@ Web3D 抓娃娃机叙事 Demo：四幕方框画幅（记忆）+ 终幕 16:9 故�
 全部美术资产走 Tripo AI 生成，机制边界锁死（三爪抓取 / 三视角 / 鱼眼弱第一人称）。
 完整项目方案（产品、运营、盲盒与共创）见 `PROJECT-方案说明.md`；设计文档见 `outline.md`；参赛与裸眼 3D 见 `CONCEPT-参赛与裸眼3D.md`；调参见 `prototype/PARAMS.md`；界面/模型二开见 `prototype/GUIDE.md`。
 
+## 项目进度与热度
+
+可视化都不依赖外部服务：时间线用 [mermaid](https://mermaid.js.org/)（GitHub 原生渲染），热度图是 `tools/heatmap.mjs` 读 git log 画的 SVG（配色取自 `prototype/theme.css` 的强调色 `#9db87a`）——本地 VS Code 预览、GitHub、离线打开都能看。
+
+### 更新进度
+
+```mermaid
+gantt
+    title 开发时间线 · 首提交 2026-09-11 → 至今（117 commits）
+    dateFormat YYYY-MM-DD
+    axisFormat %m-%d
+    todayMarker off
+    section 原型与管线
+    M1 手感灰盒 + Tripo 生成管线 :done, m1, 2026-09-11, 4d
+    vendor 本地化 + 发布三平台 :done, m2, after m1, 1d
+    渲染三件套 + Marble 全链路实测 :done, m3, 2026-09-20, 2d
+    section 叙事与界面
+    前四幕 + 副屏出货 + 奖池配置 :done, a1, 2026-09-21, 8d
+    终幕溶解 + Marble 实景宽屏 :done, a2, 2026-09-29, 5d
+    副屏揭晓交互 + 终幕调试台 :active, a3, 2026-10-16, 1d
+```
+
+两态资产的唯一台账是 `tools/prize-pairs.json`，Hub 面板和 `prototype/src/prizeTableData.js`（游戏实际读取）都从它落地；人话版进度快照见 `PROGRESS.md`。
+
+### 代码热度
+
+![提交热度](docs/activity.svg)
+
+`npm run heatmap` 随时重新生成（GitHub Action 每天自动刷新一次），鼠标悬停格子看当天提交数。GitHub 页面上还有一张贡献日历贪吃蛇动画，由 `.github/workflows/snake.yml` 生成（首次 push 后出现）：
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/LouisCanBe/tripothon-scrap-claw/output/github-snake.svg" alt="贪吃蛇吃提交记录" />
+</p>
+
 ## 启动（玩 / 调试）
 
 需要一个静态文件服务器（ES Module 不能双击 html 直接开）：
@@ -114,6 +148,7 @@ PixVerse（网页会员）：仓库根 `npm install` → `npm run pixverse:login
 
 ```
 outline.md              设计文档（叙事/机制/美术纲领）
+docs/activity.svg       提交热度日历图（README 里那张，tools/heatmap.mjs 生成）
 prototype/              可玩原型（Three.js 0.170，CDN 引入）
   index.html            页面骨架 + 画幅遮罩/HUD 样式
   theme.css             主题变量（字体/颜色/字号，设计稿定稿只改这里）
@@ -135,6 +170,7 @@ tools/tripo.mjs         Tripo API 全接口薄封装：CLI / 可 import / serve 
 tools/marble.mjs        Marble 世界生成 API 薄封装（同 tripo 三段式，已实测）
 tools/pixverse.mjs      PixVerse 视频生成 API 薄封装（text/image/transition → MP4）
 tools/devServer.mjs     开发静态服务器（no-store 禁模块缓存）
+tools/heatmap.mjs       提交热度日历图生成器（git log → docs/activity.svg，npm run heatmap）
 tools/TRIPO.md          接口清单 + 分件可动/绑骨动画/替换流程示例
 tools/MARBLE.md         Marble 场景接入手册（资产路径/坐标系/预览器交互/已知坑）
 tools/PIXVERSE.md       PixVerse 视频接入手册（积分估算/叙事接入/已知坑）
