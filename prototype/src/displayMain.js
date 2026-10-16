@@ -367,14 +367,18 @@ if (FRAME) {
 }
 
 // ---- 普通副屏：触摸/拖拽旋转 + 双指缩放 + 滚轮缩放 ----
-// 触摸/拖拽期间完全停止自转（displaySpinRate=0），松手后无操作 1.2s 再恢复；
-// 缩放直接驱动 camera.position.z，damp tau=0.18s 平滑跟随
+// 旋转逻辑与 hub 奖品预览（tools/prize-view.mjs）一致：
+// pointerdown 记一个固定锚点 drag={x,y,yaw,pitch}，pointermove 用
+// 「锚点 + 从起点算起的总位移」的绝对公式，不依赖帧间增量、不做 Map 查找，
+// 真机上最耐造。轴心在模型中心（recenterPivot），中心固定、任意旋转。
+// 触摸/拖拽期间完全停止自转，松手后无操作 1.2s 再恢复。
 if (!FRAME) {
   const pad = renderer.domElement;
-  const pointers = new Map(); // pointerId -> { x, y }
-  let prevPinchDist = null;
-  let prevZoomZ = camera.position.z;
-  let userZoomTarget = null;   // null=无缩放输入, number=目标 camera.position.z
+  const pointers = new Map(); // pointerId -> {x,y}，仅用于双指捏合距离
+  let drag = null;            // 单指旋转锚点 {x,y,yaw,pitch}，锚点不更新
+  let pinchDist = null;
+  let pinchBaseZ = camera.position.z;
+  let userZoomTarget = null;  // null=无缩放输入, number=目标 camera.position.z
   let userInteracting = false;
   let resumeTimer = null;
 
@@ -387,52 +391,55 @@ if (!FRAME) {
 
   pad.addEventListener('pointerdown', (e) => {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.size === 1) {
-      prevZoomZ = camera.position.z;
+    if (pointers.size === 1 && spinTarget) {
+      drag = { x: e.clientX, y: e.clientY, yaw: spinTarget.rotation.y, pitch: spinTarget.rotation.x };
       userInteracting = true;    // 立即停止自转
       displaySpinRate = 0;       // 清零，避免 loop 叠加
       clearTimeout(resumeTimer);
-    }
-    if (pointers.size === 2) {
+      pad.style.cursor = 'grabbing';
+    } else if (pointers.size === 2) {
+      // 第二指落下 → 切捏合缩放
+      drag = null;
       const pts = [...pointers.values()];
-      prevPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      userZoomTarget = camera.position.z; // 锁定缩放基准
+      pinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      pinchBaseZ = camera.position.z;
+      userZoomTarget = camera.position.z;
     }
-    pad.setPointerCapture(e.pointerId);
+    try { pad.setPointerCapture(e.pointerId); } catch { /* 指针可能已失效，忽略 */ }
   });
 
   pad.addEventListener('pointermove', (e) => {
     const pt = pointers.get(e.pointerId);
-    if (!pt) return;
-    const dx = e.clientX - pt.x;
-    const dy = e.clientY - pt.y;
-    pt.x = e.clientX;
-    pt.y = e.clientY;
+    if (pt) { pt.x = e.clientX; pt.y = e.clientY; }
 
-    if (pointers.size === 1 && spinGroup) {
-      // 单指：水平拖拽旋转（累加增量，与 FRAME 拖拽同逻辑）
-      spinGroup.rotation.y += dx * 0.008;
-    } else if (pointers.size === 2) {
+    if (pointers.size >= 2) {
       // 双指：捏合缩放
       const pts = [...pointers.values()];
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      if (prevPinchDist > 1) {
-        const scale = prevPinchDist / Math.max(dist, 1);
-        userZoomTarget = Math.min(5.5, Math.max(0.8, prevZoomZ * scale));
+      if (pinchDist > 1 && dist > 1) {
+        const scale = pinchDist / dist;
+        userZoomTarget = Math.min(5.5, Math.max(0.8, pinchBaseZ * scale));
       }
+      return;
     }
+    if (!drag || !spinTarget) return;
+    // 单指：绝对公式（锚点固定），水平→yaw，垂直→pitch
+    spinTarget.rotation.y = drag.yaw + (e.clientX - drag.x) * 0.01;
+    spinTarget.rotation.x = drag.pitch + (e.clientY - drag.y) * 0.01;
   });
 
   const endPointer = (e) => {
     pointers.delete(e.pointerId);
     pad.style.cursor = pointers.size > 0 ? 'grabbing' : 'grab';
     if (pointers.size === 0) {
-      prevPinchDist = null;
+      drag = null;
+      pinchDist = null;
       scheduleResume();          // 松手后 1.2s 无操作再恢复自转
-    } else if (pointers.size === 1) {
-      // 从双指变单指：保持自转暂停
-      prevPinchDist = null;
-      prevZoomZ = camera.position.z;
+    } else if (pointers.size === 1 && spinTarget) {
+      // 双指变单指：按剩下那根手指的当前位置重新锚定
+      const rest = [...pointers.entries()][0];
+      drag = { x: rest[1].x, y: rest[1].y, yaw: spinTarget.rotation.y, pitch: spinTarget.rotation.x };
+      pinchDist = null;
       userInteracting = true;
       clearTimeout(resumeTimer);
     }
@@ -456,6 +463,8 @@ if (!FRAME) {
 }
 
 let spinGroup = null;
+let userPivot = null;   // 普通副屏：绕模型中心的旋转轴心（FRAME 不用）
+let spinTarget = null;  // 自转/用户旋转作用的对象：普通副屏=userPivot，FRAME=spinGroup
 let entrance = null;
 let displaySpinRate = 0;
 let showGeneration = 0;
@@ -494,6 +503,8 @@ function displayMetaLine(prize, { truth = false } = {}) {
 function clearStage() {
   entrance = null;
   spinGroup = null;
+  userPivot = null;
+  spinTarget = null;
   prizeContent = null;
   resetReveal();
   displaySpinRate = 0;
@@ -586,7 +597,17 @@ function mountPrizeVisual(model, prize) {
   const lift = new THREE.Group();
   const tumble = new THREE.Group();
   tumble.add(model);
-  lift.add(tumble);
+  if (FRAME) {
+    lift.add(tumble);
+    spinTarget = spinGroup;
+  } else {
+    // 普通副屏：多一层 userPivot，把旋转轴心放到模型中心，
+    // 实现「中心固定、任意旋转」（yaw + pitch），与 hub 奖品预览同手感
+    userPivot = new THREE.Group();
+    userPivot.add(tumble);
+    lift.add(userPivot);
+    spinTarget = userPivot;
+  }
   spinGroup.add(lift);
   stageRoot.add(spinGroup);
   // 揭晓时换掉的只是 tumble 里那个 model
@@ -596,7 +617,26 @@ function mountPrizeVisual(model, prize) {
   else if (entCfg.comicFx !== false) {
     applyComicStyle(model, true, { outline: entCfg.outline ?? 0.022 });
   }
+  // 必须在 entrance 把 tumble 掰歪之前量中心
+  if (!FRAME) recenterPivot();
   entrance = createCollectEntrance(lift, tumble, prize);
+}
+
+/**
+ * 把 userPivot 的轴心移到当前模型的包围盒中心：
+ * pivot.position.y = +cy，tumble.position.y = -cy（模型仍站在 y=0，位置不变）。
+ * 这样旋转始终绕模型中心，屏幕中心不会跑。
+ */
+function recenterPivot() {
+  if (!userPivot || !prizeContent) return;
+  const model = prizeContent.children[0];
+  if (!model) return;
+  prizeContent.position.y = 0; // 先归位再量，避免重复偏移
+  prizeContent.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(model);
+  const cy = Math.max(box.max.y - box.min.y, 1e-4) / 2;
+  userPivot.position.y = cy;
+  prizeContent.position.y = -cy;
 }
 
 // ---------------- 揭晓：把展台上的东西翻成它真实的样子 ----------------
@@ -651,6 +691,7 @@ async function toggleReveal() {
       disposeObject3D(child);
     }
     prizeContent.add(model);
+    if (!FRAME) recenterPivot();   // 新模型尺寸可能不同，轴心重新对中心
     revealed = wantTruth;
     // 文案翻面：标题用败露态那个名字（副屏终于说实话了）
     elName.textContent = (wantTruth ? (prize.truthName ?? prize.name) : prize.name) ?? prize.id;
@@ -800,7 +841,7 @@ function loop() {
   } else if (entrance && !RELAY_HOST) {
     entrance.update(spinDt);
   }
-  if (spinGroup) {
+  if (spinTarget) {
     // 普通副屏：触摸拖拽时 userInteracting=true，直接清零 spinRate 避免叠加；
     // 松手后 1.2s 无操作 userInteracting 变回 false，damp 平滑恢复自转
     const interacting = typeof window.__userInteracting === 'function'
@@ -811,11 +852,10 @@ function loop() {
       : (entrance?.active
         ? (entCfg.spinDuringEntrance ?? 0.22)
         : (entCfg.idleSpin ?? 0.85));
-    const target = interacting ? 0 : autoTarget;
     // 用户交互期间直接清零自转速度，不做 damp 过渡（避免叠加）
     if (interacting) displaySpinRate = 0;
-    displaySpinRate = damp(displaySpinRate, target, entCfg.spinBlendTau ?? 0.4, spinDt);
-    if (displaySpinRate > 1e-4) spinGroup.rotation.y += spinDt * displaySpinRate;
+    displaySpinRate = damp(displaySpinRate, interacting ? 0 : autoTarget, entCfg.spinBlendTau ?? 0.4, spinDt);
+    if (displaySpinRate > 1e-4) spinTarget.rotation.y += spinDt * displaySpinRate;
   } else {
     displaySpinRate = 0;
   }
@@ -1211,4 +1251,9 @@ loadFrameRoom();
 startDisplay();
 
 // 调参：副屏控制台改 CONFIG.collectDisplay.entrance 后刷新；与主游戏共用 config.js
-window.__display = { CONFIG, showPrize, clearStage };
+window.__display = {
+  CONFIG, showPrize, clearStage,
+  getSpin: () => spinTarget?.rotation.y ?? null,
+  getPitch: () => spinTarget?.rotation.x ?? null,
+  getCamZ: () => camera.position.z,
+};
