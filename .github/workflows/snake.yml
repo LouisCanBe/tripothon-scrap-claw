@@ -25,7 +25,7 @@ jobs:
         with:
           github_user_name: LouisCanBe
           outputs: |
-            dist/github-snake.svg?color_snake=#26241f&color_dots=#e9e7df,#dceac9,#c3daa6,#a3c983,#84b96b
+            dist/github-snake.svg?color_snake=#E95D3F&color_dots=#e9e7df,#dceac9,#c3daa6,#a3c983,#84b96b
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Push snake.svg to output branch
