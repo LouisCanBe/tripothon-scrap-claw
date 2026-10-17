@@ -276,10 +276,41 @@ scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffe7c4, 0.9);
 key.position.set(2, 4, 3);
 scene.add(key);
+let fillLight = null;   // 普通副屏补光灯，白底切换时要调强度
 if (!FRAME) {
-  const fill = new THREE.DirectionalLight(0xc8d4ff, 0.45);
-  fill.position.set(-2, 2, -2);
-  scene.add(fill);
+  fillLight = new THREE.DirectionalLight(0xc8d4ff, 0.45);
+  fillLight.position.set(-2, 2, -2);
+  scene.add(fillLight);
+}
+
+// ---------------- 白底 / 深底切换 ----------------
+// 现场可能搭白展台，给副屏一个一键切背景的口子；
+// 选择记 localStorage，刷新/重开页面都保持。FRAME 相框页有自己的固定观感，不参与。
+const BG_MODE_KEY = 'collectDisplay.bgMode';
+const BG_DARK = 0x0a0a0e;
+const BG_LIGHT = 0xf3f0e8;   // 与相框页同色系暖白
+let bgLight = false;
+
+function applyBgMode(light) {
+  if (FRAME) return;
+  bgLight = !!light;
+  scene.background = new THREE.Color(bgLight ? BG_LIGHT : BG_DARK);
+  document.body.classList.toggle('light', bgLight);
+  // 白底下照度稍提一点、地面反弹光暖一点，避免模型发灰
+  hemi.intensity = bgLight ? 1.1 : 0.85;
+  hemi.groundColor.set(bgLight ? 0x8a7f6d : 0x1a1a22);
+  key.intensity = bgLight ? 1.15 : 0.9;
+  if (fillLight) fillLight.intensity = bgLight ? 0.55 : 0.45;
+  const btn = document.getElementById('bgBtn');
+  if (btn) btn.textContent = bgLight ? '深 底' : '白 底';
+  try { localStorage.setItem(BG_MODE_KEY, bgLight ? 'light' : 'dark'); } catch {}
+}
+
+if (!FRAME) {
+  let stored = null;
+  try { stored = localStorage.getItem(BG_MODE_KEY); } catch {}
+  applyBgMode(stored === 'light');
+  document.getElementById('bgBtn')?.addEventListener('click', () => applyBgMode(!bgLight));
 }
 
 /** 展台根：每次出货清空；spinGroup 只负责 idle 自转，content 负责入场位移 */
