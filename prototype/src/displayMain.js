@@ -308,9 +308,21 @@ function applyBgMode(light) {
 
 if (!FRAME) {
   let stored = null;
-  try { stored = localStorage.getItem(BG_MODE_KEY); } catch {}
+  try { stored = localStorage.getItem(BG_MODE_KEY); } catch (e) {}
   applyBgMode(stored === 'light');
-  document.getElementById('bgBtn')?.addEventListener('click', () => applyBgMode(!bgLight));
+  const bgBtn = document.getElementById('bgBtn');
+  if (bgBtn) {
+    let lastTap = 0;
+    const onBgTap = () => {
+      const now = performance.now();
+      if (now - lastTap < 500) return;   // touchend 之后浏览器还会补一个 click，去重
+      lastTap = now;
+      applyBgMode(!bgLight);
+    };
+    // click 桌面/大多数安卓够用；touchend 兜底「click 被触摸手势吞掉」的情况
+    bgBtn.addEventListener('click', onBgTap);
+    bgBtn.addEventListener('touchend', onBgTap);
+  }
 }
 
 /** 展台根：每次出货清空；spinGroup 只负责 idle 自转，content 负责入场位移 */
