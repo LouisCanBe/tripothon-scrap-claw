@@ -19,7 +19,7 @@ Marble / PixVerse 在 Hub 里下载的自动命名文件（如 `world-<id>-pano.
 | **Tripo3D** | 道具/爪子模型生成（text/image/multiview → GLB）；Hub 预览另支持拖入 **.obj**（如灰盒对照） | `tools/tripo.mjs` + `tripo.serve.mjs` + `tools/ui.html` | ✅ 已实测跑通 |
 | **Marble（World Labs）** | 3D 世界/场景生成（text/image/pano → GLB mesh / SPZ 点云 / 全景图） | `tools/marble.mjs` + `marble.serve.mjs` + `tools/world.html` | ✅ 已实测跑通（draft 档 32s 出世界） |
 | **PixVerse** | 分镜/幕间视频（官方 CLI + Skill，或 OpenAPI 封装） | 根目录 `npm install` → `npm run pixverse:login`；可选 `tools/pixverse.mjs` + serve | ✅ CLI/Skill 已装；需本机 `auth login` |
-| **TapTap** | 游戏包体上传发布 | 官方 TapRails CLI / APK 上传 API | 📋 待开发者凭证 |
+| **TapTap** | 游戏上架全流程（建游戏/资料/资质/包体/提审/发布/数据） | 官方 `@taptap/cli`（npm 全局）+ 12 个 Agent Skills | ✅ CLI v2026.10.15 + Skills 已装；待 `taptap-cli auth login` 扫码授权 |
 | **tapnow** | ？ | ？ | ❓ 待确认是什么服务 |
 
 ## 统一模式（每个服务一个薄封装）
@@ -78,7 +78,7 @@ npm run game:lan                      # 内网可访问（终端会打印局域�
 
 1. ~~统一 serve hub~~ ✅ `tools/hub.serve.mjs` + `tools/hub.html`
 2. Hub 内任务队列跨服务汇总（可选）
-3. **TapTap 发布流水线**：`npm run release` = 打包 zip → TapRails 上传 → 输出审核链接
+3. **TapTap 发布流水线**：`taptap-cli`（package-management 传 H5 包 → app-edit 提审 → 定时/立即发布），详见下文「TapTap 接入」
 4. **Marble → 游戏**：生成的全景图可直接当终幕"实景"背景（`hooks.onReveal` 换成全景天空盒），
    GLB mesh 可做新场景——低模娃娃机（记忆）vs Marble 写实世界（现实）的画风对比本身就是叙事
 
@@ -103,3 +103,40 @@ npm run game:lan                      # 内网可访问（终端会打印局域�
 要点速记：
 - 测试锁 **540p + 5s**
 - OpenAPI 路径：每个请求新 `Ai-trace-id`（UUID），重复会返回旧结果
+
+## TapTap 接入
+
+官方工具是 **`@taptap/cli`**（npm 全局安装的 AI Agent CLI，非 MCP；GitHub 仓库私有，Skills 只能从 npm 包内 `skills/` 目录装）。
+
+**已安装（本机）**：`npm i -g @taptap/cli`（v2026.10.15）+ 12 个 Skill 装进 `.agents/skills/`（`taptap-publish-game` / `taptap-app-edit` / `taptap-package-management` / `taptap-materials` / `taptap-qualification` 等）+ 聚合入口 `taptap-suite`。`.agents/` 不入库，每人本机一份。
+
+**首次使用必须扫码授权**（当前状态：未登录）：
+
+```bash
+taptap-cli auth login          # 终端输出链接，浏览器确认授权，凭证只存本机
+taptap-cli auth status         # 验证登录态
+```
+
+**发布 H5 游戏流程**（本游戏是 Three.js Web 游戏，走 H5 包体，不需要 APK）：
+
+```bash
+node tools/build-deploy.mjs        # ① deploy/prototype/**（运行时必需集，已校验引用完整）
+node tools/package-h5.mjs          # ② → dist/pickman-h5.zip（game/ 单目录；概念图 PNG→JPG；剥开发物料）
+taptap-cli materials +inspect dist/pickman-h5.zip   # ③ 只读预检（top_level_entries 须只有 game/）
+taptap-cli upload-h5-package dist/pickman-h5.zip \
+  --dev-id 472074 --app-id 983258 --screen-orientation 0 --dry-run   # ④ 预览
+taptap-cli upload-h5-package dist/pickman-h5.zip \
+  --dev-id 472074 --app-id 983258 --screen-orientation 0 --yes       # ⑤ 上传（68MB）
+# ⑥ 绑定主槽位 + 写资料字段（save-changes），自测二维码：
+taptap-cli package-management get-test-qr-code --dev-id <id> --app-id <id> \
+  --data '{"package_id":<h5VersionId>}'
+```
+
+**本游戏已发布就绪**（app 983258 拾荒娃娃机，2026-10-18）：H5 包 v323388 已绑主槽位；封面/图标/宣传图/简介/截图齐；实机录屏已上传（videoId 5984173，`tools/_record-gameplay.mjs` 用 CDP screencast 录第三幕实机，47s/1264×568）；SCE 协议已签；`analyze-app-status` **blocker / suggestion / warning 全为 0**。**提审由人工确认后执行**（三步：prepare-review-snapshot → precheck-app-review → submit-app-review）。
+
+要点速记：
+- 写操作一律先 `--dry-run` 预览；正式执行带 `--idempotency-key` 防重复提交
+- 成功判断看退出码 / `ok == true`，**不要**看业务体 `code == 0`
+- `taptap-cli schema` / `schema app <方法>` 随时查参数契约，不用翻文档
+- 资质（版号/备案/隐私/防沉迷）是平台人工审核，CLI 只能识别缺口和提审，替不了审核本身
+- 另有官方 MCP `@taptap/instant-games-open-mcp`（H5 上传 + 排行榜/联机/云存档），本项目未配；要接小游戏服务再装
