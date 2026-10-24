@@ -41,6 +41,7 @@ import { createRevealDissolveTransition } from './revealTransition.js';
 import {
   endingBrandActive, hideEndingBrand, initEndingBrand, layoutEndingBrand, showEndingBrand,
 } from './endingBrand.js';
+import { initAds, onGrabFail as adsFail, onCollect as adsCollect, showTruthEntry, resetAds as resetAdsState } from './tapAds.js';
 import { createModelFade } from './modelFade.js';
 import { createNarrativeSceneBgDome } from './narrativeSceneBgDome.js';
 import { refreshPrizeComicFx } from './prizeComicFx.js';
@@ -268,10 +269,14 @@ const claw = new ClawMachine(world, items, {
   onMessage: (t) => director?.msg(t),
   onCollect: (item) => {
     bumpGlobalGrabCount();
+    adsCollect();
     if (director?.act?.id !== 3) toast(tr('collected', { name: copy(item.name) }));
     director?.notify('collect', item);
   },
-  onGrabFail: (kind) => director?.notify('grabFail', kind),
+  onGrabFail: (kind) => {
+    adsFail();
+    director?.notify('grabFail', kind);
+  },
   shouldSkipCollectLine: () => director?.shouldSkipCollectLine?.() ?? false,
   onHoleDrop: (item) => publishHoleDrop(item),
   onVended: (item) => {
@@ -798,6 +803,7 @@ function unlockRevealWalk() {
   revealWalkAfterOrbit = false;
   layoutEndingBrand(viewRect);
   showEndingBrand();
+  showTruthEntry();
   applyRevealFeatures();
   if (revealImmersive) applyRevealWalkBounds(revealImmersive);
   if (revealControlsOn && elHint) {
@@ -1361,10 +1367,11 @@ director = new Director({
       document.getElementById('actLabel')?.classList.remove('show');
       world.visible = true;
     },
-    onRestart: onGameplayRestart,
+    onRestart: () => { onGameplayRestart(); resetAdsState(); },
   },
 });
 startCollectDisplayPairPanel(director);
+initAds();
 startCollectGamePing();
 
 // —— 输入接线（带幕间权限闸 + 演出锁）——
