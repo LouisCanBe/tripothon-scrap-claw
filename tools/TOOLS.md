@@ -132,7 +132,9 @@ taptap-cli package-management get-test-qr-code --dev-id <id> --app-id <id> \
   --data '{"package_id":<h5VersionId>}'
 ```
 
-**本游戏已发布就绪**（app 983258 拾荒娃娃机，2026-10-18）：H5 包 v323388 已绑主槽位；封面/图标/宣传图/简介/截图齐；实机录屏已上传（videoId 5984173，`tools/_record-gameplay.mjs` 用 CDP screencast 录第三幕实机，47s/1264×568）；SCE 协议已签；`analyze-app-status` **blocker / suggestion / warning 全为 0**。**提审由人工确认后执行**（三步：prepare-review-snapshot → precheck-app-review → submit-app-review）。
+**本游戏已发布就绪**（app 983258 拾荒娃娃机）：H5 包体 **v363632** 已绑主槽位（含激励视频广告：第三幕「借个力」+ 终幕真相卡，推广位 1072395）；封面/图标/宣传图/简介/截图/录屏齐；SCE 协议已签；`analyze-app-status` **blocker / suggestion / warning 全为 0**。**提审由人工确认后执行**（三步：prepare-review-snapshot → precheck-app-review → submit-app-review）。
+
+包体 lineage：323388（首发，缺 comic-render 已废）→ 327825/327946（修复模块加载）→ **363632（+ 广告接入，当前）**。git tag：`taptap-v1`（包体记录）/ `taptap-ads-v1`（广告接入）。
 
 要点速记：
 - 写操作一律先 `--dry-run` 预览；正式执行带 `--idempotency-key` 防重复提交
