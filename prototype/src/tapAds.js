@@ -22,9 +22,11 @@ const DEBUG = new URLSearchParams(location.search).has('ad');
 const ENABLED = hasTap() || DEBUG;
 
 let ad = null;            // tap 广告单例
-let adReady = false;      // 素材拉取成功（仅状态跟踪，show 失败走重试不再依赖它）
-let adShowing = false;    // 广告播放中（防重入；原生覆盖层期间仍可能收到点击）
+let adReady = false;      // 素材就绪（onLoad 置位；官方流程：SDK 事件走回调，Promise 链只用于 show/load 一次性重试）
+let adState = 'idle';     // idle | showing | reloading（回调驱动的小状态机）
+let adShowStartedAt = 0;  // show 起始时间（onClose 疑似未回时的安全阀）
 let pendingReward = null; // 待发奖回调（看完才发）
+const AD_STUCK_MS = 60000; // onClose 超过 1 分钟未回 → 强制复位允许重试
 let buffActive = false;   // 必中 buff 生效中（等下一次抓取结果回收）
 const boostTrigger = new BoostTrigger(AD_TRIGGER_CONFIG.boost);
 let boostEl = null;
@@ -82,7 +84,8 @@ export function initAds() {
       ad.onLoad(() => { adReady = true; });
       ad.onError(() => { adReady = false; });
       ad.onClose((res) => {
-        adShowing = false;
+        adState = 'reloading';   // 关闭后 SDK 自动加载下一份，等 onLoad 再置 ready
+        adReady = false;
         // 只有完整看完才发奖；没看完什么都不给
         if (res && res.isEnded && pendingReward) { const fn = pendingReward; pendingReward = null; fn(); }
         else pendingReward = null;
@@ -98,13 +101,23 @@ export function initAds() {
 // 看广告 → 发奖。DEBUG 模式直接发奖。
 function watchAd(rewardFn) {
   if (DEBUG || !hasTap()) { rewardFn(); return; }
-  if (!ad || adShowing) return;          // 播放中不重入
+  if (!ad) return;
+  // 门禁（有反馈，绝不做无声点击）：
+  if (adState === 'showing') {
+    if (Date.now() - adShowStartedAt > AD_STUCK_MS) {
+      adState = 'reloading'; adReady = false;   // onClose 疑似未回，强制复位放行重试
+    } else {
+      toastAd(t('adPlaying')); return;          // 真的在播放
+    }
+  }
+  if (!adReady) { toastAd(t('adNotReady')); return; }   // 等 SDK 自动加载完（onLoad）
   pendingReward = rewardFn;
-  adShowing = true;
-  // 官方推荐模式：show 失败（未就绪/关闭后自动加载未完成）→ load → 重试一次；仍失败只提示不卡游戏
+  adState = 'showing';
+  adShowStartedAt = Date.now();
+  // 官方推荐：show 失败（未就绪）→ load → 重试一次；仍失败只提示不卡游戏
   ad.show().catch(() => ad.load()
     .then(() => ad.show())
-    .catch(() => { adShowing = false; pendingReward = null; toastAd(t('adNotReady')); }));
+    .catch(() => { adState = 'reloading'; adReady = false; pendingReward = null; toastAd(t('adNotReady')); }));
 }
 
 function toastAd(text) {

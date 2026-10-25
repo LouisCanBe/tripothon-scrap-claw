@@ -41,9 +41,9 @@ const sfxBuf = {};
 
 // Kenney Impact Sounds（CC0）
 const CLAW_SAMPLE = {
-  open: 'assets/audio/claw-open.ogg',
-  close: 'assets/audio/claw-close.ogg',
-  thud: 'assets/audio/claw-thud.ogg',
+  open: 'assets/audio/claw-open.mp3',
+  close: 'assets/audio/claw-close.mp3',
+  thud: 'assets/audio/claw-thud.mp3',
 };
 const clawSample = {};
 
