@@ -134,7 +134,7 @@ taptap-cli package-management get-test-qr-code --dev-id <id> --app-id <id> \
 
 **本游戏已发布就绪**（app 983258 拾荒娃娃机）：H5 包体 **v363632** 已绑主槽位（含激励视频广告：第三幕「借个力」+ 终幕真相卡，推广位 1072395）；封面/图标/宣传图/简介/截图/录屏齐；SCE 协议已签；`analyze-app-status` **blocker / suggestion / warning 全为 0**。**提审由人工确认后执行**（三步：prepare-review-snapshot → precheck-app-review → submit-app-review）。
 
-包体 lineage：323388（首发，缺 comic-render 已废）→ 327825/327946（修复模块加载）→ **363632（+ 广告接入，当前）**。git tag：`taptap-v1`（包体记录）/ `taptap-ads-v1`（广告接入）。
+包体 lineage：323388（首发，缺 comic-render 已废）→ 327825/327946（修复模块加载）→ 363632（+ 广告接入，ID 曾用错）→ **365513（广告位修正为服务端匹配值 1054323，当前）**。git tag：`taptap-v1`（包体记录）/ `taptap-ads-v1`（广告接入最终版）。
 
 要点速记：
 - 写操作一律先 `--dry-run` 预览；正式执行带 `--idempotency-key` 防重复提交
