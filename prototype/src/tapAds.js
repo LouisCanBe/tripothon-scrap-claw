@@ -2,29 +2,30 @@
  * TapTap 广告接入（激励视频）
  * ------------------------------------------------------------
  * 两个点位（均为玩家主动点击，绝不自动弹）：
- *   ① 第三幕「借个力」：连续抓取失败 N 次后出现；看完广告，下一次抓取必中（一次性）
+ *   ① 第三幕「借个力」：按 adTriggers.js 的规则出现；看完广告，下一次抓取必中（可重复，有冷却）
  *   ② 终幕「他今天吃了什么？」：结尾揭晓 stinger 的答案（真相卡）
  *
  * 环境降级：仅 TapTap 小游戏运行时存在全局 tap.*；
  * 本地 devServer / Netlify / Render 下入口不渲染、零报错。
  * 调试：URL 加 ?ad=1 可在本地强制显示入口（点击直接发奖，不调真广告）。
+ *
+ * 触发规则（出现时机/次数/冷却）在 ./adTriggers.js 独立配置，与本文件的渲染逻辑解耦。
  */
 import { CONFIG } from './config.js';
 import { t } from './i18n.js';
+import { AD_TRIGGER_CONFIG, BoostTrigger } from './adTriggers.js';
 
 const AD_UNIT_ID = '1054323';        // 服务端匹配广告位（check_ads_status 自动解析；勿用手动建的其他 ID）
-const BOOST_FAIL_STREAK = 2;         // 连续失败几次后出「借个力」
 
 const hasTap = () => typeof window.tap?.createRewardedVideoAd === 'function';
 const DEBUG = new URLSearchParams(location.search).has('ad');
 const ENABLED = hasTap() || DEBUG;
 
 let ad = null;            // tap 广告单例
-let adReady = false;      // 素材拉取成功
+let adReady = false;      // 素材拉取成功（仅状态跟踪，show 失败走重试不再依赖它）
 let pendingReward = null; // 待发奖回调（看完才发）
-let boostUsed = false;    // 「借个力」是否已用过（restart 重置）
 let buffActive = false;   // 必中 buff 生效中（等下一次抓取结果回收）
-let failStreak = 0;
+const boostTrigger = new BoostTrigger(AD_TRIGGER_CONFIG.boost);
 let boostEl = null;
 let truthEl = null;
 let cardEl = null;
@@ -44,9 +45,29 @@ function paperStyle(e, extra) {
     fontFamily: 'var(--font-main, monospace)', borderRadius: '2px',
     boxShadow: '0 4px 0 rgba(38,36,31,.25)', userSelect: 'none',
     opacity: '0', transition: 'opacity .35s ease, transform .35s ease',
+    display: 'none',            // 默认隐藏：不存在于交互层，杜绝透明占位遮挡
     ...extra,
   });
   return e;
+}
+
+// —— 显/隐：隐藏必须 display:none + pointer-events:none 双保险，淡出后彻底移除 ——
+function showEntry(e, transformShown) {
+  clearTimeout(e._hideTimer);
+  e.style.display = 'block';
+  e.style.pointerEvents = 'auto';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    e.style.opacity = '1';
+    e.style.transform = transformShown;
+  }));
+}
+function hideEntry(e, transformHidden) {
+  if (!e || e.style.display === 'none') return;
+  e.style.opacity = '0';
+  e.style.pointerEvents = 'none';
+  e.style.transform = transformHidden;
+  clearTimeout(e._hideTimer);
+  e._hideTimer = setTimeout(() => { e.style.display = 'none'; }, 380);  // 等淡出结束再移除
 }
 
 // ------------------------------------------------------------
@@ -95,7 +116,7 @@ function toastAd(text) {
 }
 
 // ------------------------------------------------------------
-// 点位①：第三幕「借个力」
+// 点位①：第三幕「借个力」（触发规则见 adTriggers.js）
 // ------------------------------------------------------------
 function ensureBoostEl() {
   if (boostEl) return boostEl;
@@ -108,38 +129,31 @@ function ensureBoostEl() {
   const hint = el('span', null, t('adBoostHint'));
   hint.style.cssText = 'display:block;font-size:10px;letter-spacing:1px;opacity:.55;margin-top:5px;';
   e.append(k, label, hint);
-  e.addEventListener('click', () => {
-    if (boostUsed) return;
-    watchAd(() => { grantBoost(); hideBoostEntry(); });
-  });
+  e.addEventListener('click', () => watchAd(() => { grantBoost(); hideBoostEntry(); }));
   document.body.appendChild(e);
   boostEl = e;
   return e;
 }
 
 function showBoostEntry() {
-  if (boostUsed || buffActive) return;
+  if (buffActive) return;
   const e = ensureBoostEl();
-  requestAnimationFrame(() => { e.style.opacity = '1'; e.style.transform = 'translateY(0)'; });
+  showEntry(e, 'translateY(0)');
 }
 function hideBoostEntry() {
-  if (!boostEl) return;
-  boostEl.style.opacity = '0';
-  boostEl.style.transform = 'translateY(8px)';
+  if (boostEl) hideEntry(boostEl, 'translateY(8px)');
 }
 
-/** 抓取失败：累计连胜达到阈值出「借个力」（掉落控制只在第二/三幕开放，无需判幕） */
+/** 抓取失败：交给触发器判定（buff 生效期的失败先回收 buff） */
 export function onGrabFail() {
-  if (buffActive) { recycleBuff(); failStreak = 0; hideBoostEntry(); return; }
-  if (boostUsed) return;
-  failStreak++;
-  if (failStreak >= BOOST_FAIL_STREAK) showBoostEntry();
+  if (buffActive) { recycleBuff(); boostTrigger.onSuccess(); hideBoostEntry(); return; }
+  if (boostTrigger.onFail()) showBoostEntry();
 }
 
 /** 抓取成功：回收 buff / 清零连胜 / 收入口 */
 export function onCollect() {
   recycleBuff();
-  failStreak = 0;
+  boostTrigger.onSuccess();
   hideBoostEntry();
 }
 
@@ -151,9 +165,9 @@ function recycleBuff() {
 }
 
 function grantBoost() {
-  boostUsed = true;
   buffActive = true;
-  CONFIG.claw.gripStrength = 1;      // 下一次抓取必中
+  boostTrigger.onGranted();      // 进入冷却 + 单局计数（可再次出现，规则见 adTriggers.js）
+  CONFIG.claw.gripStrength = 1;  // 下一次抓取必中
   CONFIG.claw.baseSlipProb = 0;
   toastAd(t('adBoostOn'));
 }
@@ -180,9 +194,9 @@ function ensureTruthEl() {
 
 /** 终幕揭晓入口（unlockRevealWalk 后调用） */
 export function showTruthEntry() {
-  if (!ENABLED || cardEl) return;
+  if (!ENABLED || !AD_TRIGGER_CONFIG.truth.enabled || cardEl) return;
   const e = ensureTruthEl();
-  requestAnimationFrame(() => { e.style.opacity = '1'; e.style.transform = 'translateX(-50%) translateY(0)'; });
+  showEntry(e, 'translateX(-50%) translateY(0)');
 }
 
 function grantTruth() {
@@ -211,16 +225,14 @@ function grantTruth() {
 }
 
 function hideTruthEntry() {
-  if (!truthEl) return;
-  truthEl.style.opacity = '0';
+  if (truthEl) hideEntry(truthEl, 'translateX(-50%) translateY(8px)');
 }
 
 // ------------------------------------------------------------
 // 重开（director.restart）：全部状态归零
 // ------------------------------------------------------------
 export function resetAds() {
-  failStreak = 0;
-  boostUsed = false;
+  boostTrigger.reset();
   buffActive = false;
   pendingReward = null;
   hideBoostEntry();
