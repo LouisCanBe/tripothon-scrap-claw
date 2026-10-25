@@ -23,6 +23,7 @@ const ENABLED = hasTap() || DEBUG;
 
 let ad = null;            // tap 广告单例
 let adReady = false;      // 素材拉取成功（仅状态跟踪，show 失败走重试不再依赖它）
+let adShowing = false;    // 广告播放中（防重入；原生覆盖层期间仍可能收到点击）
 let pendingReward = null; // 待发奖回调（看完才发）
 let buffActive = false;   // 必中 buff 生效中（等下一次抓取结果回收）
 const boostTrigger = new BoostTrigger(AD_TRIGGER_CONFIG.boost);
@@ -81,10 +82,12 @@ export function initAds() {
       ad.onLoad(() => { adReady = true; });
       ad.onError(() => { adReady = false; });
       ad.onClose((res) => {
+        adShowing = false;
         // 只有完整看完才发奖；没看完什么都不给
         if (res && res.isEnded && pendingReward) { const fn = pendingReward; pendingReward = null; fn(); }
         else pendingReward = null;
-        ad.load();   // 预拉下一个
+        // 不手动 load()：官方文档明确「关闭后素材清空并自动加载下一份」，
+        // 手动 load 会和 SDK 自动加载冲突导致卡死；未就绪时 show 的 catch 里会兜底重试
       });
       ad.load();     // 创建即预拉首个素材
     } catch { ad = null; }
@@ -95,12 +98,13 @@ export function initAds() {
 // 看广告 → 发奖。DEBUG 模式直接发奖。
 function watchAd(rewardFn) {
   if (DEBUG || !hasTap()) { rewardFn(); return; }
-  if (!ad) return;
+  if (!ad || adShowing) return;          // 播放中不重入
   pendingReward = rewardFn;
-  // 官方推荐模式：show 失败（未就绪）→ load → 重试一次；仍失败只提示不卡游戏
+  adShowing = true;
+  // 官方推荐模式：show 失败（未就绪/关闭后自动加载未完成）→ load → 重试一次；仍失败只提示不卡游戏
   ad.show().catch(() => ad.load()
     .then(() => ad.show())
-    .catch(() => { pendingReward = null; toastAd(t('adNotReady')); }));
+    .catch(() => { adShowing = false; pendingReward = null; toastAd(t('adNotReady')); }));
 }
 
 function toastAd(text) {
