@@ -12,7 +12,7 @@
 import { CONFIG } from './config.js';
 import { t } from './i18n.js';
 
-const AD_UNIT_ID = '1072395';        // Dirichlet 激励视频推广位（横屏）
+const AD_UNIT_ID = '1054323';        // 服务端匹配广告位（check_ads_status 自动解析；勿用手动建的其他 ID）
 const BOOST_FAIL_STREAK = 2;         // 连续失败几次后出「借个力」
 
 const hasTap = () => typeof window.tap?.createRewardedVideoAd === 'function';
@@ -65,6 +65,7 @@ export function initAds() {
         else pendingReward = null;
         ad.load();   // 预拉下一个
       });
+      ad.load();     // 创建即预拉首个素材
     } catch { ad = null; }
   }
   return true;
@@ -74,9 +75,11 @@ export function initAds() {
 function watchAd(rewardFn) {
   if (DEBUG || !hasTap()) { rewardFn(); return; }
   if (!ad) return;
-  if (!adReady) { toastAd(t('adNotReady')); return; }
   pendingReward = rewardFn;
-  ad.show();
+  // 官方推荐模式：show 失败（未就绪）→ load → 重试一次；仍失败只提示不卡游戏
+  ad.show().catch(() => ad.load()
+    .then(() => ad.show())
+    .catch(() => { pendingReward = null; toastAd(t('adNotReady')); }));
 }
 
 function toastAd(text) {
