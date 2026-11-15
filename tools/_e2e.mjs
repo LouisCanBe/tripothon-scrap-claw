@@ -4,6 +4,11 @@
 //
 // 做法：一个常驻 Chrome 实例，一个 tab，用 Page.navigate 依次走三个场景。
 // （headless 下 Target.createTarget 出来的是 about:blank 目标，导航不可靠，所以不用它。）
+//
+// ⚠️ 已知停更：本脚本的分幕断言停在 2026-10-05 的叙事版本。之后游戏加了两处必须玩家
+// 交互才会往下走的环节 —— 10-06 的加载闸门（点「开始」，已在本文件里补上）和相框式
+// 过场图（interstitial dismiss:'click'，第一幕就会停住）。整池件数与 appearance 字段
+// 的断言也还是老版本（当时 8 件）。要恢复全绿，得先补「自动点掉过场图」再改这两处断言。
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -104,8 +109,16 @@ async function waitFor(expr, timeoutMs = 120000, label = expr) {
 /** 导航到 url 并等开演 */
 async function go(url, label) {
   await conn.send('Page.navigate', { url });
-  await waitFor('!!(window.__boot && window.__boot.booted === true)', 180000, label);
+  await startGame(label);
   await sleep(1200);
+}
+
+// 2026-10-06 起有加载闸门（上货完成才出「开始」），不再自动开演：
+// 先等 loadReady，点一下开始，再等 booted。
+async function startGame(label) {
+  await waitFor('!!(window.__boot && window.__boot.loadReady === true)', 180000, label + ' loadReady');
+  await evaluate(`document.getElementById('loadStart')?.click()`);
+  await waitFor('!!(window.__boot && window.__boot.booted === true)', 60000, label + ' booted');
 }
 
 // 让爪把某件物品真的抓进洞：
@@ -138,7 +151,7 @@ const GRAB_FN = (wantId, slotId = '') => `(async () => {
 
 // ---------------------------------------------------------------- A
 console.log('=== A: 从第一幕开场，走真实首抓 ===\n');
-await waitFor('!!(window.__boot && window.__boot.booted === true)', 180000, 'boot act1');
+await startGame('boot act1');
 await sleep(1200);
 const errsA = await evaluate('JSON.stringify(window.__errs)');
 ok('开场放行（第一幕）', true, errsA);
