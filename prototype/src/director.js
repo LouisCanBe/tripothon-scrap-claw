@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { ACTS } from './acts.js';
 import { copy, onLangChange, t } from './i18n.js';
+import { showEndingCue, hideEndingCue } from './feedback.js';
 import { PRIZE_TABLE } from './prizePool.js';
 import {
   playGlitchTick,
@@ -736,6 +737,7 @@ export class Director {
   #hideReplayCue() {
     clearTimeout(this._replayTimer);
     this._replayTimer = 0;
+    hideEndingCue();
     const el = this.elReplay;
     if (!el) return;
     el.classList.remove('show');
@@ -747,6 +749,7 @@ export class Director {
     if (!el || this.idx !== ACTS.length - 1) return;
     el.hidden = false;
     requestAnimationFrame(() => el.classList.add('show'));
+    showEndingCue();
   }
 
   #stinger(text) {

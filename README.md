@@ -106,6 +106,21 @@ npm run hub                      # 工具台 http://localhost:8780/
 
 注意：**不要**把根目录的 `.env.local`（API key）传上去——它在 `prototype/` 外面，正常不会带上；`tools/` 生成管线同理，发布不需要。
 
+## 反馈 / 联系
+
+玩完想说的话，发 **louis_wxl@outlook.com**。站内三个入口，都是玩家自己点开；**不埋点、不上报**，选中的选项和备注只留在当前页面里，点「发邮件」才拼进 `mailto:` 由玩家自己的邮件客户端发出。
+
+| 位置 | 形态 |
+|---|---|
+| 封面（加载页底部） | `反馈 · louis_wxl@outlook.com`；邮箱本身是 mailto，点「反馈」开留言卡 |
+| 游戏内右上角 | 「反馈」小标，在语言键下方；开始后常驻，终幕角标出现时自动让位 |
+| 终幕 | 「留一句给做它的人」纸条，跟「再记一遍」一起出现（stinger 后 10 秒） |
+
+留言卡是三问 + 一段备注：哪一幕让你停了一下 / 哪里卡住了 / 还想看到什么。选完点「发邮件」自动拼好正文，也可以「复制反馈」手动粘。
+
+实现：`prototype/src/feedback.js`（逻辑与文案），样式在 `prototype/index.html` 的 `#feedbackChip` / `#feedbackCue` / `#feedbackCard` 段，静态短句在 `src/i18n.js` 的 `fb*` 键。**换邮箱**只改两处：`feedback.js` 顶部的 `MAIL`，和 `index.html` 里两处 `mailto:`（封面脚注、卡片由 JS 生成不用管）。
+
+
 ## 资产生成（Tripo 管线，离线批处理）
 
 只在需要重新生成模型时跑，平时玩不需要：

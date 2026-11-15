@@ -41,6 +41,7 @@ import { createRevealDissolveTransition } from './revealTransition.js';
 import {
   endingBrandActive, hideEndingBrand, initEndingBrand, layoutEndingBrand, showEndingBrand,
 } from './endingBrand.js';
+import { initFeedback, showFeedbackChip, hideFeedbackChip } from './feedback.js';
 import { initAds, onGrabFail as adsFail, onCollect as adsCollect, showTruthEntry, resetAds as resetAdsState } from './tapAds.js';
 import { createModelFade } from './modelFade.js';
 import { createNarrativeSceneBgDome } from './narrativeSceneBgDome.js';
@@ -317,6 +318,7 @@ document.documentElement.classList.add('game-booting');
 const mask = new FrameMask();
 initViewportChrome();
 initEndingBrand();
+initFeedback();   // 反馈入口：封面脚注 / 角落小标 / 终幕纸条（见 feedback.js）
 mask.bootstrapFromAct(ACTS[parseStartActIndex()] ?? ACTS[0]);
 const post = new Post(renderer, scene, camera);
 post.setSize(innerWidth, innerHeight);
@@ -803,6 +805,7 @@ function unlockRevealWalk() {
   revealWalkAfterOrbit = false;
   layoutEndingBrand(viewRect);
   showEndingBrand();
+  hideFeedbackChip();   // 终幕角标占了右上角，反馈小标让位；纸条在 stinger 之后出来
   showTruthEntry();
   applyRevealFeatures();
   if (revealImmersive) applyRevealWalkBounds(revealImmersive);
@@ -1883,6 +1886,7 @@ function beginGame() {
     loadingEl?.classList.add('done');
     document.documentElement.classList.remove('game-booting');
     director.start();
+    showFeedbackChip();   // 开始后右上角「反馈」小标常驻（终幕出纸条时自动收起）
     if (startIdx > 0) toast(tr('tryAct', { label: copy(ACTS[startIdx]?.label) || tr('loadReadyAct', { n: startIdx + 1 }) }));
     if (window.__boot) window.__boot.booted = true;
   }, 420);

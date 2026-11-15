@@ -426,6 +426,112 @@
   #replayCue .label { display: block; font-family: var(--font-hand); font-size: 26px; letter-spacing: 4px; }
   #msg.stinger { font-family: var(--font-hand); font-size: 24px; letter-spacing: 2px;
                  background: none; border: none; }
+
+  /* —— 反馈：封面脚注 / 角落小标 / 终幕纸条 / 留言卡 ——
+     纸片美学沿用旁白框与 replayCue（--color-paper + 2px 墨线 + 硬阴影）；
+     三个入口都是玩家主动点，不自动弹。 */
+  #loading .load-feedback { position: absolute; left: 0; right: 0; bottom: 26px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 11px; letter-spacing: 1.5px; color: var(--color-ink-dim); }
+  #loading .load-feedback-open { background: none; border: none; margin: 0; padding: 2px 0;
+    font: inherit; letter-spacing: 2px; color: inherit; cursor: pointer;
+    border-bottom: 1px solid rgba(216,212,200,.3); }
+  #loading .load-feedback-open:hover { color: var(--color-ink);
+    border-bottom-color: rgba(216,212,200,.7); }
+  #loading .load-feedback-mail { color: inherit; text-decoration: none;
+    border-bottom: 1px dotted rgba(216,212,200,.35); }
+  #loading .load-feedback-mail:hover { color: var(--color-ink); border-bottom-style: solid; }
+
+  #feedbackChip { position: fixed; top: 50px; right: 16px; z-index: 50; pointer-events: auto;
+    font-family: inherit; font-size: 12px; letter-spacing: 1px; color: var(--color-ink-dim);
+    background: rgba(8,8,10,.42); border: 1px solid rgba(216,212,200,.18);
+    border-radius: 999px; padding: 4px 12px; cursor: pointer;
+    transition: color .25s, border-color .25s, background .25s; }
+  #feedbackChip:hover { color: var(--color-ink); border-color: rgba(216,212,200,.45);
+    background: rgba(8,8,10,.66); }
+  #feedbackChip[hidden] { display: none !important; }
+
+  /* 终幕纸条：比重开按钮轻一档，垫在它上方 */
+  #feedbackCue { position: fixed; left: 50%; bottom: calc(18% + 110px); z-index: 26;
+    transform: translateX(-50%) translateY(8px); opacity: 0;
+    pointer-events: auto; cursor: pointer; font-family: inherit;
+    background: rgba(239,233,220,.9); color: #26241f;
+    border: 1px solid rgba(38,36,31,.55); border-radius: 2px;
+    padding: 8px 20px 9px; text-align: center;
+    box-shadow: 3px 3px 0 rgba(0,0,0,.35);
+    transition: opacity .7s ease, transform .7s ease, background .2s; }
+  #feedbackCue[hidden] { display: none !important; }
+  #feedbackCue.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #feedbackCue:hover { background: #efe9dc; }
+  #feedbackCue .kicker { display: block; font-size: 10px; letter-spacing: 3px; opacity: .55;
+    margin-bottom: 3px; }
+  #feedbackCue .label { display: block; font-family: var(--font-hand); font-size: 20px;
+    letter-spacing: 2px; }
+
+  /* 留言卡：遮罩挡住全部交互；卡片内的按键在这一层截住，不会漏成落爪/移动 */
+  #feedbackCard { position: fixed; inset: 0; z-index: 60; display: flex;
+    align-items: center; justify-content: center; padding: 24px; }
+  #feedbackCard[hidden] { display: none !important; }
+  #feedbackCard .fb-backdrop { position: absolute; inset: 0; background: rgba(4,4,6,.8);
+    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); opacity: 0;
+    transition: opacity .28s ease; }
+  #feedbackCard.show .fb-backdrop { opacity: 1; }
+  #feedbackCard .fb-sheet { position: relative; width: min(94vw, 560px); max-height: 88vh;
+    overflow: auto; background: var(--color-paper, #efe9dc);
+    color: var(--color-paper-ink, #26241f);
+    border: 2px solid #26241f; border-radius: 2px; padding: 26px 28px 22px;
+    box-shadow: 6px 6px 0 rgba(0,0,0,.5); font-size: 13px; line-height: 1.7;
+    transform: translateY(10px); opacity: 0;
+    transition: opacity .28s ease, transform .28s ease; }
+  #feedbackCard.show .fb-sheet { opacity: 1; transform: none; }
+  #feedbackCard .fb-close { position: absolute; top: 6px; right: 10px; width: 30px; height: 30px;
+    background: none; border: none; font-family: inherit; font-size: 20px; line-height: 1;
+    color: rgba(38,36,31,.55); cursor: pointer; }
+  #feedbackCard .fb-close:hover { color: #26241f; }
+  #feedbackCard .fb-kicker { font-size: 10px; letter-spacing: 4px; opacity: .5; }
+  #feedbackCard .fb-title { font-family: var(--font-hand); font-size: 26px; letter-spacing: 2px;
+    font-weight: normal; margin: 6px 0 10px; }
+  #feedbackCard .fb-lede { font-size: 12px; line-height: 1.8; opacity: .72; margin-bottom: 18px; }
+  #feedbackCard .fb-q { margin-bottom: 14px; }
+  #feedbackCard .fb-q-title { font-size: 12px; letter-spacing: 1px; margin-bottom: 7px;
+    opacity: .85; }
+  #feedbackCard .fb-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  #feedbackCard .fb-opt { font-family: inherit; font-size: 12px; letter-spacing: .5px;
+    color: inherit; background: transparent; border: 1px solid rgba(38,36,31,.38);
+    border-radius: 999px; padding: 4px 11px; cursor: pointer;
+    transition: background .16s, color .16s, border-color .16s; }
+  #feedbackCard .fb-opt:hover { border-color: #26241f; }
+  #feedbackCard .fb-opt.on { background: #26241f; color: var(--color-paper, #efe9dc);
+    border-color: #26241f; }
+  #feedbackCard .fb-note { display: block; width: 100%; min-height: 68px; margin: 16px 0 0;
+    padding: 9px 11px; font-family: inherit; font-size: 12px; line-height: 1.7;
+    color: inherit; background: rgba(38,36,31,.05); border: 1px solid rgba(38,36,31,.3);
+    border-radius: 2px; resize: vertical; }
+  #feedbackCard .fb-note::placeholder { color: rgba(38,36,31,.42); }
+  #feedbackCard .fb-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  #feedbackCard .fb-send, #feedbackCard .fb-copy { font-family: inherit; font-size: 13px;
+    letter-spacing: 2px; padding: 9px 22px; cursor: pointer; border: 2px solid #26241f;
+    border-radius: 2px; text-decoration: none; }
+  #feedbackCard .fb-send { background: #26241f; color: var(--color-paper, #efe9dc); }
+  #feedbackCard .fb-send:hover { background: #3a362d; }
+  #feedbackCard .fb-copy { background: transparent; color: #26241f; }
+  #feedbackCard .fb-copy:hover { background: rgba(38,36,31,.08); }
+  #feedbackCard .fb-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+    margin-top: 16px; padding-top: 12px; border-top: 1px dashed rgba(38,36,31,.25);
+    font-size: 11px; letter-spacing: 1px; opacity: .8; }
+  #feedbackCard .fb-mail { color: #26241f; font-weight: bold; letter-spacing: .5px;
+    text-decoration: none; border-bottom: 1px solid rgba(38,36,31,.5); }
+  #feedbackCard .fb-copy-status { display: block; margin-top: 10px; font-size: 11px;
+    letter-spacing: 1px; color: #4a6b3d; min-height: 1em; }
+  #feedbackCard .fb-copy-status.bad { color: #9a3d2a; }
+  @media (orientation: portrait) {
+    #feedbackCard .fb-sheet { padding: 22px 18px 18px; }
+    #feedbackCard .fb-title { font-size: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #feedbackCard .fb-sheet, #feedbackCard .fb-backdrop, #feedbackCue { transition: none; }
+  }
+
   #hint { font-size: var(--font-size-hint); color: var(--color-ink-dim);
           letter-spacing: var(--letter-spacing); pointer-events: none; transition: opacity .5s;
           text-shadow: 0 1px 8px rgba(0,0,0,.85); }
@@ -563,10 +669,11 @@
   #loading { position: fixed; inset: 0; z-index: 40; background: #070708;
              display: flex; flex-direction: column; align-items: center; justify-content: center;
              gap: 16px; transition: opacity 1.85s ease; }
-  #loading .mark, #loading .title, #loading .t, #loading .bar, #loading .pct, #loading .load-start {
-    transition: opacity .4s ease; }
+  #loading .mark, #loading .title, #loading .t, #loading .bar, #loading .pct, #loading .load-start,
+  #loading .load-feedback { transition: opacity .4s ease; }
   #loading.fading .mark, #loading.fading .title, #loading.fading .t,
-  #loading.fading .bar, #loading.fading .pct, #loading.fading .load-start { opacity: 0; }
+  #loading.fading .bar, #loading.fading .pct, #loading.fading .load-start,
+  #loading.fading .load-feedback { opacity: 0; }
   #loading.done { opacity: 0; pointer-events: none; }
   #loading.ready .bar,
   #loading.ready .pct { opacity: .4; }
@@ -708,8 +815,14 @@
     <span class="kicker" data-i18n="replayKicker">手心里还是那一罐</span>
     <span class="label" data-i18n="replay">再记一遍</span>
   </button>
+  <button type="button" id="feedbackCue" hidden aria-haspopup="dialog">
+    <span class="kicker" data-i18n="fbCueKicker">想说的话</span>
+    <span class="label" data-i18n="fbCueLabel">留一句给做它的人</span>
+  </button>
   <button type="button" id="langToggle">EN</button>
-  <div id="loading" aria-live="polite" aria-busy="true"><img class="mark" alt="" src="./assets/mark-horizontal.svg" /><div class="title" data-i18n="title">拾荒娃娃机</div><div class="t">准备中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div><button type="button" id="loadStart" class="load-start" data-i18n="start" hidden>开始</button></div>
+  <button type="button" id="feedbackChip" hidden data-i18n="fbChip" aria-haspopup="dialog"
+          title="louis_wxl@outlook.com">反馈</button>
+  <div id="loading" aria-live="polite" aria-busy="true"><img class="mark" alt="" src="./assets/mark-horizontal.svg" /><div class="title" data-i18n="title">拾荒娃娃机</div><div class="t">准备中……</div><div class="bar"><i id="loadFill"></i></div><div class="pct" id="loadPct">0%</div><button type="button" id="loadStart" class="load-start" data-i18n="start" hidden>开始</button><div class="load-feedback"><button type="button" class="load-feedback-open" data-i18n="fbCover" aria-haspopup="dialog">反馈</button><span aria-hidden="true">·</span><a class="load-feedback-mail" href="mailto:louis_wxl@outlook.com">louis_wxl@outlook.com</a></div></div>
 
   <!-- ?v= 由 tools/build-deploy.mjs 在打包时替换成版本号（本地开发原样带着，服务端在本地会忽略）。
        生产环境带版本串的请求拿 immutable 强缓存；其余模块走 no-cache + ETag 重验证。
